@@ -11,6 +11,7 @@ across the 6 primary workspaces:
 """
 from typing import Dict, Any, List, Optional
 from app.domain.models import ExecutiveReport
+from app.domain.evidence.integrity import validate_score
 from app.aeo.reporting import aeo_cover_figure, render_aeo_audit_book
 from app.geo.reporting import geo_cover_figure, render_geo_audit_book
 from app.seo.reporting import render_seo_audit_book
@@ -579,6 +580,7 @@ class SectionReportGenerator:
             score_val = geo_cover_figure(report)
         else:
             score_val = self._get_section_score(report, section_key)
+        score_val = validate_score(score_val)
         if is_seo or is_aeo or is_geo:
             findings = list(report.findings or [])
             if is_seo:
