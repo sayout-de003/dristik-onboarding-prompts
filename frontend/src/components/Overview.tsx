@@ -328,8 +328,17 @@ export function Overview({
             return (
               <div
                 key={disc.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`Open ${disc.name} assessment`}
                 onClick={() => onNavigate?.(disc.id)}
-                className="card p-5 hover:border-ink hover:shadow-md transition-all cursor-pointer space-y-3 flex flex-col justify-between group"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onNavigate?.(disc.id);
+                  }
+                }}
+                className="card p-5 hover:border-ink hover:shadow-md transition-all cursor-pointer space-y-3 flex flex-col justify-between group focus-visible:outline-2 focus-visible:outline-offset-2"
               >
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
