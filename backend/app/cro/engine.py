@@ -456,9 +456,15 @@ def _parse_page(page: Any, raw_html_map: Optional[Dict[str, str]]) -> Dict[str, 
     if raw_html_map and url in raw_html_map:
         html = raw_html_map.get(url) or ""
     if not html:
-        html = _get(page, "raw_html", "") or ""
+        html = _get(page, "rendered_dom", "") or _get(page, "html", "") or _get(page, "raw_html", "") or ""
     schema_types = [str(item) for item in (_get(page, "schema_types", []) or [])]
-    status = int(_get(page, "status_code", 200) or 200)
+    status_raw = _get(page, "status_code", None)
+    status = (
+        int(status_raw)
+        if isinstance(status_raw, (int, float)) and not isinstance(status_raw, bool)
+        and math.isfinite(float(status_raw)) and float(status_raw).is_integer()
+        else None
+    )
     title = str(_get(page, "title", "") or "")
     h1_values = [str(item) for item in (_get(page, "h1", []) or []) if str(item).strip()]
     h2_values = [str(item) for item in (_get(page, "h2", []) or []) if str(item).strip()]
@@ -817,7 +823,7 @@ def _observe(
         if page["h1"] and not obs.h1:
             obs.h1 = page["h1"]
             obs.subhead = page["h2"]
-        if page["status"] >= 400:
+        if page["status"] is not None and page["status"] >= 400:
             obs.status_errors.append(f"{page['url']} returned HTTP {page['status']}")
         if not page["viewport"]:
             obs.viewport_missing.append(page["url"])
@@ -2559,7 +2565,7 @@ class _Rules:
         return self.technical_failures(check)
 
     def broken_checkout(self, check: Dict[str, Any]) -> Dict[str, Any]:
-        errors = [page["url"] for page in self.obs.pages if page["kind"] == "checkout" and page["status"] >= 400]
+        errors = [page["url"] for page in self.obs.pages if page["kind"] == "checkout" and page["status"] is not None and page["status"] >= 400]
         if errors:
             return self.fail(check, "Checkout URLs with an error status: " + _join(errors) + ".", priority="High", effort="High", action="Restore the checkout response before changing the offer.", stage="Checkout")
         return self.observed(check, "No broken checkout response was in the sample. The flow was not purchased.")
