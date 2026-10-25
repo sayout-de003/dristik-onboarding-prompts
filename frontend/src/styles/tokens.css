@@ -4,7 +4,7 @@
 
 :root {
   color-scheme: light;
-  --paper: 244 245 247;
+  --paper: 246 248 250;
   --paper-50: 255 255 255;
   --paper-100: 247 248 250;
   --paper-200: 236 238 242;
@@ -21,21 +21,21 @@
   --ink-800: 36 41 48;
   --ink-900: 23 26 32;
   --ink-950: 12 14 18;
-  --line: 218 222 228;
-  --pine: 16 92 76;
-  --pine-700: 10 64 54;
+  --line: 226 232 240;
+  --pine: 15 118 110;
+  --pine-700: 17 94 89;
   --pine-100: 226 238 234;
-  --pine-solid: 16 92 76;
-  --pine-solid-hover: 10 64 54;
+  --pine-solid: 15 118 110;
+  --pine-solid-hover: 17 94 89;
   --good: 15 122 72;
   --warn: 146 90 8;
   --bad: 168 38 32;
   --on-solid: 248 250 249;
   --shadow-color: 16 24 40;
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 6px;
-  --radius-xl: 6px;
+  --radius-sm: 5px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -53,9 +53,9 @@
   --font-sans: 'Source Sans 3', system-ui, sans-serif;
   --font-serif: 'Instrument Serif', Georgia, serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --sidebar: 252px;
+  --sidebar: 264px;
   --sidebar-collapsed: 68px;
-  --topbar: 56px;
+  --topbar: 64px;
 }
 
 .dark {
