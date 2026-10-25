@@ -647,6 +647,8 @@ async def oauth_callback(
             success=False,
         )
 
+    team_data = token_data.get("team") if isinstance(token_data.get("team"), dict) else {}
+    provider_account_id = token_data.get("team_id") or team_data.get("id") or token_data.get("account_id") or saved.get("account_id") or ""
     stored = {
         "type": "oauth2",
         "provider": provider,
@@ -655,6 +657,7 @@ async def oauth_callback(
         "property_id": discovered_prop,
         "shop": shop_host,
         "repository": saved.get("repository") or "",
+        "account_id": provider_account_id,
     }
     creds = ConnectorCredentials(
         provider=spec["connector"],
@@ -662,6 +665,7 @@ async def oauth_callback(
         api_key=json.dumps(stored),
         access_token=token_data.get("access_token"),
         refresh_token=token_data.get("refresh_token"),
+        account_id=str(provider_account_id) if provider_account_id else None,
         github_token=token_data.get("access_token") if provider == "github" else None,
         repository=saved.get("repository") or None,
         scopes=(token_data.get("scope", "").replace(",", " ").split() if isinstance(token_data.get("scope", ""), str) else []),
@@ -672,7 +676,7 @@ async def oauth_callback(
         target_url=creds.api_url or target,
         credentials=creds,
         repository=saved.get("repository") or None,
-        settings={"auth_mode": "oauth2", "oauth_provider": provider, "property_id": discovered_prop},
+        settings={"auth_mode": "oauth2", "oauth_provider": provider, "property_id": discovered_prop, "account_id": provider_account_id or None},
         org_id=org_id,
     )
     # Authorization is not the same as a working integration. Verify against the real API.
