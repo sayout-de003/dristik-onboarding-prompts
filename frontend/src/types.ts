@@ -1205,10 +1205,7 @@ export interface GoogleChannelPayload {
 }
 
 export interface ExecutiveReport {
-  certification_status?: 'CERTIFIED' | 'NOT_CERTIFIED' | 'NOT_ASSESSED' | string;
   quality_gate_results?: Record<string, unknown>;
-  withheld_sections?: Array<{ section: string; reason: string }>;
-  evidence_ledger?: Record<string, Record<string, unknown>>;
 
   report_id: string;
   analysis_id?: string;
@@ -1344,7 +1341,7 @@ export interface ExecutiveReport {
   visual_intelligence?: VisualIntelligencePayload;
   evidence_ledger?: Record<string, EvidenceLedgerItem>;
   integrity_repairs_log?: Array<{ timestamp: string; action: string; description: string; auditable: boolean; }>;
-  certification_status?: 'CERTIFIED' | 'DEGRADED_SECTIONS_WITHHELD';
+  certification_status?: 'CERTIFIED' | 'DEGRADED_SECTIONS_WITHHELD' | 'NOT_CERTIFIED' | 'NOT_ASSESSED';
   withheld_sections?: Array<{ check: string; section: string; reason: string; }>;
   meta_rollup?: MetaBucketRollup;
   heading_hierarchy?: HeadingHierarchyRollup;
@@ -2448,6 +2445,7 @@ export interface WebsiteIntelligenceRollup {
 export type AppView =
   | 'home'
   | 'analytics'
+  | 'continuous'
   | 'grader'
   | 'pricing'
   | 'login'
