@@ -109,3 +109,27 @@ def test_attribution_requires_same_model_locale_and_prompt():
     )
     assert report.status == "INSUFFICIENT_COMPARABLE_DATA"
     assert report.total_queries_evaluated == 0
+
+
+def test_empty_crawl_does_not_create_readiness_findings_or_score():
+    from app.geo.readiness import evaluate_geo_readiness
+
+    report = evaluate_geo_readiness(website_url="https://example.com", pages=[])
+    assert report.extractability_score is None
+    assert report.questions_total == 0
+    assert report.questions == []
+    assert report.dimension_scores == {}
+    assert "no analyzed pages" in report.headline.lower()
+
+
+def test_brand_and_domain_mentions_use_boundaries():
+    runner = GeoBenchmarkRunner()
+    assert runner._detect_mention_and_position(
+        "AcmeCorp is a vendor", "Acme", "example.com"
+    ) == (False, None)
+    assert runner._detect_mention_and_position(
+        "A review of notexample.com", "Acme", "example.com"
+    ) == (False, None)
+    assert runner._detect_mention_and_position(
+        "Acme is recommended", "Acme", "example.com"
+    )[0] is True
