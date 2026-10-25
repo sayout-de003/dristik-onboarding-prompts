@@ -223,7 +223,8 @@ class TestAdaptiveAuditBookHtmlRendering:
         assert "ZERO-FAKE EVIDENCE ATTESTATION" in rendered_html
         assert "RE-VERIFICATION PROTOCOL" in rendered_html
         assert "acme-analytics.io" in rendered_html
-        assert "AUDIT CERTIFIED" in rendered_html
+        assert "NOT_ASSESSED" in rendered_html
+        assert "AUDIT CERTIFIED" not in rendered_html
 
     def test_handles_unmeasured_scores_without_defaulting_to_zero(self):
         rep = _build_test_report()
