@@ -1408,19 +1408,11 @@ class AnalysisOrchestrator:
                 evidence_graph_snapshot_id=graph_snap.snapshot_id,
                 app_version=settings.APP_VERSION,
             )
-            seal_manifest(run_manifest, snapshots=blackboard.evidence_store.snapshots)
+            # Manifest sealing is deferred until the final report passes integrity gates.
+            # The IDs are available to report assembly, but the run is not sealed yet.
             run.manifest_id = run_manifest.manifest_id
             run.report_id = report_uuid
-            run.is_sealed = True
-            try:
-                from app.intelligence.outcomes.store import get_outcome_store
-                get_outcome_store().schedule(
-                    analysis_id=analysis_id,
-                    website_url=website_url,
-                    org_id=getattr(run, "org_id", None),
-                )
-            except Exception:
-                pass
+            run.is_sealed = False
 
             from app.intelligence.monitoring.visual_intelligence import visual_intelligence_engine
             visual_intel = visual_intelligence_engine.synthesize_visual_intelligence(
@@ -1768,6 +1760,58 @@ class AnalysisOrchestrator:
                     {"failure_reasons": gate_result.failure_reasons}
                 )
                 return
+
+            # Final customer-facing integrity gate: after report validation, before sealing
+            # the manifest or persisting the report. Keep evidence gaps explicit rather than
+            # certifying findings whose evidence is absent.
+            from app.report_integrity_gate import validate_final_report
+            from app.audit.manifest import FindingPin
+            run_manifest.findings = [
+                FindingPin(
+                    finding_id=str(getattr(f, "finding_id", "")),
+                    finding=str(getattr(f, "title", "") or getattr(f, "finding", "")),
+                    severity=str(getattr(getattr(f, "severity", ""), "value", getattr(f, "severity", ""))),
+                    materiality=str(getattr(getattr(f, "materiality", ""), "value", getattr(f, "materiality", ""))) or None,
+                    confidence_rubric=str(getattr(getattr(f, "confidence_rubric", ""), "value", getattr(f, "confidence_rubric", ""))) or None,
+                    evidence_refs=sorted({
+                        str(ref)
+                        for field in ("evidence_refs", "evidence_ids", "evidence_references")
+                        for ref in (getattr(f, field, None) or [])
+                        if ref
+                    } | {
+                        str(getattr(ev, "evidence_id"))
+                        for ev in (getattr(f, "evidence", None) or [])
+                        if getattr(ev, "evidence_id", None)
+                    }),
+                    source_agreement=int(getattr(f, "source_agreement", 0) or 0),
+                )
+                for f in (report.findings or [])
+            ]
+            integrity_result = validate_final_report(report, run_manifest)
+            report.quality_gate_results = {
+                **(report.quality_gate_results or {}),
+                "final_report_integrity": integrity_result,
+            }
+            report.certification_status = "CERTIFIED" if integrity_result["certified"] else "NOT_CERTIFIED"
+            if not integrity_result["certified"]:
+                report.withheld_sections = list(report.withheld_sections or [])
+                report.withheld_sections.append({
+                    "section": "Evidence certification",
+                    "reason": "One or more findings lack linked evidence; these findings must not be treated as verified.",
+                })
+
+            # Seal only after the final report and its exact finding set are validated.
+            seal_manifest(run_manifest, snapshots=blackboard.evidence_store.snapshots)
+            run.is_sealed = True
+            try:
+                from app.intelligence.outcomes.store import get_outcome_store
+                get_outcome_store().schedule(
+                    analysis_id=analysis_id,
+                    website_url=website_url,
+                    org_id=getattr(run, "org_id", None),
+                )
+            except Exception as schedule_err:
+                logger.warning("Outcome monitoring schedule failed for %s: %s", analysis_id, type(schedule_err).__name__)
 
             telemetry_data = telemetry_tracker.get_data()
             report.telemetry = telemetry_data
