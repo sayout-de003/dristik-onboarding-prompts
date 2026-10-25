@@ -126,6 +126,7 @@ def test_offpage_citation_network_analysis():
             ],
             was_mentioned=True,
             was_first_party_cited=False,
+            is_live=True,
             source_domains=["g2.com", "techcrunch.com", "reddit.com"],
         )
     ]
@@ -158,6 +159,7 @@ def test_displacement_sentinel_alert_generation():
             was_mentioned=True,
             mention_position=1,
             was_first_party_cited=True,
+            is_live=True,
         )
     ]
     current = [
@@ -174,6 +176,7 @@ def test_displacement_sentinel_alert_generation():
             was_mentioned=False,
             mention_position=None,
             was_first_party_cited=False,
+            is_live=True,
         )
     ]
     result = displacement_sentinel.detect_displacements(
@@ -205,6 +208,7 @@ def test_closed_loop_attribution_calculation():
             was_mentioned=False,
             mention_position=None,
             was_first_party_cited=False,
+            is_live=True,
         )
     ]
     post_patch = [
@@ -221,6 +225,7 @@ def test_closed_loop_attribution_calculation():
             was_mentioned=True,
             mention_position=1,
             was_first_party_cited=True,
+            is_live=True,
         )
     ]
     attr = geo_attribution_engine.calculate_attribution(
@@ -253,6 +258,7 @@ def test_funnel_weighted_share_of_model():
             was_mentioned=True,
             mention_position=1,
             was_first_party_cited=True,
+            is_live=True,
         ),
         EvaluatedQueryRun(
             query_id="Q-AWARENESS",
@@ -266,6 +272,7 @@ def test_funnel_weighted_share_of_model():
             was_mentioned=False,
             mention_position=None,
             was_first_party_cited=False,
+            is_live=True,
         ),
     ]
     som = benchmark_runner.calculate_share_of_model(
