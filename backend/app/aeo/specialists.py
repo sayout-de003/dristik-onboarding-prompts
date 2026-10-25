@@ -100,8 +100,9 @@ class QuestionDiscoverySpecialist(BaseAeoSpecialist):
         questions = getattr(g, "questions", []) if g else []
         total = len(questions)
 
+        pages = getattr(report, "page_reports", []) or []
         findings = []
-        if total == 0:
+        if total == 0 and pages:
             findings.append(AeoFindingRecord(
                 finding_id="AEO-QDISC-001",
                 priority="P1",
@@ -123,8 +124,18 @@ class QuestionDiscoverySpecialist(BaseAeoSpecialist):
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.SAMPLE_VERIFIED if total > 0 else EvidenceState.VERIFIED,
-            summary=f"Discovered {total} customer queries across analyzed page corpus.",
+            status=(
+                EvidenceState.SAMPLE_VERIFIED if total > 0
+                else EvidenceState.SAMPLE_VERIFIED if pages
+                else EvidenceState.NOT_TESTED
+            ),
+            summary=(
+                f"Discovered {total} customer queries across analyzed page corpus."
+                if total else
+                "No question inventory was available; no site-wide absence claim was made."
+                if not pages else
+                "No explicit customer questions were found in the available crawl sample."
+            ),
             findings=findings,
             metadata={"questions_count": total},
         )
@@ -156,8 +167,11 @@ class IntentClassificationSpecialist(BaseAeoSpecialist):
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.VERIFIED,
-            summary=f"Classified questions across {len(intents_found)} distinct intent dimensions.",
+            status=EvidenceState.SAMPLE_VERIFIED if questions else EvidenceState.NOT_TESTED,
+            summary=(
+                f"Applied keyword-based intent heuristics to {len(questions)} questions across {len(intents_found)} intent labels."
+                if questions else "No questions were available for intent classification."
+            ),
             findings=[],
             metadata={"intent_breakdown": intents_found},
         )
@@ -180,8 +194,11 @@ class QuestionClusteringSpecialist(BaseAeoSpecialist):
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.SAMPLE_VERIFIED,
-            summary=f"Organized inquiries into {len(clusters)} semantic topic clusters.",
+            status=EvidenceState.SAMPLE_VERIFIED if questions else EvidenceState.NOT_TESTED,
+            summary=(
+                f"Grouped {len(questions)} questions by existing category labels into {len(clusters)} groups; this is not semantic clustering."
+                if questions else "No questions were available for clustering."
+            ),
             findings=[],
             metadata={"cluster_count": len(clusters)},
         )
@@ -218,8 +235,16 @@ class AnswerQualitySpecialist(BaseAeoSpecialist):
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.SAMPLE_VERIFIED,
-            summary="Evaluated answer directness and conciseness across primary landing pages.",
+            status=(
+                EvidenceState.SAMPLE_VERIFIED
+                if getattr(g, "questions_total", 0) > 0
+                else EvidenceState.NOT_TESTED
+            ),
+            summary=(
+                "Reviewed answer-support counts from the available question evaluation; passage-level quality evidence is not attached by this specialist."
+                if getattr(g, "questions_total", 0) > 0
+                else "Answer quality was not tested because no assessed question inventory is available."
+            ),
             findings=findings,
             metadata={"unsupported_count": unsupp},
         )
@@ -255,8 +280,12 @@ class FactualVerificationSpecialist(BaseAeoSpecialist):
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.VERIFIED if not contradictions else EvidenceState.SAMPLE_VERIFIED,
-            summary=f"Detected {len(contradictions)} cross-page factual contradictions.",
+            status=EvidenceState.SAMPLE_VERIFIED if contradictions else EvidenceState.NOT_TESTED,
+            summary=(
+                f"Recorded {len(contradictions)} contradiction record(s); underlying claims still require source review."
+                if contradictions else
+                "No contradiction records were supplied; this does not establish that all factual claims were verified."
+            ),
             findings=findings,
             metadata={"contradiction_count": len(contradictions)},
         )
@@ -458,7 +487,10 @@ class CompetitiveIntelligenceSpecialist(BaseAeoSpecialist):
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
             status=EvidenceState.SAMPLE_VERIFIED if comp else EvidenceState.NOT_TESTED,
-            summary="Evaluated competitor answer presence and comparison content gaps.",
+            summary=(
+                "Competitor report data is present; comparability of engines, queries, regions, and run windows has not been independently established here."
+                if comp else "No competitor answer dataset was available for comparison."
+            ),
             findings=[],
             metadata={"has_competitor_data": bool(comp)},
         )
@@ -513,8 +545,11 @@ class RemediationPlannerSpecialist(BaseAeoSpecialist):
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.VERIFIED,
-            summary=f"Synthesized remediation plan covering {len(findings)} findings ({p0} P0 critical, {p1} P1 high).",
+            status=EvidenceState.SAMPLE_VERIFIED if findings else EvidenceState.NOT_TESTED,
+            summary=(
+                f"Counted {len(findings)} existing findings ({p0} P0 critical, {p1} P1 high); root-cause ranking and evidence validation are not performed by this specialist."
+                if findings else "No findings were available to plan remediation against."
+            ),
             findings=[],
             metadata={"p0": p0, "p1": p1, "total": len(findings)},
         )
