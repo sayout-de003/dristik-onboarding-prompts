@@ -1811,8 +1811,7 @@ class AnalysisOrchestrator:
             final_findings = report.findings or final_findings
 
             try:
-                self.repository.persist_findings(analysis_id, final_findings)
-                self.repository.save_run(run)
+                self.repository.save_run(run, findings=final_findings)
             except Exception as pe:
                 logger.exception("Durable report persistence failed for %s", analysis_id)
                 run.status = AnalysisStage.FAILED
