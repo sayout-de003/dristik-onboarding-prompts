@@ -147,9 +147,9 @@ class ScoringEngine:
         self,
         findings: Optional[List[Finding]] = None,
         business_profile: Optional[BusinessProfile] = None,
-        has_schema: bool = True,
-        is_https: bool = True,
-        readability: float = 60.0,
+        has_schema: Optional[bool] = None,
+        is_https: Optional[bool] = None,
+        readability: Optional[float] = None,
         external_authority_connected: bool = False,
         live_citation_score: Optional[float] = None,
         performance_metrics: Optional[Dict[str, float]] = None,
@@ -351,7 +351,13 @@ class ScoringEngine:
 
 
                     # Specific Check Value Evaluations
-                    if cid == "robots_txt_rfc9309":
+                    if cat_enum == Category.SCHEMA and has_schema is None:
+                        is_measured = False
+                        status = "NOT_MEASURED"
+                        s = 0.0
+                        passed = 0
+                        failed = 0
+                    elif cid == "robots_txt_rfc9309":
                         if manifest is not None and not getattr(manifest, "robots_txt_found", True):
                             s = 0.0
                             passed = 0
@@ -386,14 +392,22 @@ class ScoringEngine:
                         else:
                             s = 1.0
                     elif cid == "https_on_all_urls":
-                        s = 1.0 if is_https else 0.0
-                        domain_lbl = getattr(business_profile, "domain", None) or getattr(business_profile, "business_name", "") or "homepage"
-                        if is_https:
-                            evidence_list.append({"url": domain_lbl, "status": "PASS", "detail": "All inspected pages served securely over HTTPS."})
+                        if is_https is None:
+                            is_measured = False
+                            status = "NOT_MEASURED"
                         else:
-                            evidence_list.append({"url": domain_lbl, "status": "FAIL", "detail": "Homepage requested over insecure HTTP."})
+                            s = 1.0 if is_https else 0.0
+                            domain_lbl = getattr(business_profile, "domain", None) or getattr(business_profile, "business_name", "") or "homepage"
+                            if is_https:
+                                evidence_list.append({"url": domain_lbl, "status": "PASS", "detail": "All inspected pages served securely over HTTPS."})
+                            else:
+                                evidence_list.append({"url": domain_lbl, "status": "FAIL", "detail": "Homepage requested over insecure HTTP."})
                     elif cid == "tls_version_valid":
-                        s = 1.0 if is_https else 0.0
+                        if is_https is None:
+                            is_measured = False
+                            status = "NOT_MEASURED"
+                        else:
+                            s = 1.0 if is_https else 0.0
                     elif cid == "security_headers_hardening":
                         hsts_finding = next((f for f in primary_findings if "hsts" in f.title.lower() or "hsts" in f.finding_id.lower()), None)
                         s = 0.5 if hsts_finding else 1.0
@@ -421,8 +435,12 @@ class ScoringEngine:
                         else:
                             is_measured = False
                     elif cid == "audience_flesch_reading_ease":
-                        s = audience_readability_score(readability, audience=business_profile.target_audience or "b2b")
-                        evidence_list.append({"readability": readability, "status": "PASS" if s >= 0.7 else "PARTIAL"})
+                        if readability is None or isinstance(readability, bool) or not isinstance(readability, (int, float)) or not math.isfinite(float(readability)):
+                            is_measured = False
+                            status = "NOT_MEASURED"
+                        else:
+                            s = audience_readability_score(readability, audience=getattr(business_profile, "target_audience", None) or "b2b")
+                            evidence_list.append({"readability": readability, "status": "PASS" if s >= 0.7 else "PARTIAL"})
                     elif cid == "form_field_count_curve":
                         form_field_count = 3.0
                         for f in check_findings:
@@ -917,11 +935,19 @@ class ScoringEngine:
 
         # Evidence coverage across findings
         total_f = len(findings)
-        ev_cov = round(sum(1 for f in findings if f.evidence_refs) / max(1, total_f), 2) if total_f > 0 else 1.0
+        ev_cov = round(sum(1 for f in findings if f.evidence_refs) / total_f, 2) if total_f > 0 else 0.0
+        measured_confidence = (
+            sum(
+                active_weights[cat] * float(category_scores[cat.value].confidence or 0.0)
+                for cat in active_cats
+                if cat in active_weights and cat.value in category_scores
+            )
+            if active_weights else 0.0
+        )
 
         return OverallScoreResult(
             overall_score=overall_score,
-            overall_confidence=0.90,
+            overall_confidence=round(measured_confidence, 2),
             evidence_coverage=ev_cov,
             grade=grade,
             health_label=health,
@@ -991,9 +1017,9 @@ class ScoringEngine:
         findings: List[Finding],
         business_profile: BusinessProfile,
         commercial_evals: Optional[List[Any]] = None,
-        has_schema: bool = True,
-        is_https: bool = True,
-        readability: float = 60.0,
+        has_schema: Optional[bool] = None,
+        is_https: Optional[bool] = None,
+        readability: Optional[float] = None,
         geo_readiness: Optional[Any] = None,
         live_citation_score: Optional[float] = None,
         performance_metrics: Optional[Dict[str, float]] = None,
