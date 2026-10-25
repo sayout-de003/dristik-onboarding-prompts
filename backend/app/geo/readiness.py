@@ -214,11 +214,23 @@ def _score_content_extractability(
 ) -> GeoDimensionScore:
     headings = sum(len(p.h2 or []) + len(p.h3 or []) for p in pages)
     heading_score = min(40.0, headings * 4.0)
-    passage_score = (passage_res.citation_readiness_score * 0.40) if passage_res else 30.0
+    passage_score = (passage_res.citation_readiness_score * 0.40) if passage_res else 0.0
     question_score = min(20.0, supported * 5.0)
     score = max(0.0, min(100.0, heading_score + passage_score + question_score))
 
     summary = f"{headings} H2/H3 blocks; {supported} questions have quotable answers."
+    if not pages:
+        return GeoDimensionScore(
+            key=GeoDimensionKey.CONTENT_EXTRACTABILITY.value,
+            label="Content extractability & citation readiness",
+            score=0.0,
+            band="low",
+            confidence=0.0,
+            summary="Content extractability was not measured because no pages were available.",
+            evidence_notes=["pages_analyzed=0"],
+            is_measured=False,
+            measurement_note="A successful crawl with at least one analyzed page is required.",
+        )
     if passage_res:
         summary += f" {passage_res.highly_citable_count} highly citation-ready passages."
 
@@ -231,10 +243,11 @@ def _score_content_extractability(
         summary=summary,
         evidence_notes=[
             f"h2_h3_count={headings}",
-            f"citation_score={passage_res.citation_readiness_score if passage_res else 'N/A'}",
+            f"citation_score={passage_res.citation_readiness_score if passage_res else 'NOT_MEASURED'}",
         ],
         is_measured=True,
-        measurement_note=None,
+        measurement_note=("Passage analyzer unavailable; score uses observed heading/question signals only."
+                          if passage_res is None else None),
     )
 
 
@@ -243,8 +256,17 @@ def _score_citation_readiness(passage_res) -> GeoDimensionScore:
         raw = passage_res.citation_readiness_score
         count = passage_res.highly_citable_count
     else:
-        raw = 50.0
-        count = 0
+        return GeoDimensionScore(
+            key=GeoDimensionKey.CITATION_READINESS.value,
+            label="Citation-ready passage density",
+            score=0.0,
+            band="low",
+            confidence=0.0,
+            summary="Passage analysis unavailable; citation readiness was not measured.",
+            evidence_notes=["highly_citable_count=NOT_MEASURED", "raw_score=NOT_MEASURED"],
+            is_measured=False,
+            measurement_note="A successful passage analysis is required to score citation readiness.",
+        )
 
     score = max(0.0, min(100.0, raw))
     return GeoDimensionScore(
@@ -302,8 +324,17 @@ def _score_factual_grounding(
         score = raw
         summary = f"{claims_res.citable_claims_count} verified citable claims with no detected contradictions."
     else:
-        score = 50.0
-        summary = "Claim analysis unavailable. Score is provisional."
+        return GeoDimensionScore(
+            key=GeoDimensionKey.FACTUAL_GROUNDING.value,
+            label="Factual grounding & claim verifiability",
+            score=0.0,
+            band="low",
+            confidence=0.0,
+            summary="Claim analysis unavailable; factual grounding was not measured.",
+            evidence_notes=["conflicting_facts=0", "claim_clarity=NOT_MEASURED"],
+            is_measured=False,
+            measurement_note="Run claim extraction and evidence validation before scoring factual grounding.",
+        )
 
     return GeoDimensionScore(
         key=GeoDimensionKey.FACTUAL_GROUNDING.value,
@@ -330,13 +361,13 @@ def _score_external_authority(entity_res) -> GeoDimensionScore:
     return GeoDimensionScore(
         key=GeoDimensionKey.EXTERNAL_AUTHORITY.value,
         label="External authority & backlink signals",
-        score=50.0,   # Neutral default when not measured
+        score=0.0,   # Placeholder value is ignored because is_measured=False
         band="medium",
         confidence=0.30,
         summary=(
             "External authority cannot be measured from on-page HTML crawl. "
             "This requires GSC, backlink API, or business directory connector data. "
-            "Score of 50 is a provisional neutral pending measurement."
+            "No score is reported until external connector data are available."
         ),
         evidence_notes=["requires_connector=GSC or backlink API"],
         is_measured=False,
@@ -407,7 +438,7 @@ _WEIGHTS: Dict[str, float] = {
 }
 
 
-def _compute_composite(dimension_scores: Dict[str, GeoDimensionScore]) -> float:
+def _compute_composite(dimension_scores: Dict[str, GeoDimensionScore]) -> Optional[float]:
     """Weighted composite of measured dimensions only."""
     total_weight = 0.0
     total_score = 0.0
@@ -417,7 +448,7 @@ def _compute_composite(dimension_scores: Dict[str, GeoDimensionScore]) -> float:
             total_score += ds.score * weight
             total_weight += weight
     if total_weight == 0.0:
-        return 50.0  # Cannot compute — return neutral
+        return None  # Cannot compute is not a neutral score.
     return round(total_score / total_weight, 1)
 
 
