@@ -310,12 +310,27 @@ async def check_integration_health(integration_id: str, user: UserIdentity = Dep
 
 @router.get("/{integration_id}/discover", response_model=Dict[str, Any])
 async def discover_integration_structure(integration_id: str, user: UserIdentity = Depends(get_current_user)):
-    """Discover site hierarchy, detected SEO plugins, or repo framework."""
-    _owned_integration(integration_id, user)
+    """Discover resources through the provider API and record non-secret provenance."""
+    integration = _owned_integration(integration_id, user)
     connector = connector_store.get_connector_for_org(integration_id, user.org_id)
     if not connector:
         raise HTTPException(status_code=404, detail="Integration not found")
-    return await connector.discover_site_structure()
+    result = await connector.discover_site_structure()
+    evidence = result.get("evidence") if isinstance(result, dict) else None
+    connector_store.record_event(
+        org_id=integration.org_id, action="RESOURCE_DISCOVERY",
+        result=str(result.get("discovery_status", "COMPLETED")) if isinstance(result, dict) else "COMPLETED",
+        integration_id=integration_id, actor_id=_actor_id(user),
+        details={
+            "provider": integration.provider.value,
+            "resource_count": result.get("resource_count") if isinstance(result, dict) else None,
+            "source": evidence.get("source") if isinstance(evidence, dict) else None,
+            "observed_at": evidence.get("observed_at") if isinstance(evidence, dict) else None,
+            "response_sha256": evidence.get("response_sha256") if isinstance(evidence, dict) else None,
+            "verification_status": evidence.get("verification_status") if isinstance(evidence, dict) else "NOT_REPORTED",
+        },
+    )
+    return result
 
 @router.delete("/{integration_id}")
 async def delete_integration(integration_id: str, user: UserIdentity = Depends(require_permission("patches:generate"))):
