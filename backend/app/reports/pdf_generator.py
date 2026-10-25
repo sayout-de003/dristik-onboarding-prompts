@@ -45,7 +45,7 @@ class ExecutiveDeckGenerator:
         @page {{ size: A4 landscape; margin: 0; }}
         body {{
             font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
-            background: #090d16;
+            background: #111827;
             color: #f8fafc;
             margin: 0;
             padding: 0;
@@ -60,7 +60,7 @@ class ExecutiveDeckGenerator:
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            background: #090d16;
+            background: #111827;
             border-bottom: 2px solid #1e293b;
         }}
         .header {{
@@ -77,13 +77,13 @@ class ExecutiveDeckGenerator:
         }}
         .header-brand {{
             font-weight: 800;
-            color: #38bdf8;
+            color: #0f766e;
             letter-spacing: 0.18em;
         }}
         .classification {{
-            background: rgba(239, 68, 68, 0.15);
-            border: 1px solid rgba(239, 68, 68, 0.4);
-            color: #f87171;
+            background: rgba(100, 116, 139, 0.12);
+            border: 1px solid rgba(100, 116, 139, 0.4);
+            color: #cbd5e1;
             padding: 2px 8px;
             border-radius: 4px;
             font-weight: 700;
@@ -99,7 +99,7 @@ class ExecutiveDeckGenerator:
         .hero-subtitle {{
             font-family: monospace;
             font-size: 13px;
-            color: #38bdf8;
+            color: #0f766e;
             letter-spacing: 0.15em;
             text-transform: uppercase;
         }}
@@ -109,7 +109,7 @@ class ExecutiveDeckGenerator:
             line-height: 1.6;
             color: #94a3b8;
             max-width: 900px;
-            border-left: 2px solid #38bdf8;
+            border-left: 2px solid #0f766e;
             padding-left: 16px;
             margin-top: 15px;
         }}
@@ -124,7 +124,7 @@ class ExecutiveDeckGenerator:
             gap: 24px;
         }}
         .card {{
-            background: #0f172a;
+            background: #111827;
             border-radius: 8px;
             padding: 20px;
             border: 1px solid #1e293b;
@@ -132,7 +132,7 @@ class ExecutiveDeckGenerator:
         .card-kicker {{
             font-family: monospace;
             font-size: 10px;
-            color: #38bdf8;
+            color: #0f766e;
             text-transform: uppercase;
             letter-spacing: 0.15em;
             margin-bottom: 6px;
@@ -154,13 +154,13 @@ class ExecutiveDeckGenerator:
             align-items: baseline;
             gap: 10px;
             background: rgba(56, 189, 248, 0.1);
-            border: 1px solid #38bdf8;
+            border: 1px solid #0f766e;
             border-radius: 8px;
             padding: 14px 24px;
             font-family: monospace;
             font-size: 26px;
             font-weight: 700;
-            color: #38bdf8;
+            color: #0f766e;
         }}
         .footer {{
             display: flex;
@@ -181,7 +181,7 @@ class ExecutiveDeckGenerator:
             <div class="classification">RESTRICTED // C-SUITE DOSSIER</div>
         </div>
         <div>
-            <div class="hero-subtitle">Independent Technical Assurance &amp; Advisory</div>
+            <div class="hero-subtitle">Technical Audit &amp; Advisory</div>
             <div class="hero-title">{domain}</div>
             <div class="score-box">OVERALL INDEX: {score_display}</div>
             <div class="lead-narrative">

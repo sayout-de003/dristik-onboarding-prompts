@@ -416,6 +416,81 @@ def get_publishing_css() -> str:
         text-rendering: optimizeLegibility;
     }
 
+    /* Editorial system v3: restrained ink + teal palette, clear evidence hierarchy. */
+    :root {
+        --dr-ink: #0f172a;
+        --dr-muted: #64748b;
+        --dr-line: #cbd5e1;
+        --dr-paper: #ffffff;
+        --dr-accent: #0f766e;
+        --dr-accent-soft: #f0fdfa;
+        --dr-critical: #b91c1c;
+        --dr-warning: #b45309;
+    }
+
+    h1, h2, h3, h4 {
+        color: var(--dr-ink);
+        letter-spacing: -0.018em;
+        line-height: 1.2;
+    }
+    h1 { font-size: 25pt; }
+    h2 { font-size: 18pt; margin: 0 0 5mm; }
+    h3 { font-size: 13pt; margin: 0 0 3mm; }
+    p, li { max-width: 100%; }
+    a { color: var(--dr-accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+    /* Data tables should be readable in print, not rely on color alone. */
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 9pt;
+        line-height: 1.4;
+        font-variant-numeric: tabular-nums;
+    }
+    th {
+        background: #f1f5f9;
+        color: #0f172a;
+        font-weight: 700;
+        text-align: left;
+        border-bottom: 1.5px solid #94a3b8;
+        padding: 7px 8px;
+    }
+    td {
+        border-bottom: 1px solid #e2e8f0;
+        padding: 7px 8px;
+        vertical-align: top;
+        overflow-wrap: anywhere;
+    }
+    tbody tr:nth-child(even) { background: #f8fafc; }
+
+    /* Evidence, interpretation, action and verification stay visually distinct. */
+    .evidence-box {
+        border-left: 3px solid var(--dr-accent);
+        background: var(--dr-accent-soft);
+        padding: 10px 12px;
+        margin: 3mm 0;
+    }
+    .business-explanation-card {
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        background: #ffffff;
+        padding: 12px 14px;
+        margin: 3mm 0;
+    }
+    .finding-card, .finding-card-v2 {
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 12px 14px;
+        margin: 4mm 0;
+        background: #ffffff;
+        box-shadow: none;
+    }
+    .finding-card h3, .finding-card-v2 h3 { margin-bottom: 2mm; }
+    .page-number, .folio, .running-footer {
+        color: #64748b;
+        font-variant-numeric: tabular-nums;
+    }
+
     .serif {
         font-family: Georgia, Cambria, "Times New Roman", serif;
     }
@@ -460,7 +535,7 @@ def get_publishing_css() -> str:
             font-size: 9.5px;
             font-weight: 700;
             letter-spacing: 0.16em;
-            color: #38bdf8;
+            color: #0f766e;
             text-transform: uppercase;
         }
         .toolbar-domain {
@@ -475,7 +550,7 @@ def get_publishing_css() -> str:
             flex-wrap: wrap;
         }
         .btn-action-primary {
-            background: #0284c7;
+            background: #0f766e;
             color: #ffffff;
             font-weight: 600;
             font-size: 12.5px;
@@ -490,7 +565,7 @@ def get_publishing_css() -> str:
             box-shadow: 0 2px 4px rgba(0,0,0,0.3);
             transition: background 0.15s ease;
         }
-        .btn-action-primary:hover { background: #0369a1; }
+        .btn-action-primary:hover { background: #115e59; }
         .btn-action-secondary {
             background: #1e293b;
             color: #e2e8f0;
@@ -589,7 +664,7 @@ def get_publishing_css() -> str:
         font-size: 18pt;
         font-weight: 900;
         letter-spacing: 2.5px;
-        color: #38bdf8;
+        color: #0f766e;
     }
 
     .cover-classification-badge {
@@ -635,7 +710,7 @@ def get_publishing_css() -> str:
 
     .cover-target-box {
         margin: 5mm 0 6mm 0;
-        border-left: 2px solid #38bdf8;
+        border-left: 2px solid #0f766e;
         padding-left: 14px;
     }
 
@@ -657,7 +732,7 @@ def get_publishing_css() -> str:
     .cover-target-url {
         font-family: ui-monospace, monospace;
         font-size: 9.5pt;
-        color: #38bdf8;
+        color: #0f766e;
         margin-top: 2px;
     }
 
@@ -766,7 +841,7 @@ def get_publishing_css() -> str:
         font-weight: 800;
         letter-spacing: 0.12em;
         text-transform: uppercase;
-        color: #0284c7;
+        color: #0f766e;
         margin-bottom: 4px;
     }
 
@@ -828,7 +903,7 @@ def get_publishing_css() -> str:
     }
 
     .toc-link:hover {
-        color: #0284c7;
+        color: #0f766e;
     }
 
     .toc-badge {
@@ -878,7 +953,7 @@ def get_publishing_css() -> str:
         font-family: ui-monospace, monospace;
         font-size: 8.5pt;
         font-weight: 800;
-        color: #0284c7;
+        color: #0f766e;
         letter-spacing: 0.1em;
         text-transform: uppercase;
     }
@@ -953,7 +1028,7 @@ def get_publishing_css() -> str:
     .finding-card.sev-critical { border-left-color: #dc2626; }
     .finding-card.sev-high { border-left-color: #ea580c; }
     .finding-card.sev-medium { border-left-color: #d97706; }
-    .finding-card.sev-low { border-left-color: #2563eb; }
+    .finding-card.sev-low { border-left-color: #0f766e; }
     .finding-card.sev-info { border-left-color: #64748b; }
 
     .finding-top-bar {
@@ -1040,19 +1115,19 @@ def get_publishing_css() -> str:
     }
 
     .plain-english-panel {
-        background: #eff6ff;
-        border: 1px solid #bfdbfe;
+        background: #f0fdfa;
+        border: 1px solid #99f6e4;
         border-radius: 4px;
         padding: 12px 14px;
         margin: 10px 0;
     }
 
     .plain-english-panel .finding-block-title {
-        color: #1e40af;
+        color: #115e59;
     }
 
     .plain-english-panel .finding-block-text {
-        color: #1e3a8a;
+        color: #134e4a;
         font-weight: 500;
     }
 
@@ -1064,7 +1139,7 @@ def get_publishing_css() -> str:
 
     .affected-urls-list code {
         font-family: ui-monospace, monospace;
-        color: #0284c7;
+        color: #0f766e;
         font-size: 8pt;
     }
 
@@ -1084,7 +1159,7 @@ def get_publishing_css() -> str:
 
     .code-block {
         background: #0f172a;
-        color: #38bdf8;
+        color: #0f766e;
         font-family: ui-monospace, monospace;
         font-size: 7.5pt;
         padding: 10px 12px;

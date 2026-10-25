@@ -47,7 +47,7 @@ SEO_BOOK_PRINT_CSS = """
     font-family: monospace;
     font-size: 9pt;
     font-weight: 700;
-    color: #0284c7;
+    color: #0f766e;
     letter-spacing: 0.12em;
     text-transform: uppercase;
 }
@@ -73,7 +73,7 @@ SEO_BOOK_PRINT_CSS = """
 }
 .running-brand {
     font-weight: 700;
-    color: #0284c7;
+    color: #0f766e;
 }
 .running-meta {
     color: #94a3b8;
@@ -105,11 +105,11 @@ SEO_BOOK_PRINT_CSS = """
     font-family: monospace;
     font-size: 8.5pt;
     font-weight: 700;
-    color: #0284c7;
+    color: #0f766e;
 }
 .decorative-separator {
     height: 2px;
-    background: linear-gradient(90deg, #0284c7 0%, rgba(2, 132, 199, 0) 100%);
+    background: linear-gradient(90deg, #0f766e 0%, rgba(2, 132, 199, 0) 100%);
     margin: 8px 0 16px;
 }
 
@@ -142,7 +142,7 @@ SEO_BOOK_PRINT_CSS = """
     font-size: 9.5px;
     font-weight: 700;
     letter-spacing: 0.16em;
-    color: #38bdf8;
+    color: #0f766e;
     text-transform: uppercase;
 }
 .toolbar-domain {
@@ -157,7 +157,7 @@ SEO_BOOK_PRINT_CSS = """
     flex-wrap: wrap;
 }
 .btn-action-primary {
-    background: #0284c7;
+    background: #0f766e;
     color: #ffffff;
     font-weight: 600;
     font-size: 12.5px;
@@ -170,7 +170,7 @@ SEO_BOOK_PRINT_CSS = """
     transition: all 0.15s ease;
     text-decoration: none;
 }
-.btn-action-primary:hover { background: #0369a1; }
+.btn-action-primary:hover { background: #115e59; }
 .btn-action-secondary {
     background: #1e293b;
     color: #e2e8f0;
@@ -190,7 +190,7 @@ SEO_BOOK_PRINT_CSS = """
 /* Document Stage Geometry */
 @media screen {
     body {
-        background: #090d16 !important;
+        background: #111827 !important;
         padding: 24px 12px 60px 12px;
         display: flex;
         flex-direction: column;
@@ -252,7 +252,7 @@ SEO_BOOK_PRINT_CSS = """
     font-size: 16pt;
     font-weight: 900;
     letter-spacing: 2.5px;
-    color: #38bdf8;
+    color: #0f766e;
 }
 .cover-series-tag {
     font-size: 7.5pt;
@@ -269,7 +269,7 @@ SEO_BOOK_PRINT_CSS = """
     padding: 4px 10px;
     background: rgba(56, 189, 248, 0.15);
     border: 1px solid rgba(56, 189, 248, 0.35);
-    color: #7dd3fc;
+    color: #99f6e4;
     border-radius: 4px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -327,7 +327,7 @@ SEO_BOOK_PRINT_CSS = """
 .cover-target-url {
     font-family: monospace;
     font-size: 8.5pt;
-    color: #38bdf8;
+    color: #0f766e;
     margin-top: 1px;
 }
 .cover-description {
@@ -417,7 +417,7 @@ SEO_BOOK_PRINT_CSS = """
 }
 .status-pill.clean { background: #0f172a; color: #ffffff; }
 .status-pill.issue { background: #ffedd5; color: #9a3412; }
-.status-pill.measured { background: #e0f2fe; color: #0369a1; }
+.status-pill.measured { background: #f0fdfa; color: #115e59; }
 .status-pill.inferred { background: #f1f5f9; color: #475569; }
 .status-pill.gap { background: #f8fafc; color: #94a3b8; border: 1px solid #e2e8f0; }
 .status-pill.untested { background: #f1f5f9; color: #64748b; }
@@ -445,7 +445,7 @@ SEO_BOOK_PRINT_CSS = """
     font-family: monospace;
     font-size: 9pt;
     font-weight: 800;
-    color: #0284c7;
+    color: #0f766e;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-bottom: 6px;
@@ -469,7 +469,7 @@ SEO_BOOK_PRINT_CSS = """
     transition: color 0.15s ease;
 }
 .toc-link:hover {
-    color: #0284c7;
+    color: #0f766e;
 }
 .toc-badge {
     font-family: monospace;
@@ -504,7 +504,7 @@ SEO_BOOK_PRINT_CSS = """
     font-family: monospace;
     font-size: 7.5pt;
     font-weight: 700;
-    color: #0284c7;
+    color: #0f766e;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     margin-bottom: 4px;
