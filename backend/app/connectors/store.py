@@ -230,6 +230,10 @@ class ConnectorStore:
         return integration
 
 
+    def get_credentials(self, integration_id: str) -> Optional[ConnectorCredentials]:
+        """Internal-only credential access for adapter and update operations; never serialize to clients."""
+        return self._credentials.get(integration_id)
+
     def update_credentials(self, integration_id: str, credentials: ConnectorCredentials) -> Optional[Integration]:
         """Replace encrypted credentials for an existing integration and persist atomically."""
         integration = self._integrations.get(integration_id)
