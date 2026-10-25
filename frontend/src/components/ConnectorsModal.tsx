@@ -529,7 +529,9 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
                             ACTIVE
                           </span>
                         ) : (
-                          <span className="text-[9px] font-mono text-ink-400">AVAILABLE</span>
+                          <span className="text-[9px] font-mono text-ink-400">
+                            {providerRegistry[item.id]?.implementation_status === 'adapter_required' ? 'ADAPTER REQUIRED' : 'NOT CONNECTED'}
+                          </span>
                         )}
                       </div>
                       <span className="font-bold leading-tight truncate w-full text-xs text-ink">{item.label}</span>
@@ -1173,6 +1175,65 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
                       required
                     />
                   </div>
+                </div>
+              )}
+
+              {['sanity', 'openai_search', 'perplexity', 'claude', 'gemini', 'linkedin', 'x', 'tiktok', 'instagram', 'whatsapp_business', 'telegram', 'slack', 'hubspot', 'salesforce', 'stripe'].includes(activeTab) && (
+                <div className="space-y-3 rounded-lg border border-line bg-paper-50 p-4">
+                  <div>
+                    <div className="text-sm font-semibold text-ink">Provider API credentials</div>
+                    <p className="mt-1 text-xs text-ink-500">
+                      Credentials are sent to the Dristik API and stored encrypted. The first check is a live authentication handshake; it does not imply publishing, analytics, or search-citation capabilities are enabled.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-ink-700 font-medium block mb-1">API key / authorized access token</label>
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      value={providerToken}
+                      onChange={(e) => setProviderToken(e.target.value)}
+                      placeholder="Paste provider-issued credential"
+                      className="w-full bg-paper-50 border border-line rounded px-3 py-2 text-sm text-ink placeholder:text-ink-500 focus:outline-none focus:border-pine font-mono"
+                      required
+                    />
+                  </div>
+                  {activeTab === 'sanity' && (
+                    <>
+                      <div>
+                        <label className="text-xs text-ink-700 font-medium block mb-1">Sanity project ID</label>
+                        <input value={providerResource} onChange={(e) => setProviderResource(e.target.value)} placeholder="Project ID" className="w-full bg-paper-50 border border-line rounded px-3 py-2 text-sm text-ink" required />
+                      </div>
+                      <div>
+                        <label className="text-xs text-ink-700 font-medium block mb-1">Dataset</label>
+                        <input value={providerDataset} onChange={(e) => setProviderDataset(e.target.value)} placeholder="production" className="w-full bg-paper-50 border border-line rounded px-3 py-2 text-sm text-ink" required />
+                      </div>
+                    </>
+                  )}
+                  {activeTab === 'whatsapp_business' && (
+                    <div>
+                      <label className="text-xs text-ink-700 font-medium block mb-1">WhatsApp Phone Number ID</label>
+                      <input value={providerResource} onChange={(e) => setProviderResource(e.target.value)} placeholder="Phone Number ID from Meta" className="w-full bg-paper-50 border border-line rounded px-3 py-2 text-sm text-ink" required />
+                    </div>
+                  )}
+                  {activeTab === 'salesforce' && (
+                    <div>
+                      <label className="text-xs text-ink-700 font-medium block mb-1">Salesforce instance URL</label>
+                      <input type="url" value={providerApiUrl} onChange={(e) => setProviderApiUrl(e.target.value)} placeholder="https://your-domain.my.salesforce.com" className="w-full bg-paper-50 border border-line rounded px-3 py-2 text-sm text-ink" required />
+                    </div>
+                  )}
+                  {activeTab !== 'salesforce' && (
+                    <div>
+                      <label className="text-xs text-ink-700 font-medium block mb-1">Optional API / account URL</label>
+                      <input type="url" value={providerApiUrl} onChange={(e) => setProviderApiUrl(e.target.value)} placeholder="Only if your provider requires a custom endpoint" className="w-full bg-paper-50 border border-line rounded px-3 py-2 text-sm text-ink" />
+                    </div>
+                  )}
+                  {activeTab !== 'sanity' && activeTab !== 'whatsapp_business' && (
+                    <div>
+                      <label className="text-xs text-ink-700 font-medium block mb-1">Optional account or resource ID</label>
+                      <input value={providerResource} onChange={(e) => setProviderResource(e.target.value)} placeholder="Required only by some provider APIs" className="w-full bg-paper-50 border border-line rounded px-3 py-2 text-sm text-ink" />
+                    </div>
+                  )}
                 </div>
               )}
 
