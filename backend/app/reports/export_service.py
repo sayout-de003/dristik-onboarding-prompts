@@ -74,7 +74,9 @@ def generate_urls_csv(report: ExecutiveReport) -> str:
         title_px = snip.desktop_title_pixel_width if snip else (title_len * 9.8)
         title_trunc = "YES" if (snip and snip.desktop_title_truncated) or (title_len > 60) else "NO"
 
-        desc = getattr(pr, "meta_description", "") or (getattr(pr, "seo", None) and getattr(pr.seo, "meta_status", "")) or ""
+        desc = getattr(pr, "meta_description", None)
+        if desc is None:
+            desc = ""
         desc_len = len(desc)
         desc_px = snip.meta_description_pixel_width if snip else (desc_len * 6.8)
         desc_trunc = "YES" if (snip and snip.meta_description_truncated) or (desc_len > 160) else "NO"
