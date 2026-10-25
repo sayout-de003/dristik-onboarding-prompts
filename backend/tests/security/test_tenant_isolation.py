@@ -16,7 +16,7 @@ def test_missing_run_is_not_found(monkeypatch):
     monkeypatch.setattr(access.orchestrator, "runs", {})
     with pytest.raises(HTTPException) as caught:
         require_analysis("run_does_not_exist", owner)
-    assert caught.value.status_code == 403
+    assert caught.value.status_code == 404
 
 
 def test_cross_tenant_run_is_hidden_as_not_found(monkeypatch):
@@ -46,4 +46,4 @@ def test_inactive_user_cannot_access_even_own_tenant(monkeypatch):
     monkeypatch.setattr(access.orchestrator, "get_run", lambda _analysis_id: owned_run)
     with pytest.raises(HTTPException) as caught:
         require_analysis("run_owned_by_org_1", owner)
-    assert caught.value.status_code == 404
+    assert caught.value.status_code == 403
