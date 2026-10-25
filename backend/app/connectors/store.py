@@ -103,6 +103,20 @@ class ConnectorStore:
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_connector_oauth_nonce_expiry ON connector_oauth_state_nonces(expires_at)")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS connector_action_runs (
+                org_id TEXT NOT NULL,
+                integration_id TEXT NOT NULL,
+                idempotency_key TEXT NOT NULL,
+                action TEXT NOT NULL,
+                status TEXT NOT NULL,
+                result_json TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (org_id, integration_id, idempotency_key)
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_connector_action_runs_status ON connector_action_runs(org_id, status, updated_at)")
         return conn
 
     def _load(self) -> None:
@@ -148,6 +162,47 @@ class ConnectorStore:
 
     def list_integrations(self, org_id: str = "org_default") -> List[Integration]:
         return [i for i in self._integrations.values() if i.org_id == org_id]
+
+    def begin_action(self, org_id: str, integration_id: str, idempotency_key: str, action: str) -> Dict[str, Any]:
+        """Reserve an action key exactly once per tenant/integration."""
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            try:
+                conn.execute(
+                    """INSERT INTO connector_action_runs
+                    (org_id, integration_id, idempotency_key, action, status, result_json, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, NULL, ?, ?)""",
+                    (org_id, integration_id, idempotency_key, action, "RUNNING", now, now),
+                )
+                conn.commit()
+                return {"created": True, "status": "RUNNING", "result": None}
+            except sqlite3.IntegrityError:
+                row = conn.execute(
+                    """SELECT action, status, result_json FROM connector_action_runs
+                    WHERE org_id = ? AND integration_id = ? AND idempotency_key = ?""",
+                    (org_id, integration_id, idempotency_key),
+                ).fetchone()
+                if not row:
+                    raise
+                existing_action, status, result_json = row
+                try:
+                    result = json.loads(result_json) if result_json else None
+                except (TypeError, ValueError):
+                    result = None
+                return {"created": False, "action": existing_action, "status": status, "result": result}
+
+    def complete_action(self, org_id: str, integration_id: str, idempotency_key: str, status: str, result: Dict[str, Any]) -> None:
+        """Persist a small, sanitized action outcome for safe idempotent retries."""
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """UPDATE connector_action_runs SET status = ?, result_json = ?, updated_at = ?
+                WHERE org_id = ? AND integration_id = ? AND idempotency_key = ? AND status = ?""",
+                (status, json.dumps(result, sort_keys=True, default=str), datetime.now(timezone.utc).isoformat(),
+                 org_id, integration_id, idempotency_key, "RUNNING"),
+            )
+            conn.commit()
+            if cursor.rowcount != 1:
+                raise RuntimeError("Action run was not in RUNNING state; refusing to overwrite its outcome.")
 
     def consume_oauth_nonce(self, nonce: str, expires_at: int) -> bool:
         """Atomically consume a signed OAuth state nonce once; reject replay."""
