@@ -1,5 +1,5 @@
 """Regression tests for evidence-safe CRO analytics and metric semantics."""
-from app.cro.engine import _read_analytics, build_cro_intelligence
+from app.cro.engine import _parse_page, _read_analytics, _read_search, build_cro_intelligence
 from app.cro.metrics import experiment_lift, rate
 
 
@@ -77,3 +77,77 @@ def test_math_helpers_reject_non_finite_values():
     assert rate(1, float("inf")) is None
     assert experiment_lift(float("nan"), 0.1) is None
     assert experiment_lift(0.2, float("inf")) is None
+
+def test_revenue_per_visitor_requires_users_not_sessions():
+    report = build_cro_intelligence(
+        pages=[],
+        analytics={
+            "state": "MEASURED",
+            "sessions": 100,
+            "revenue": 500.0,
+            "orders": 5,
+        },
+    )
+    metric = _metric(report, "Revenue per visitor")
+    assert metric.status == "DATA_UNAVAILABLE"
+    assert metric.value is None
+    assert "sessions are not substituted for visitors" in metric.note
+
+
+def test_revenue_per_visitor_uses_eligible_users_denominator():
+    report = build_cro_intelligence(
+        pages=[],
+        analytics={
+            "state": "MEASURED",
+            "sessions": 150,
+            "eligible_users": 100,
+            "revenue": 500.0,
+            "orders": 5,
+        },
+    )
+    metric = _metric(report, "Revenue per visitor")
+    assert metric.status == "MEASURED"
+    assert metric.value == 5.0
+    assert metric.denominator == "eligible users"
+
+
+def test_search_console_invalid_click_totals_are_not_cast_or_published():
+    for value in (-1, float("nan"), float("inf"), True, 2.5, "10"):
+        result = _read_search({"state": "MEASURED", "clicks": value})
+        assert result["state"] == "INVALID_DATA"
+        assert result["clicks"] is None
+
+
+def test_cro_report_discloses_sample_and_unverified_rendering_and_journeys():
+    report = build_cro_intelligence(
+        pages=[{"url": "https://example.com/", "raw_html": "<html><head><meta name='viewport' content='width=device-width'></head><body><h1>Example</h1><a class='cta' href='/demo'>Book a demo</a></body></html>"}],
+        discovered_urls=4,
+    )
+    assert report.coverage["status"] == "PARTIAL_SAMPLE"
+    assert report.coverage["inspected_pages"] == 1
+    assert report.coverage["discovered_urls"] == 4
+    assert report.coverage["sample_coverage_pct"] == 25.0
+    assert report.coverage["rendered_dom_status"] == "NOT_VERIFIED_BY_CRO_ENGINE"
+    assert report.coverage["journey_execution_status"] == "NOT_EXECUTED"
+
+
+def test_static_html_parser_detects_form_friction_and_ctas():
+    page = _parse_page(
+        {
+            "url": "https://example.com/contact",
+            "raw_html": (
+                "<html><head><title>Contact</title></head><body>"
+                "<a class='cta' href='/demo'>Book a demo</a>"
+                "<form><input type='text' name='email' placeholder='Email address'>"
+                "<button type='submit'>Send</button></form>"
+                "</body></html>"
+            ),
+        },
+        None,
+    )
+    assert any(item["text"] == "Book a demo" for item in page["ctas"])
+    assert len(page["forms"]) == 1
+    assert page["forms"][0]["missing_labels"] == 1
+    assert page["forms"][0]["placeholder_only"] == 1
+    assert page["forms"][0]["has_submit"] is True
+
