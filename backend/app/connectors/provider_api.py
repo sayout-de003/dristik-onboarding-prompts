@@ -187,6 +187,14 @@ class ProviderApiConnector(BaseConnector):
                     status = ConnectorHealthStatus.UNAUTHORIZED
                     authenticated = False
                     message = "Telegram getMe rejected the bot token."
+                elif provider == ConnectorType.TIKTOK and isinstance(payload, dict) and isinstance(payload.get("error"), dict) and payload["error"].get("code") not in (None, "", "ok", "0"):
+                    status = ConnectorHealthStatus.UNAUTHORIZED
+                    authenticated = False
+                    message = "TikTok rejected the access token or required scopes."
+                elif isinstance(payload, dict) and isinstance(payload.get("error"), dict):
+                    status = ConnectorHealthStatus.ERROR
+                    authenticated = False
+                    message = "Provider returned an API-level error despite a successful HTTP status."
                 else:
                     status = ConnectorHealthStatus.CONNECTED
                     authenticated = True
