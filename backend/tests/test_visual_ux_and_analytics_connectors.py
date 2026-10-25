@@ -98,13 +98,13 @@ def test_lifecycle_revenue_connected_but_missing_nullable_metrics_stay_unknown()
     svc = LifecycleRevenueService()
     result = svc.synthesize_lifecycle_intelligence(
         "example.com",
-        gsc_data=GscAttributionData(is_connected=True, ctr=None),
-        ga4_data=Ga4AttributionData(
+        gsc_data=GscAttributionData.model_construct(is_connected=True, ctr=None),
+        ga4_data=Ga4AttributionData.model_construct(
             is_connected=True,
             engagement_rate=None,
             conversion_rate=None,
         ),
-        crm_data=CrmAttributionData(is_connected=True, lead_quality_score=None),
+        crm_data=CrmAttributionData.model_construct(is_connected=True, lead_quality_score=None),
     )
     assert result.stages["search"]["metrics"]["ctr"] == "UNKNOWN"
     assert result.stages["visitor"]["metrics"]["engagement_rate"] == "UNKNOWN"
