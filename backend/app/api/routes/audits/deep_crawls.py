@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import asyncio
 import os
+import uuid
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
 from urllib.parse import urljoin, urlsplit
 from urllib.robotparser import RobotFileParser
 
@@ -113,7 +115,8 @@ async def _worker(job_id: str, org_id: str) -> None:
                 if not target or not is_same_origin(target, origin):
                     store.finish_url(job_id, org_id, url, "EXCLUDED", http_status=result.status_code, final_url=target, error_code="REDIRECT_OUT_OF_SCOPE")
                 else:
-                    store.finish_url(job_id, org_id, url, "FAILED", http_status=result.status_code, final_url=target, error_code="REDIRECT_REQUIRES_REQUEUE")
+                    store.enqueue_discovered(job_id, org_id, [target], url, int(item["depth"]))
+                    store.finish_url(job_id, org_id, url, "CRAWLED", http_status=result.status_code, final_url=target)
                 continue
             if result.status_code >= 400:
                 store.finish_url(job_id, org_id, url, "FAILED", http_status=result.status_code, error_code=f"HTTP_{result.status_code}")
@@ -132,7 +135,7 @@ async def _worker(job_id: str, org_id: str) -> None:
         with store._connect() as db:
             job = db.execute("SELECT cancel_requested FROM deep_crawl_jobs WHERE job_id=? AND org_id=?", (job_id, org_id)).fetchone()
             if job and job["cancel_requested"]:
-                db.execute("UPDATE deep_crawl_jobs SET status='CANCELLED',updated_at=? WHERE job_id=? AND org_id=?", (__import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(), job_id, org_id))
+                db.execute("UPDATE deep_crawl_jobs SET status='CANCELLED',updated_at=? WHERE job_id=? AND org_id=?", (datetime.now(timezone.utc).isoformat(), job_id, org_id))
             else:
                 remaining = db.execute("SELECT COUNT(*) FROM deep_crawl_urls WHERE job_id=? AND status IN ('DISCOVERED','IN_PROGRESS')", (job_id,)).fetchone()[0]
                 failed = db.execute("SELECT COUNT(*) FROM deep_crawl_urls WHERE job_id=? AND status='FAILED'", (job_id,)).fetchone()[0]
@@ -149,7 +152,7 @@ async def create_deep_crawl(
     origin = normalize_url(payload.website_url)
     if not origin:
         raise HTTPException(status_code=422, detail="website_url must be a valid HTTP(S) URL")
-    job_id = "crawl_" + __import__("uuid").uuid4().hex
+    job_id = "crawl_" + uuid.uuid4().hex
     try:
         _store().create_job(job_id, user.org_id, origin, payload.max_pages, payload.max_depth)
     except ValueError as exc:
