@@ -19,7 +19,7 @@ import html
 import re
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from app.domain.evidence.integrity import validate_score
+from app.evidence_integrity import validate_score
 
 from app.reports.publishing_engine import (
     ChapterSpec,
