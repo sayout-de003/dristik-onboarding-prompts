@@ -264,7 +264,8 @@ def test_rebuild_uses_measured_analytics_and_falls_back_to_stored_intelligence()
     rebuilt = build_from_executive_report(sealed)
     assert rebuilt.sample_size == 1
     assert rebuilt.discovered_urls == 8
-    assert _metric(rebuilt, "Conversion rate").value == 0.05
+    assert _metric(rebuilt, "Conversion rate").value is None
+    assert _metric(rebuilt, "Key-event rate per session").value == 0.05
     competitor_text = " ".join(check.summary for check in _checks(rebuilt) if check.key == "competitor")
     assert "other.example" in competitor_text
     assert "example.com" not in competitor_text
