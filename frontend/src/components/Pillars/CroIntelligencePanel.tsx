@@ -89,6 +89,14 @@ export function CroIntelligencePanel({ report, analysisId }: CroIntelligencePane
             {intel.coverage.note && <p className="text-xs text-ink-500">{intel.coverage.note}</p>}
           </div>
         )}
+        {intel.scoring_calibration && (
+          <div className="rounded border border-line bg-paper-50 p-3 space-y-1">
+            <p className="text-xs font-mono uppercase tracking-wide text-ink-600">Scoring calibration</p>
+            <p className="text-xs text-ink-700">{intel.scoring_calibration.status || 'NOT_RECORDED'} · {intel.scoring_calibration.priority_calibration || 'NOT_RECORDED'}</p>
+            {intel.scoring_calibration.basis && <p className="text-xs text-ink-600">{intel.scoring_calibration.basis}</p>}
+            {intel.scoring_calibration.note && <p className="text-xs text-ink-500">{intel.scoring_calibration.note}</p>}
+          </div>
+        )}
       </Card>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
