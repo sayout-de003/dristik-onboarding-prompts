@@ -206,7 +206,8 @@ def test_geo_report_fastapi_endpoints():
     from app.orchestration.orchestrator import orchestrator
 
     import uuid
-    client = TestClient(app)
+    # Auth cookies are Secure outside DEBUG, so use HTTPS in the test client.
+    client = TestClient(app, base_url="https://testserver")
     signup = client.post("/api/v1/auth/signup", json={
         "full_name": "GEO Owner",
         "email": f"geo_{uuid.uuid4().hex[:8]}@example.com",
