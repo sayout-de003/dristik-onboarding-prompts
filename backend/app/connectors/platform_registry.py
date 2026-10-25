@@ -73,6 +73,8 @@ def registry_payload(adapter_keys: set[str] | None = None) -> list[dict[str, Any
             registered_operations: list[str] = []
         elif provider.adapter_key == "provider_api":
             registered_operations = ["health", "live_resource_discovery"]
+            if provider.id in {"slack", "whatsapp_business", "telegram"}:
+                registered_operations.append("webhook_ingress")
         else:
             # Legacy adapters expose the common lifecycle interface, but are not certified
             # until provider contract tests have passed against real/sandbox accounts.
