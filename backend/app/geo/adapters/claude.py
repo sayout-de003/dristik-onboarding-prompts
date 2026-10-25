@@ -75,6 +75,7 @@ class ClaudeAdapter(BaseGeoEngineAdapter):
                         raw_content=raw_text,
                         citations=citations,
                         status_code=200,
+                        is_live=True,
                         latency_ms=latency,
                     )
                 else:
