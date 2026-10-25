@@ -100,7 +100,7 @@ def test_revenue_per_visitor_uses_eligible_users_denominator():
         analytics={
             "state": "MEASURED",
             "sessions": 150,
-            "eligible_users": 100,
+            "eligible_visitors": 100,
             "revenue": 500.0,
             "orders": 5,
         },
@@ -108,7 +108,7 @@ def test_revenue_per_visitor_uses_eligible_users_denominator():
     metric = _metric(report, "Revenue per visitor")
     assert metric.status == "MEASURED"
     assert metric.value == 5.0
-    assert metric.denominator == "eligible users"
+    assert metric.denominator == "eligible visitors"
 
 
 def test_search_console_invalid_click_totals_are_not_cast_or_published():
@@ -150,4 +150,33 @@ def test_static_html_parser_detects_form_friction_and_ctas():
     assert page["forms"][0]["missing_labels"] == 1
     assert page["forms"][0]["placeholder_only"] == 1
     assert page["forms"][0]["has_submit"] is True
+
+def test_generic_ga4_fields_do_not_become_conversion_denominators():
+    report = build_cro_intelligence(
+        pages=[],
+        analytics={
+            "state": "MEASURED",
+            "sessions": 100,
+            "conversions": 20,
+            "users": 80,
+            "revenue": 500.0,
+        },
+    )
+    assert _metric(report, "Conversion rate").status == "DATA_UNAVAILABLE"
+    assert _metric(report, "Conversion rate").value is None
+    assert _metric(report, "Revenue per visitor").status == "DATA_UNAVAILABLE"
+
+
+def test_finding_evidence_includes_the_observed_page_url():
+    report = build_cro_intelligence(
+        pages=[{
+            "url": "https://example.com/landing",
+            "raw_html": "<html><head><meta name='viewport' content='width=device-width'></head><body><h1>Our service</h1><p>" + ("Useful service content " * 20) + "</p></body></html>",
+        }],
+        discovered_urls=1,
+    )
+    finding = next((item for item in report.findings if "No CTA was found" in item.finding), None)
+    assert finding is not None
+    assert "https://example.com/landing" in finding.evidence
+    assert finding.evidence_state == "SAMPLE_VERIFIED"
 
