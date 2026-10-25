@@ -238,7 +238,13 @@ class CrawlerService:
         # Browser and remote-render paths must validate the initial target too.
         # The browser additionally validates each redirect/subresource in its route hook.
         if settings.SSRF_PROTECTION_ENABLED:
-            safe, reason = is_safe_url(url)
+            try:
+                safe, reason = await asyncio.wait_for(
+                    asyncio.to_thread(is_safe_url, url),
+                    timeout=3.0,
+                )
+            except asyncio.TimeoutError:
+                return None, None, 0, (time.time() - start_time) * 1000, {}, 0, "SSRF validation timed out; render target blocked", None
             if not safe:
                 return None, None, 0, (time.time() - start_time) * 1000, {}, 0, f"SSRF blocked render target: {reason}", None
 
