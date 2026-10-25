@@ -302,6 +302,10 @@ class Settings(BaseSettings):
     RAZORPAY_WEBHOOK_SECRET: Optional[str] = Field(default=None, description="Razorpay Webhook Secret")
     RAZORPAY_CURRENCY: str = "INR"
 
+    # Crawl resource safety. Enforced against decoded response bytes per URL.
+    CRAWL_MAX_RESPONSE_BYTES: int = Field(default=5 * 1024 * 1024, ge=1024, le=50 * 1024 * 1024)
+    CRAWL_MAX_SITEMAP_BYTES: int = Field(default=2 * 1024 * 1024, ge=1024, le=10 * 1024 * 1024)
+
     # External ground truth. Absent keys stay NOT_CONFIGURED. Never invent the metric.
     CRUX_API_KEY: Optional[str] = Field(default=None, description="Chrome UX Report API key. Not a substitute for lab TTFB.")
     DATAFORSEO_LOGIN: Optional[str] = None
