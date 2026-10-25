@@ -390,8 +390,16 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
     }
 
     try {
-      const res = await fetch('/api/v1/connectors/connect', {
-        method: 'POST',
+      const existing = integrations.find((integration) =>
+        integration.provider === payload.provider &&
+        (integration.target_url === payload.target_url ||
+          (payload.repository && integration.repository === payload.repository))
+      );
+      const endpoint = existing
+        ? `/api/v1/connectors/${existing.integration_id}/credentials`
+        : '/api/v1/connectors/connect';
+      const res = await fetch(endpoint, {
+        method: existing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
