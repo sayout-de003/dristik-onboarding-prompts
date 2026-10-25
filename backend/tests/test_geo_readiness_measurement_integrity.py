@@ -37,3 +37,9 @@ def test_composite_is_null_when_no_weighted_dimensions_were_measured():
     assert _compute_composite({
         "unavailable": _score_citation_readiness(None),
     }) is None
+
+
+def test_legacy_readiness_entry_point_does_not_blend_citation_and_sentiment():
+    from app.geo.scoring.geo_readiness import calculate_geo_readiness
+
+    assert calculate_geo_readiness(75.0, 80.0) is None
