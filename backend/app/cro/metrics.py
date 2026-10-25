@@ -38,7 +38,13 @@ def incremental_profit(
 METRIC_CATALOG = (
     {
         "metric": "Conversion rate",
-        "formula": "Unique eligible converters ÷ eligible visitors",
+        "formula": "Unique eligible converters ÷ eligible users",
+        "numerator_name": "unique converters",
+        "denominator_name": "eligible users",
+    },
+    {
+        "metric": "Key-event rate per session",
+        "formula": "GA4 key events ÷ sessions",
         "numerator_name": "key events",
         "denominator_name": "sessions",
     },
