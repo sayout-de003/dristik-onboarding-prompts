@@ -1598,12 +1598,7 @@ class SectionReportGenerator:
         honest = getattr(report, "honest_scores", None)
         scores = getattr(report, "scores", None)
         cat_scores = getattr(scores, "category_scores", {}) or {} if scores else {}
-        base_score = None
-        if scores:
-            extracted_base = self._extract_score_num(getattr(scores, "overall_score", None))
-            if extracted_base is not None:
-                base_score = extracted_base
-
+        # Do not substitute the overall score for a missing pillar-specific result.
         if section_key in ("crawl", "seo"):
             if honest and getattr(honest, "honest_google_search", None) is not None:
                 val = self._extract_score_num(getattr(honest, "honest_google_search"))
