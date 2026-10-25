@@ -338,11 +338,11 @@ export function Overview({
                       <span className="font-semibold text-ink text-sm">{disc.shortName}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className={`font-mono text-sm font-bold ${scoreTone(disc.score ?? 0)}`}>
+                      <span className={`font-mono text-sm font-bold ${disc.score != null ? scoreTone(disc.score) : "text-ink-400"}`}>
                         {disc.score != null ? Math.round(disc.score) : '—'}
                       </span>
                       <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-paper-200 text-ink-600">
-                        {disc.grade}
+                        {disc.score != null ? disc.grade : "Not measured"}
                       </span>
                     </div>
                   </div>
