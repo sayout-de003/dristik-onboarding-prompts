@@ -19,7 +19,7 @@ class EngineRawResponse(BaseModel):
     raw_content: str
     citations: List[str] = Field(default_factory=list)
     sources: List[Dict[str, Any]] = Field(default_factory=list)
-    status_code: int = 200
+    status_code: int = 0
     latency_ms: float = 0.0
     error: Optional[str] = None
     queried_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
