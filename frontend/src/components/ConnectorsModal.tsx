@@ -1224,6 +1224,16 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
                       Credentials are sent to the Dristik API and stored encrypted. The first check is a live authentication handshake; it does not imply publishing, analytics, or search-citation capabilities are enabled.
                     </p>
                   </div>
+                  {['linkedin', 'slack', 'instagram', 'whatsapp_business', 'hubspot', 'salesforce', 'stripe'].includes(activeTab) && oauthProviders[activeTab]?.configured && (
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={() => startOauth(activeTab, { domain: providerApiUrl || siteUrl, shop: providerApiUrl || siteUrl, repository: providerResource })}
+                      className="w-full py-2.5 px-4 border border-line rounded text-sm font-semibold text-ink hover:bg-paper-100 disabled:opacity-50"
+                    >
+                      Connect with {activeTab === 'whatsapp_business' ? 'Meta' : activeTab[0].toUpperCase() + activeTab.slice(1)} OAuth
+                    </button>
+                  )}
                   <div>
                     <label className="text-xs text-ink-700 font-medium block mb-1">API key / authorized access token</label>
                     <input
