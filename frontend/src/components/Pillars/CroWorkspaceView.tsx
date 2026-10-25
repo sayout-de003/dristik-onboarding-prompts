@@ -414,7 +414,7 @@ export function CroWorkspaceView({
           </div>
 
           {/* Passive CTA Warning Notice with Suggestions */}
-          {(ctaData?.passive_generic_count ?? 0) > 0 && (
+          {ctaData && (ctaData.passive_generic_count ?? 0) > 0 && (
             <Card className="p-4 bg-warn/5 border-warn/30 space-y-2">
               <span className="text-[10px] font-mono uppercase tracking-[0.04em] text-warn font-bold block">
                 High Priority: Replace Passive Microcopy
@@ -524,7 +524,7 @@ export function CroWorkspaceView({
               <div className="p-3.5 rounded bg-paper-50 border border-line space-y-1">
                 <span className="text-[10px] font-mono uppercase text-ink-500 block">Headline Word Count</span>
                 <p className="font-sans font-bold text-ink text-lg">
-                  {valueProp?.headline_word_count ?? 8} words
+                  {valueProp?.headline_word_count == null ? 'Not measured' : valueProp.headline_word_count} words
                 </p>
                 <p className="text-[11px] text-ink-500">Ideal range: 6–10 punchy words</p>
               </div>
@@ -800,13 +800,15 @@ export function CroWorkspaceView({
                 Spam Defense &amp; Bot Filter
               </span>
               <div className="flex items-center gap-1.5 pt-1">
-                {formAudit?.forms_without_captcha != null && formAudit.forms_without_captcha === 0 ? (
+                {formAudit?.forms_without_captcha == null ? (
+                  <span className="font-mono text-sm text-ink-500">Not measured</span>
+                ) : formAudit.forms_without_captcha === 0 ? (
                   <span className="font-mono text-sm text-good font-bold flex items-center gap-1">
-                    <CheckCircle2 className="w-4 h-4" /> Protected
+                    <CheckCircle2 className="w-4 h-4" /> Defense detected
                   </span>
                 ) : (
                   <span className="font-mono text-sm text-warn font-bold flex items-center gap-1">
-                    <AlertTriangle className="w-4 h-4" /> Unprotected
+                    <AlertTriangle className="w-4 h-4" /> Defense not detected
                   </span>
                 )}
               </div>
