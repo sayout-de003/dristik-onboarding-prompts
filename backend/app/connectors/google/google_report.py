@@ -200,8 +200,18 @@ def map_analytics(summary: Any) -> Dict[str, Any]:
             summary.get("payload") or {},
             str(summary.get("period") or "last 30 days"),
         )
-    if isinstance(summary, dict) and summary.get("state") in _NOTICES[ANALYTICS] and "provenance" not in summary:
-        return _channel(ANALYTICS, str(summary["state"]), property=summary.get("property"), period=summary.get("period"))
+    if (
+        isinstance(summary, dict)
+        and summary.get("state") in _NOTICES[ANALYTICS]
+        and summary.get("state") != "MEASURED"
+        and "provenance" not in summary
+    ):
+        return _channel(
+            ANALYTICS,
+            str(summary["state"]),
+            property=summary.get("property"),
+            period=summary.get("period"),
+        )
     if summary is None:
         return _channel(ANALYTICS, "NOT_CONNECTED")
 
