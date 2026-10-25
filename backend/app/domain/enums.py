@@ -538,8 +538,11 @@ class ConnectorType(str, Enum):
 class ConnectorHealthStatus(str, Enum):
     CONNECTED = "connected"
     DISCONNECTED = "disconnected"
-    ERROR = "error"
-    UNAUTHORIZED = "unauthorized"
+    DEGRADED = "degraded"
+    AUTH_REQUIRED = "auth_required"
+    UNAVAILABLE = "unavailable"
+    ERROR = "error"          # Legacy status retained for compatibility
+    UNAUTHORIZED = "unauthorized"  # Legacy status retained for compatibility
 
 
 class CapabilityStatus(str, Enum):
