@@ -136,9 +136,9 @@ def build_publication_manifest(
     brand_name = getattr(profile, "business_name", None) or domain_clean
 
     generated_at = str(getattr(report, "generated_at", None) or "Timestamp unavailable")
-    date_clean = generated_at[:10] if len(generated_at) >= 10 else generated_at
+    date_clean = generated_at[:10] if generated_at != "Timestamp unavailable" and len(generated_at) >= 10 else generated_at
     analysis_id = str(getattr(report, "analysis_id", None) or getattr(report, "report_id", None) or "Report reference unavailable")
-    report_ref = analysis_id[:12].upper()
+    report_ref = analysis_id[:12].upper() if analysis_id != "Report reference unavailable" else "REFERENCE UNAVAILABLE"
 
     TITLES: Dict[str, Dict[str, str]] = {
         "COMPLETE": {
@@ -860,6 +860,12 @@ def build_adaptive_publication_document(
     )
 
     # Front matter HTML
+    coverage_sentence = (
+        f"This audit recorded {pages_count} primary-origin URLs."
+        if isinstance(pages_count, int)
+        else "The number of crawled URLs was not recorded."
+    )
+
     front_matter = f"""
     <div class="chapter-start front-matter-page" style="padding: 0 4mm;">
         <div class="running-header">
@@ -885,7 +891,7 @@ def build_adaptive_publication_document(
                 <div class="card">
                     <div class="card-kicker">02 // SCOPE BOUNDARIES</div>
                     <p style="font-size: 8pt; color: #334155; margin: 0;">
-                        {f"This audit recorded {pages_count} primary-origin URLs." if isinstance(pages_count, int) else "The number of crawled URLs was not recorded."} Findings apply only to the observed crawl window and tested query sets.
+                        {coverage_sentence} Findings apply only to the observed crawl window and tested query sets.
                     </p>
                 </div>
             </div>
