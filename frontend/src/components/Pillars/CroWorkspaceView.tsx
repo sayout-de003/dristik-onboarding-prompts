@@ -60,13 +60,14 @@ export function CroWorkspaceView({
   const formAudit = report.form_audit || croAudit?.form_friction;
   const honest = report.honest_scores;
 
-  const croScore = croAudit?.overall_cro_score != null
+  const categoryCroScore = report.scores?.category_scores?.['UX_CONVERSION']?.score;
+  const croScore: number | null = croAudit?.overall_cro_score != null
     ? Math.round(croAudit.overall_cro_score)
     : (honest?.human_score != null
       ? Math.round(honest.human_score)
-      : (report.scores?.category_scores?.['UX_CONVERSION']?.score ? Math.round(report.scores.category_scores['UX_CONVERSION'].score) : 74));
+      : (categoryCroScore != null ? Math.round(categoryCroScore) : null));
 
-  const croGrade = croAudit?.cro_grade || (croScore >= 85 ? 'A' : (croScore >= 70 ? 'B' : (croScore >= 55 ? 'C' : 'D')));
+  const croGrade = croAudit?.cro_grade || (croScore == null ? 'Unmeasured' : (croScore >= 85 ? 'A' : (croScore >= 70 ? 'B' : (croScore >= 55 ? 'C' : 'D'))));
 
   // Category UX_CONVERSION findings
   const croFindings = (report.findings || []).filter(
@@ -92,7 +93,7 @@ export function CroWorkspaceView({
 
   // Value Prop Data
   const valueProp = croAudit?.value_prop;
-  const heroHeadline = valueProp?.hero_headline || profile?.value_proposition || 'Empowering Modern Enterprises';
+  const heroHeadline = valueProp?.hero_headline || profile?.value_proposition || 'No observed value proposition';
   const heroSubhead = valueProp?.hero_subhead;
 
   // Filtered Findings
@@ -107,7 +108,7 @@ export function CroWorkspaceView({
       title="Conversion Rate & UX Optimization (CRO)"
       description="CTA ergonomics, above-the-fold value proposition clarity, social proof depth, pricing psychology, and form friction diagnostics."
       scoreLabel="CRO Score"
-      score={croScore}
+      score={croScore == null ? 'Unmeasured' : croScore}
       metaLabel="Form Grade"
       meta={formAudit ? `Grade ${formAudit.cro_friction_grade}` : `Grade ${croGrade}`}
       actions={
@@ -121,9 +122,9 @@ export function CroWorkspaceView({
         { id: 'overview', label: 'Scorecard & Diagnostics' },
         { id: 'ctas', label: `CTA Studio (${ctaData?.total_ctas_detected ?? ctasList.length})` },
         { id: 'valueprop', label: '5-Sec Hook & Value Prop' },
-        { id: 'trust', label: `Trust & Social Proof (${socialProof?.trust_authority_score ?? 60}%)` },
+        { id: 'trust', label: `Trust & Social Proof (${socialProof?.trust_authority_score == null ? 'Not measured' : `${socialProof.trust_authority_score}%`})` },
         { id: 'pricing', label: 'Pricing & Risk Reversal' },
-        { id: 'forms', label: `Form Friction (${formAudit?.total_forms_detected ?? 0})` },
+        { id: 'forms', label: `Form Friction (${formAudit?.total_forms_detected == null ? 'Not measured' : formAudit.total_forms_detected})` },
         { id: 'findings', label: `Findings (${croFindings.length})` },
         { id: 'revenue', label: 'Funnel & Revenue' },
         { id: 'leadgen', label: 'Lead Gen' },
@@ -189,14 +190,14 @@ export function CroWorkspaceView({
               </span>
               <div className="flex items-baseline gap-2">
                 <span className="font-sans text-3xl font-bold text-ink">
-                  {formAudit ? formAudit.cro_friction_grade : 'A-'}
+                  {formAudit ? formAudit.cro_friction_grade : 'Unmeasured'}
                 </span>
                 <span className="text-xs text-ink-500">
-                  ({formAudit?.total_forms_detected ?? 0} forms)
+                  ({formAudit?.total_forms_detected == null ? 'Not measured' : formAudit.total_forms_detected} forms)
                 </span>
               </div>
               <p className="text-xs text-ink-500">
-                {(formAudit?.forms_with_missing_labels ?? 0) === 0 ? 'Fully labeled inputs' : `${formAudit?.forms_with_missing_labels} unlabeled`}
+                {formAudit?.forms_with_missing_labels == null ? 'Label status not measured' : (formAudit.forms_with_missing_labels === 0 ? 'No unlabeled inputs detected in sample' : `${formAudit.forms_with_missing_labels} unlabeled`)}
               </p>
             </Card>
 
@@ -206,10 +207,10 @@ export function CroWorkspaceView({
               </span>
               <div className="flex items-baseline gap-2">
                 <span className="font-sans text-3xl font-bold text-ink">
-                  {valueProp?.clarity_grade || 'B+'}
+                  {valueProp?.clarity_grade || 'Unmeasured'}
                 </span>
                 <span className="text-xs text-ink-500">
-                  {valueProp?.headline_word_count ?? 8} words
+                  {valueProp?.headline_word_count == null ? 'Not measured' : valueProp.headline_word_count} words
                 </span>
               </div>
               <p className="text-xs text-ink-500">
@@ -275,7 +276,7 @@ export function CroWorkspaceView({
               <div className="flex items-center gap-2 pt-2 border-t border-line font-mono text-[11px] text-ink-500">
                 <span>Headline: {valueProp?.headline_word_count ?? 8} words</span>
                 <span>·</span>
-                <span>Centricity: {valueProp?.customer_centricity_ratio ?? 1.2}x</span>
+                <span>Centricity: {valueProp?.customer_centricity_ratio == null ? 'Not measured' : valueProp.customer_centricity_ratio}x</span>
               </div>
             </Card>
 
@@ -505,7 +506,7 @@ export function CroWorkspaceView({
                 5-Second Value Proposition Clarity Test
               </span>
               <span className="font-mono text-xs px-2.5 py-1 rounded bg-paper-200 text-ink font-bold">
-                Clarity Grade: {valueProp?.clarity_grade || 'B+'}
+                Clarity Grade: {valueProp?.clarity_grade || 'Unmeasured'}
               </span>
             </div>
 
