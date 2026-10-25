@@ -11,7 +11,7 @@ across the 6 primary workspaces:
 """
 from typing import Dict, Any, List, Optional
 from app.domain.models import ExecutiveReport
-from app.domain.evidence.integrity import validate_score
+from app.evidence_integrity import validate_score
 from app.aeo.reporting import aeo_cover_figure, render_aeo_audit_book
 from app.geo.reporting import geo_cover_figure, render_geo_audit_book
 from app.seo.reporting import render_seo_audit_book
