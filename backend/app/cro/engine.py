@@ -276,6 +276,7 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
         "key_events_present": False,
         "unique_converters": None,
         "eligible_users": None,
+        "eligible_visitors": None,
         "engagement_rate_pct": None,
         "landing_pages": None,
         "revenue": None,
@@ -299,7 +300,7 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
         # A malformed provider payload invalidates the measurement snapshot as a whole.
         # Do not let downstream CRO checks consume partially parsed values.
         for field in (
-            "sessions", "key_events", "unique_converters", "eligible_users",
+            "sessions", "key_events", "unique_converters", "eligible_users", "eligible_visitors",
             "engagement_rate_pct", "landing_pages", "revenue", "orders",
         ):
             result[field] = None
@@ -325,8 +326,11 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
 
     sessions = count_value("sessions")
     key_events = count_value("key_events", "keyEvents", "conversions")
-    unique_converters = count_value("unique_converters", "converters")
-    eligible_users = count_value("eligible_users", "total_users", "users")
+    # Accept only explicit semantic fields. Generic GA4 "conversions" and "users"
+    # are not silently relabelled as unique converters or eligible users.
+    unique_converters = count_value("unique_converters")
+    eligible_users = count_value("eligible_users")
+    eligible_visitors = count_value("eligible_visitors")
     if result["state"] == "INVALID_DATA":
         return result
     result["sessions"] = sessions
@@ -334,6 +338,7 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
     result["key_events_present"] = key_events is not None
     result["unique_converters"] = unique_converters
     result["eligible_users"] = eligible_users
+    result["eligible_visitors"] = eligible_visitors
 
     engagement = channel.get("engagement_rate_pct")
     if engagement is not None:
@@ -2982,7 +2987,7 @@ def _metrics(obs: _Obs) -> List[CroMetricResult]:
     window = analytics.get("period")
     conversion = rate(analytics.get("unique_converters"), analytics.get("eligible_users"))
     key_event_rate = rate(analytics.get("key_events"), analytics.get("sessions")) if analytics.get("key_events_present") else None
-    revenue_per_visitor = rate(analytics.get("revenue"), analytics.get("eligible_users"))
+    revenue_per_visitor = rate(analytics.get("revenue"), analytics.get("eligible_visitors"))
     aov = rate(analytics.get("revenue"), analytics.get("orders"))
     values = {
         "Conversion rate": (
@@ -3000,8 +3005,8 @@ def _metrics(obs: _Obs) -> List[CroMetricResult]:
         "Revenue per visitor": (
             revenue_per_visitor,
             "attributed revenue",
-            "eligible users",
-            "Shown only when attributed revenue and eligible users are both present; sessions are not substituted for visitors.",
+            "eligible visitors",
+            "Shown only when attributed revenue and eligible visitors are both present; users and sessions are not substituted for visitors.",
         ),
         "Average order value": (aov, "net sales", "orders", "Shown only when both net sales and completed orders were present."),
     }
@@ -3123,7 +3128,11 @@ def _findings(failed: List[Dict[str, Any]], obs: _Obs) -> List[CroFindingRecord]
             finding_id=f"CRO-{index:03d}",
             priority=item.get("priority", "Medium"),
             finding=item["summary"],
-            evidence=item["summary"] + ((" Evidence URL: " + item["page_url"]) if item.get("page_url") else ""),
+            evidence="; ".join(
+                [str(value) for value in (item.get("evidence") or []) if value]
+                + ([item["summary"]] if item.get("summary") else [])
+                + (["Evidence URL: " + item["page_url"]] if item.get("page_url") else [])
+            ),
             observed_scope=scope,
             hypothesis=item.get("action", "Change the observed defect.") + " This is a hypothesis. The inspected sample does not show that the change will raise conversions.",
             recommended_action=item.get("action", "Change the observed defect and keep the current experience as the control."),
