@@ -1664,7 +1664,9 @@ class SectionReportGenerator:
                 st = getattr(p, "status_code", None)
                 t = getattr(p, "title", "") or "—"
                 h1 = (getattr(p, "h1", []) or ["—"])[0]
-                rows.append(f"<tr><td><code>{u}</code></td><td>{st}</td><td>{t[:45]}</td><td>{h1[:40]}</td></tr>")
+                status_text = str(st) if isinstance(st, int) and not isinstance(st, bool) else "Not recorded"
+                url_text = u if u else "URL not recorded"
+                rows.append(f"<tr><td><code>{url_text}</code></td><td>{status_text}</td><td>{t[:45]}</td><td>{h1[:40]}</td></tr>")
             return f"""
             <h2>Crawled Pages & Routing Ledger</h2>
             <table>
