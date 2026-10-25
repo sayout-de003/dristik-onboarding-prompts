@@ -22,7 +22,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-from app.domain.evidence.integrity import validate_score
+from app.evidence_integrity import validate_score
 
 try:
     import pypdf
