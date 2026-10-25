@@ -82,6 +82,19 @@ class ConnectorStore:
                 credentials_json TEXT NOT NULL
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS connector_audit_events (
+                event_id TEXT PRIMARY KEY,
+                org_id TEXT NOT NULL,
+                integration_id TEXT,
+                actor_id TEXT,
+                action TEXT NOT NULL,
+                result TEXT NOT NULL,
+                details_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_connector_audit_org_time ON connector_audit_events(org_id, created_at)")
         return conn
 
     def _load(self) -> None:
@@ -127,6 +140,52 @@ class ConnectorStore:
 
     def list_integrations(self, org_id: str = "org_default") -> List[Integration]:
         return [i for i in self._integrations.values() if i.org_id == org_id]
+
+    def get_integration_for_org(self, integration_id: str, org_id: str) -> Optional[Integration]:
+        """Resolve an integration only inside its tenant boundary."""
+        integration = self._integrations.get(integration_id)
+        if integration is None or integration.org_id != org_id:
+            return None
+        return integration
+
+    def record_event(
+        self, org_id: str, action: str, result: str,
+        integration_id: Optional[str] = None, actor_id: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Persist lifecycle events. Callers must never pass credential values."""
+        event_id = f"cevt_{uuid.uuid4().hex}"
+        created_at = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                """INSERT INTO connector_audit_events
+                (event_id, org_id, integration_id, actor_id, action, result, details_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (event_id, org_id, integration_id, actor_id, action, result,
+                 json.dumps(details or {}, sort_keys=True, default=str), created_at),
+            )
+            conn.commit()
+
+    def list_events(self, org_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+        """Return only audit events scoped to the requesting organization."""
+        bounded_limit = max(1, min(int(limit), 500))
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT event_id, integration_id, actor_id, action, result, details_json, created_at
+                FROM connector_audit_events WHERE org_id = ? ORDER BY created_at DESC LIMIT ?""",
+                (org_id, bounded_limit),
+            ).fetchall()
+        events = []
+        for event_id, integration_id, actor_id, action, result, details_json, created_at in rows:
+            try:
+                details = json.loads(details_json)
+            except (TypeError, ValueError):
+                details = {}
+            events.append({
+                "event_id": event_id, "integration_id": integration_id, "actor_id": actor_id,
+                "action": action, "result": result, "details": details, "created_at": created_at,
+            })
+        return events
 
     def get_integration(self, integration_id: str) -> Optional[Integration]:
         return self._integrations.get(integration_id)
