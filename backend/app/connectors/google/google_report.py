@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -61,7 +62,9 @@ def _num(value: Any) -> Optional[float]:
         return None
     try:
         number = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(number) or number < 0:
         return None
     return number
 
@@ -170,8 +173,8 @@ def _analytics_from_payload(property_id: str, payload: Dict[str, Any], period: s
                 continue
             landing_pages.append({
                 "page": page,
-                "sessions": int(metrics.get("sessions") or 0),
-                "key_events": int(metrics["conversions"]) if "conversions" in metrics else None,
+                "sessions": int(metrics["sessions"]) if metrics.get("sessions") is not None else None,
+                "key_events": int(metrics["conversions"]) if metrics.get("conversions") is not None else None,
             })
     if "sessions" not in parsed:
         return _channel(ANALYTICS, "NO_DATA", property=property_id, period=period)
