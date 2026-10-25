@@ -351,6 +351,7 @@ async def _exchange(provider: str, code: str, shop: str, redirect_uri: Optional[
     async with httpx.AsyncClient(timeout=20) as client:
         if provider in ("instagram", "whatsapp_business"):
             # Meta OAuth access-token exchange is a GET with query parameters.
+            body.pop("grant_type", None)
             response = await client.get(url, params=body, headers=headers)
         else:
             response = await client.post(url, data=body, headers=headers)
