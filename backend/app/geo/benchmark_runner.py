@@ -734,9 +734,7 @@ class GeoBenchmarkRunner:
             for comp in comp_list:
                 comp_host = self._normalize_hostname(comp)
                 if "." in comp_host:
-                    comp_hit = self._contains_domain(raw, comp_host) or any(
-                        self._is_first_party_host(source, comp_host) for source in (ev.source_domains or [])
-                    )
+                    comp_hit = self._contains_domain(raw, comp_host)
                 else:
                     comp_hit = self._contains_term(raw, comp.lower())
                 if comp_hit:
