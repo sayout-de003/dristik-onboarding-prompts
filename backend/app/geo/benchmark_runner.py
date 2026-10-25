@@ -57,7 +57,8 @@ class EvaluatedQueryRun(BaseModel):
     cost_usd: float = 0.0
     source_domains: List[str] = Field(default_factory=list)
     source_quality: SourceQuality = "unsourced"
-    status: str = "SUCCESS"  # SUCCESS | KEY_MISSING | TIMEOUT | ERROR
+    status: str = "SUCCESS"  # SUCCESS | KEY_MISSING | TIMEOUT | RATE_LIMITED | ERROR
+    is_live: bool = False
     error_message: Optional[str] = None
     run_index: int = 1
 
@@ -400,7 +401,11 @@ class GeoBenchmarkRunner:
                 source_domains=sources,
                 source_quality=quality,
                 status=status,
-                error_message=resp.error,
+                is_live=bool(getattr(resp, "is_live", False)) and status == "SUCCESS",
+                error_message=resp.error or (
+                    None if status == "SUCCESS"
+                    else "Provider response was not a successful live measurement."
+                ),
                 run_index=run_index,
             )
 
