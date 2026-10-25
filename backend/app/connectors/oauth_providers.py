@@ -11,6 +11,8 @@ import html
 import json
 import urllib.parse
 import logging
+import secrets
+import time
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -232,10 +234,13 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
 
 
 def _sign(payload: Dict[str, str]) -> str:
-    raw = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode()
     secret_value = settings.AUTH_SECRET or ""
     if len(secret_value) < 32 or secret_value == "dristik-dev-secret-change-me":
         raise HTTPException(status_code=503, detail="OAuth state signing requires a configured secret of at least 32 characters.")
+    state_payload = dict(payload)
+    state_payload["iat"] = str(int(time.time()))
+    state_payload["nonce"] = secrets.token_urlsafe(24)
+    raw = base64.urlsafe_b64encode(json.dumps(state_payload, separators=(",", ":")).encode()).decode()
     secret = secret_value.encode()
     sig = hmac.new(secret, raw.encode(), hashlib.sha256).hexdigest()
     return f"{raw}.{sig}"
@@ -256,6 +261,13 @@ def _unsign(state: str) -> Dict[str, str]:
     data = json.loads(base64.urlsafe_b64decode(raw.encode()))
     if not isinstance(data, dict) or "provider" not in data:
         raise HTTPException(status_code=400, detail="OAuth state is missing the provider.")
+    try:
+        issued_at = int(data.get("iat", "0"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="OAuth state timestamp is invalid.") from exc
+    now = int(time.time())
+    if not data.get("nonce") or issued_at > now + 60 or now - issued_at > 900:
+        raise HTTPException(status_code=400, detail="OAuth state has expired or is incomplete.")
     return {str(k): str(v) for k, v in data.items()}
 
 
