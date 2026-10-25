@@ -196,7 +196,7 @@ class CompleteGeoReportGenerator:
                     "per_engine_geo": report.per_engine_geo.model_dump() if report.per_engine_geo else None,
                 },
                 "18_business_impact_and_measurement": {
-                    "ai_referral_tracking": "Configured via GA4 referral channel isolation.",
+                    "ai_referral_tracking": "Not assessed unless verified GA4 referral data is connected.",
                     "attribution_disclaimer": "Citation count is an intermediate visibility metric, not proof of revenue attribution.",
                 },
                 "19_prioritized_remediation_roadmap": {
@@ -877,11 +877,11 @@ class CompleteGeoReportGenerator:
                 </thead>
                 <tbody>
                     <tr><td>GPTBot</td><td>OpenAI Training & Retrieval</td><td><span class="finding-badge">NOT ASSESSED</span></td><td>Requires direct robots.txt and crawler-policy evidence; not assessed here</td></tr>
-                    <tr><td>OAI-SearchBot</td><td>ChatGPT Search Live Web</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Consumer search visibility is not established by API responses; not assessed here</td></tr>
-                    <tr><td>PerplexityBot</td><td>Perplexity Live Search</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Requires direct crawler-policy evidence; not assessed here</td></tr>
-                    <tr><td>Google-Extended</td><td>Gemini / Google AI Training</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Training access and live search access are distinct; not assessed here</td></tr>
-                    <tr><td>ClaudeBot</td><td>Anthropic Claude Retrieval</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Requires direct crawler-policy evidence; not assessed here</td></tr>
-                    <tr><td>Bytespider</td><td>ByteDance AI Systems</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Requires direct crawler-policy evidence; not assessed here</td></tr>
+                    <tr><td>OAI-SearchBot</td><td>ChatGPT Search Live Web</td><td><span class="finding-badge">NOT ASSESSED</span></td><td>Consumer search visibility is not established by API responses; not assessed here</td></tr>
+                    <tr><td>PerplexityBot</td><td>Perplexity Live Search</td><td><span class="finding-badge">NOT ASSESSED</span></td><td>Requires direct crawler-policy evidence; not assessed here</td></tr>
+                    <tr><td>Google-Extended</td><td>Gemini / Google AI Training</td><td><span class="finding-badge">NOT ASSESSED</span></td><td>Training access and live search access are distinct; not assessed here</td></tr>
+                    <tr><td>ClaudeBot</td><td>Anthropic Claude Retrieval</td><td><span class="finding-badge">NOT ASSESSED</span></td><td>Requires direct crawler-policy evidence; not assessed here</td></tr>
+                    <tr><td>Bytespider</td><td>ByteDance AI Systems</td><td><span class="finding-badge">NOT ASSESSED</span></td><td>Requires direct crawler-policy evidence; not assessed here</td></tr>
                 </tbody>
             </table>
         </section>
