@@ -375,8 +375,8 @@ def test_aeo_four_pillars_decoupled_scoring():
     # Pillar B: only some page-level technical dimensions are present in this fixture.
     # A partial observation is not a complete technical eligibility composite.
     assert scorecard.pillar_b_technical_eligibility.composite_eligibility_score is None
-    assert scorecard.pillar_b_technical_eligibility.crawlability_score == 100.0
-    assert scorecard.pillar_b_technical_eligibility.state == EvidenceState.SAMPLE_VERIFIED
+    assert scorecard.pillar_b_technical_eligibility.crawlability_score is None
+    assert scorecard.pillar_b_technical_eligibility.state == EvidenceState.DATA_UNAVAILABLE
 
     # Pillar C: Observed visibility is NOT_TESTED when live APIs are disconnected (Zero fabrication!)
     assert scorecard.pillar_c_observed_visibility.state == EvidenceState.NOT_TESTED
