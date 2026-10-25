@@ -7,6 +7,7 @@ an application factory.
 from fastapi import FastAPI
 
 from app.api.routes.audits.analyses import router as analyses_router
+from app.api.routes.audits.deep_crawls import router as deep_crawls_router
 from app.api.routes.audits.public_grader import router as public_grader_router
 from app.api.routes.audits.stream import router as stream_router
 from app.api.routes.identity.auth import router as auth_router
@@ -37,6 +38,7 @@ from app.tenancy.white_label import router as white_label_router
 # verify a real identity provider and a SCIM bearer token.
 _PREFIXED_ROUTERS = (
     analyses_router,
+    deep_crawls_router,
     public_grader_router,
     stream_router,
     commercial_router,

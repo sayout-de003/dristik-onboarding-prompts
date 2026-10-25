@@ -41,3 +41,18 @@ This document records the current integration-platform tranche. Provider names i
 ## Acceptance gate
 
 A provider may be labelled fully verified only when a test proves: real authentication, live read behavior, every claimed write behavior, post-write independent verification, credential redaction/encryption, tenant and permission isolation, rate-limit/error handling, webhook security and event-processing behavior where applicable, disconnect/revocation behavior, and successful/failing contract tests. Until then, show the precise state (`DISCONNECTED`, `DEGRADED`, `AUTH_REQUIRED`, `UNAVAILABLE`, or `CONNECTED`) and the operation-level verification status.
+
+## Audit correctness and deep-crawl tranche (in progress)
+
+- Added `app.report_quality`: strict evidence/finding contracts, snapshot SHA-256 validation, affected-URL-to-evidence matching, verified-scope checks, duplicate detection, canonical severity validation, required remediation/verification text, and composite-score reconciliation against declared weights.
+- Added `app.crawl_orchestration`: SQLite-persisted deep-crawl job and URL state, normalized URL deduplication, same-origin checks, page/depth budgets, tenant-scoped job access, interruption recovery primitives, cancellation flags, retries/attempt counters, and truthful discovered/eligible/crawled/failed/excluded/remaining coverage counters.
+- Added authenticated `POST /api/v1/deep-crawls`, `GET /api/v1/deep-crawls/{job_id}`, and `POST /api/v1/deep-crawls/{job_id}/cancel` routes. The worker discovers same-origin URLs from internal links and XML sitemaps, respects fetched robots rules, does bounded HTTP retries, blocks out-of-scope redirects, and records HTTP-only crawl coverage. The existing five-page Quick Scan entry point was not changed.
+- Added contract tests for report validation, score reconciliation, URL normalization, same-origin boundaries, crawl resume/accounting, partial failures and tenant scoping; CI now runs this test file.
+
+### Known limitations that remain open
+
+- These report-quality contracts are available as a reusable gate but are not yet wired into every existing report assembly/PDF export path. The next change must adapt the real finding/evidence objects and enforce the gate before finalization without dropping legacy fields.
+- The initial deep-crawl worker runs as a FastAPI background task. URL/job state persists in SQLite, but there is not yet a durable external worker queue or automatic startup recovery of interrupted jobs; do not advertise process-crash auto-resume until that wiring exists.
+- The initial worker is HTTP-only. Browser-rendered DOM coverage, robust sitemap-index recursion, DNS/IP-level SSRF defense at connection time, concurrency scheduling, incremental recrawling, and richer per-stage traces are not complete.
+- The deep-crawl API has not yet received end-to-end runtime testing in a deployed environment. CI must pass before these endpoints are considered release-ready.
+- Connector provider completeness and sandbox validation remain separate outstanding work; this tranche does not mark any provider operation as verified.
