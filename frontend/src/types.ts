@@ -2442,6 +2442,7 @@ export interface WebsiteIntelligenceRollup {
 
 export type AppView =
   | 'home'
+  | 'analytics'
   | 'grader'
   | 'pricing'
   | 'login'
