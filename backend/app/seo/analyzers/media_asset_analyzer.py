@@ -162,6 +162,7 @@ class MediaAssetAnalyzer:
                             img_filename = src.split("/")[-1].split("?")[0] or "inline-image"
                             missing_alt_images.append({
                                 "page_url": p.url,
+                                "response_status": getattr(p, "status_code", None),
                                 "img_src": src,
                                 "filename": img_filename,
                                 "tag_snippet": img.get("_tag_str", f"<img src='{src}'>")[:200],
@@ -255,6 +256,7 @@ class MediaAssetAnalyzer:
                 evidence_items.append(FindingEvidence(
                     evidence_id=ev_id,
                     url=page_url,
+                    response_status=item.get("response_status"),
                     element="img",
                     value=img_src,
                     observed_value=img_src,
