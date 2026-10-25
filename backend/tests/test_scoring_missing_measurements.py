@@ -47,6 +47,6 @@ def test_explicit_transport_and_schema_measurements_are_honoured():
         check.check_id: check
         for check in result.category_scores[Category.TECHNICAL_SEO.value].check_results
     }
-    assert technical_checks["https_on_all_urls"].status == "FAIL"
+    assert technical_checks["https_on_all_urls"].status == "DEFICIT"
     assert technical_checks["tls_version_valid"].status == "FAIL"
     assert result.category_scores[Category.SCHEMA.value].score is not None
