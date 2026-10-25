@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Activity, ArrowDownRight, ArrowUpRight, BarChart3, CalendarDays, CheckCircle2, ChevronDown, CircleAlert, Clock3, Download, Gauge, RefreshCw, Search, ShieldCheck, Target, TrendingUp, WifiOff } from 'lucide-react';
+import { Activity, ArrowDownRight, ArrowUpRight, CalendarDays, CheckCircle2, CircleAlert, Clock3, Download, Gauge, RefreshCw, Search, ShieldCheck, Target, WifiOff } from 'lucide-react';
 import { getAnalysis, listAnalyses } from '../services/api';
 
 type AnyRecord = Record<string, any>;
@@ -53,7 +53,6 @@ const toSnapshot = (raw: AnyRecord): Snapshot => {
 };
 const fmt = (value: number | null, suffix = '') => value === null ? '—' : `${Number.isInteger(value) ? value : value.toFixed(1)}${suffix}`;
 const delta = (current: number | null, previous: number | null) => current === null || previous === null ? null : current - previous;
-const pct = (current: number | null, previous: number | null) => current === null || previous === null || previous === 0 ? null : ((current - previous) / Math.abs(previous)) * 100;
 const dateLabel = (value: string) => {
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? 'Date unavailable' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' });
@@ -123,14 +122,8 @@ export function DeltaAnalyticsDashboard() {
   const previous = latestByDomain.length ? latestByDomain[0].rows[1] : undefined;
   const currentScore = latest?.overall ?? null;
   const scoreDelta = delta(currentScore, previous?.overall ?? null);
-  const avg = (key: keyof Snapshot) => {
-    const values = filtered.map(s => s[key]).filter((v): v is number => typeof v === 'number');
-    return values.length ? values.reduce((a,b)=>a+b,0)/values.length : null;
-  };
-  const currentMetric = (s: Snapshot | undefined) => s ? s[selectedMetric] : null;
   const chartValues = filtered.map(s => s[selectedMetric]).filter((v): v is number => v !== null);
   const scoreTrend = chartValues.length > 1 ? chartValues[chartValues.length - 1] - chartValues[0] : null;
-  const auditCountDelta = filtered.length - snapshots.filter(s => new Date(s.date).getTime() >= Date.now() - Number(windowDays)*86400000*2 && new Date(s.date).getTime() < Date.now()-Number(windowDays)*86400000).length;
   const exportCsv = () => {
     const rows = [['date','domain','status','pages','overall','seo','geo','aeo','cro','findings','critical','high','medium','low','verified','resolved'], ...filtered.map(s=>[s.date,s.domain,s.status,s.pages,s.overall,s.seo,s.geo,s.aeo,s.cro,s.findings,s.critical,s.high,s.medium,s.low,s.verified,s.resolved])];
     const csv = rows.map(row => row.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',')).join('\n');
