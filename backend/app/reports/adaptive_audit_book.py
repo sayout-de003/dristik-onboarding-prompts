@@ -630,19 +630,19 @@ def _build_ch_aeo(report: Any, manifest: Dict[str, Any]) -> str:
 
     <div class="grid-3" style="margin-bottom: 16px;">
         <div class="card">
-            <div class="card-kicker">LIVE ENGINE QUERY RUNS</div>
-            <div class="card-title">{runs if runs > 0 else 'Multi-Model'} Evaluated</div>
-            <p style="font-size: 8pt; color: #475569;">Tested across ChatGPT Search, Perplexity Sonar, Google AIO &amp; Gemini.</p>
+            <div class="card-kicker">AI TEST RUNS</div>
+            <div class="card-title">{runs if runs > 0 else 'NOT RECORDED'}</div>
+            <p style="font-size: 8pt; color: #475569;">Successful runs recorded for this audit. A missing count is not treated as a completed test.</p>
         </div>
         <div class="card">
-            <div class="card-kicker">CITATION GROUNDING</div>
-            <div class="card-title">Direct Domain URL Attributions</div>
-            <p style="font-size: 8pt; color: #475569;">Live citation extraction on commercial brand inquiry set.</p>
+            <div class="card-kicker">CITATION OBSERVATIONS</div>
+            <div class="card-title">See recorded findings</div>
+            <p style="font-size: 8pt; color: #475569;">Citation claims are included only when observations were saved for this run.</p>
         </div>
         <div class="card">
-            <div class="card-kicker">ANSWER PASSAGE READINESS</div>
-            <div class="card-title">40–60 Word Blocks</div>
-            <p style="font-size: 8pt; color: #475569;">Concise question-answer pairs required to win generative snippet summaries.</p>
+            <div class="card-kicker">ANSWER CONTENT</div>
+            <div class="card-title">Evidence-dependent</div>
+            <p style="font-size: 8pt; color: #475569;">No universal word-count target is presented as a measured result.</p>
         </div>
     </div>
 
@@ -661,23 +661,10 @@ def _build_ch_competitive(report: Any, manifest: Dict[str, Any]) -> str:
     {callout}
 
     <div class="card" style="margin-bottom: 16px;">
-        <div class="card-kicker">COMPETITIVE PARITY &amp; BENCHMARK MATRIX</div>
-        <p style="font-size: 8.5pt; color: #475569; margin: 4px 0 10px 0;">
-            Head-to-head evaluation against recorded industry alternatives across technical discoverability and entity coverage.
+        <div class="card-kicker">COMPARISON COVERAGE</div>
+        <p style="font-size: 8pt; color: #475569; margin: 4px 0 0 0;">
+            Competitor averages and deltas are shown only when comparable measurements from identified competitors are recorded. This report does not substitute example values for missing benchmark data.
         </p>
-        <div class="data-table-wrapper">
-            <table class="print-table">
-                <thead>
-                    <tr><th>Parameter</th><th>Target Property ({_esc(manifest['domain'])})</th><th>Industry Competitor Avg</th><th>Competitive Delta</th></tr>
-                </thead>
-                <tbody>
-                    <tr><td><strong>Schema Entity Depth</strong></td><td>Organization, WebSite</td><td>Organization, Product, FAQ, Article</td><td>-2 Rich Types</td></tr>
-                    <tr><td><strong>TTFB Latency</strong></td><td>Under 250ms (Clean)</td><td>~320ms</td><td>+70ms Advantage</td></tr>
-                    <tr><td><strong>Answer Passage Snippets</strong></td><td>Emerging / Unstructured</td><td>Structured Definition Hubs</td><td>Opportunity Gap</td></tr>
-                </tbody>
-            </table>
-        </div>
-        <div class="chart-explanation-note">Competitive Delta: Evaluates schema depth, server latencies, and passage readiness against recorded sector peers. Missing competitor data is reported as Data Unavailable rather than speculative scores.</div>
     </div>
 
     <h3 style="font-size: 12pt; margin: 16px 0 8px 0; color: #0f172a;">Competitive Differentiation Findings</h3>
@@ -696,14 +683,14 @@ def _build_ch_conversion(report: Any, manifest: Dict[str, Any]) -> str:
 
     <div class="grid-2" style="margin-bottom: 16px;">
         <div class="card">
-            <div class="card-kicker">VALUE PROPOSITION AUDIT</div>
-            <div class="card-title">Above-the-Fold Delivery</div>
-            <p style="font-size: 8pt; color: #475569;">Core commercial capability communicated within primary 600px desktop viewport.</p>
+            <div class="card-kicker">VALUE PROPOSITION</div>
+            <div class="card-title">Review recorded page evidence</div>
+            <p style="font-size: 8pt; color: #475569;">Claims about message clarity or above-the-fold content require an observation from the sampled page.</p>
         </div>
         <div class="card">
-            <div class="card-kicker">CALL-TO-ACTION (CTA) ERGONOMICS</div>
-            <div class="card-title">Button Visibility</div>
-            <p style="font-size: 8pt; color: #475569;">Primary commercial conversion links present across all sampled routes.</p>
+            <div class="card-kicker">CALL TO ACTION</div>
+            <div class="card-title">Review recorded page evidence</div>
+            <p style="font-size: 8pt; color: #475569;">Button and conversion-path conclusions are included only when captured in this audit.</p>
         </div>
     </div>
 
@@ -718,19 +705,19 @@ def _build_ch_page_by_page(report: Any, manifest: Dict[str, Any]) -> str:
 
     rows = []
     for p in pages[:15]:
-        url = getattr(p, "url", "https://example.com")
-        status = getattr(p, "status_code", 200)
-        wc = getattr(p, "word_count", 0)
-        ttfb = getattr(p, "ttfb_ms", 0.0)
+        url = getattr(p, "url", None) or "URL not recorded"
+        status = getattr(p, "status_code", None)
+        wc = getattr(p, "word_count", None)
+        ttfb = getattr(p, "ttfb_ms", None)
         h1s = getattr(p, "h1_tags", []) or []
         h1_text = _esc(h1s[0]) if h1s else "—"
 
         rows.append(f"""
         <tr>
             <td style="font-family:ui-monospace; font-size:7pt; word-break:break-all;">{_esc(url)}</td>
-            <td><span style="font-weight:700; color:{'#059669' if status == 200 else '#dc2626'}">{status}</span></td>
-            <td>{wc} words</td>
-            <td>{ttfb:.1f}ms</td>
+            <td><span style="font-weight:700; color:{'#059669' if status == 200 else '#dc2626' if status is not None else '#64748b'}">{status if status is not None else 'Not recorded'}</span></td>
+            <td>{f'{wc} words' if wc is not None else 'Not recorded'}</td>
+            <td>{f'{ttfb:.1f}ms' if ttfb is not None else 'Not recorded'}</td>
             <td style="font-size:7.5pt;">{h1_text}</td>
         </tr>
         """)
