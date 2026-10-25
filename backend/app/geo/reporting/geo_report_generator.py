@@ -225,11 +225,14 @@ class CompleteGeoReportGenerator:
         scores = getattr(report, "scores", None)
 
         extractability_score = getattr(g, "extractability_score", None) if g else None
-        if extractability_score is None and scores:
-            extractability_score = getattr(scores, "geo_score", None)
 
         ext_display = f"{int(round(extractability_score))}" if extractability_score is not None else "N/A"
-        ext_color = "#10b981" if (extractability_score and extractability_score >= 80) else ("#f59e0b" if (extractability_score and extractability_score >= 60) else "#ef4444")
+        ext_color = (
+            "#64748b" if extractability_score is None
+            else "#10b981" if extractability_score >= 80
+            else "#f59e0b" if extractability_score >= 60
+            else "#ef4444"
+        )
 
         visibility_status = getattr(v_card, "status", "NOT_MEASURED") if v_card else "NOT_MEASURED"
         vis_color = "#10b981" if visibility_status == "MEASURED" else "#64748b"
@@ -239,7 +242,7 @@ class CompleteGeoReportGenerator:
             if v_card and getattr(v_card, "measurement_kind", "NOT_MEASURED") != "NOT_MEASURED"
             else None
         )
-        cit_display = f"{int(round(citation_rate * 100))}%" if citation_rate is not None else "Unmeasured"
+        cit_display = f"{int(round(citation_rate))}%" if citation_rate is not None else "Unmeasured"
 
         questions_total = getattr(g, "questions_total", 0) if g else 0
         questions_supp = getattr(g, "questions_supported", 0) if g else 0
@@ -850,13 +853,13 @@ class CompleteGeoReportGenerator:
             <p>Ground-truth reference baseline established before evaluating AI answer fidelity and potential brand misrepresentations:</p>
             <table>
                 <thead>
-                    <tr><th>Entity Property</th><th>Verified Baseline</th><th>Provenance Source</th></tr>
+                    <tr><th>Entity Property</th><th>Observed / Declared Value</th><th>Evidence Status</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td>Official Entity Name</td><td>{html.escape(getattr(g, 'entity_name', domain) if g else domain)}</td><td>Verified Organization schema and Homepage H1</td></tr>
-                    <tr><td>Primary Domain</td><td>{website_url}</td><td>Canonical host header</td></tr>
+                    <tr><td>Official Entity Name</td><td>{html.escape(getattr(g, 'entity_name', domain) if g else domain)}</td><td>Audit context; independent verification not asserted</td></tr>
+                    <tr><td>Primary Domain</td><td>{website_url}</td><td>Target URL supplied to this audit; canonicality must be separately verified</td></tr>
                     <tr><td>Market Focus</td><td>{html.escape(getattr(g, 'market_country', 'Global') if g else 'Global')} ({html.escape(getattr(g, 'market_language', 'en') if g else 'en')})</td><td>Audit context declaration</td></tr>
-                    <tr><td>Declared Products / Services</td><td>{html.escape(getattr(report.business_profile, 'primary_service', 'Web Software & Services') if report.business_profile else 'Web Software & Services')}</td><td>Commercial navigation and title tags</td></tr>
+                    <tr><td>Declared Products / Services</td><td>{html.escape(getattr(report.business_profile, 'primary_service', None) or 'Not provided' if report.business_profile else 'Not provided')}</td><td>Business profile input; on-page support must be checked separately</td></tr>
                 </tbody>
             </table>
         </section>
@@ -867,18 +870,18 @@ class CompleteGeoReportGenerator:
                 <h2 class="section-title">04. AI Discoverability & Crawler Access (Bot Directives)</h2>
                 <span class="section-tag">Crawlability</span>
             </div>
-            <p>Evaluation of bot-specific access rules across major AI platform crawlers:</p>
+            <p>Bot access is not inferred from AI provider APIs. Each status remains unassessed unless robots.txt or dedicated crawler-access evidence is attached.</p>
             <table>
                 <thead>
                     <tr><th>User-Agent / Bot</th><th>Platform</th><th>Directive Status</th><th>Impact on Indexation & Live Citability</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td>GPTBot</td><td>OpenAI Training & Retrieval</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Allows OpenAI engines to ingest full content</td></tr>
-                    <tr><td>OAI-SearchBot</td><td>ChatGPT Search Live Web</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Required for real-time live citations in SearchGPT</td></tr>
-                    <tr><td>PerplexityBot</td><td>Perplexity Live Search</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Required for Perplexity answer links & source cards</td></tr>
-                    <tr><td>Google-Extended</td><td>Gemini / Google AI Training</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Controls inclusion in Google foundational training datasets</td></tr>
-                    <tr><td>ClaudeBot</td><td>Anthropic Claude Retrieval</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Required for Claude live-search citations</td></tr>
-                    <tr><td>Bytespider</td><td>ByteDance AI Systems</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>High-frequency crawler for international multimodal models</td></tr>
+                    <tr><td>GPTBot</td><td>OpenAI Training & Retrieval</td><td><span class="finding-badge">NOT ASSESSED</span></td><td>Requires direct robots.txt and crawler-policy evidence; not assessed here</td></tr>
+                    <tr><td>OAI-SearchBot</td><td>ChatGPT Search Live Web</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Consumer search visibility is not established by API responses; not assessed here</td></tr>
+                    <tr><td>PerplexityBot</td><td>Perplexity Live Search</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Requires direct crawler-policy evidence; not assessed here</td></tr>
+                    <tr><td>Google-Extended</td><td>Gemini / Google AI Training</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Training access and live search access are distinct; not assessed here</td></tr>
+                    <tr><td>ClaudeBot</td><td>Anthropic Claude Retrieval</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Requires direct crawler-policy evidence; not assessed here</td></tr>
+                    <tr><td>Bytespider</td><td>ByteDance AI Systems</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Requires direct crawler-policy evidence; not assessed here</td></tr>
                 </tbody>
             </table>
         </section>
@@ -1012,8 +1015,8 @@ class CompleteGeoReportGenerator:
                 </thead>
                 <tbody>
                     <tr><td>First-Party Website ({domain})</td><td>{cit_display}</td><td>Direct citation to official documentation and commercial pricing</td></tr>
-                    <tr><td>Third-Party Industry Reviews (G2, Capterra)</td><td>Elevated</td><td>AI engines frequently prefer aggregated consensus over first-party claims</td></tr>
-                    <tr><td>Independent Authoritative Press</td><td>Moderate</td><td>Corroborates brand entity validity in knowledge graphs</td></tr>
+                    <tr><td>Third-Party Industry Reviews (G2, Capterra)</td><td>Not assessed</td><td>Requires observed third-party source evidence</td></tr>
+                    <tr><td>Independent Authoritative Press</td><td>Not assessed</td><td>Requires observed independent source evidence</td></tr>
                 </tbody>
             </table>
         </section>
@@ -1028,11 +1031,11 @@ class CompleteGeoReportGenerator:
             <div class="field-grid">
                 <div class="field-item">
                     <span class="field-label">Material Hallucinations Detected</span>
-                    <span class="field-val">0 Critical Brand Hallucinations identified in baseline.</span>
+                    <span class="field-val">Not assessed — no validated live-response claim audit is attached to this report.</span>
                 </div>
                 <div class="field-item">
                     <span class="field-label">Sentiment vs Factual Correctness</span>
-                    <span class="field-val">Neutral to Positive framing. Crucially, tone is not substituted for factual verification.</span>
+                    <span class="field-val">Not assessed unless successful live responses and a grounded fact set are available.</span>
                 </div>
             </div>
         </section>
