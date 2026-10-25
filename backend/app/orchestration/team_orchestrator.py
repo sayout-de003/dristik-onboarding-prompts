@@ -6,13 +6,13 @@ and coordinates parallel execution waves.
 """
 import asyncio
 from typing import Dict, Any, List, Optional
-from app.inference.model_router import ModelRouter
-from app.cognition.blackboard import CognitiveBlackboard
+from app.core.inference.model_router import ModelRouter
+from app.orchestration.cognition.blackboard import CognitiveBlackboard
 from app.domain.capability import CAPABILITY_REGISTRY, CapabilityDomain, ExecutionTier
 from app.domain.models import CrawlManifest
 from app.orchestration.capability_router import CapabilityRouter
 from app.orchestration.agent_pool import AgentPool
-from app.agents.runtime.registry import CAPABILITY_AGENT_MAP
+from app.orchestration.runtime.registry import CAPABILITY_AGENT_MAP
 from app.workers.extractor_worker import CognitiveExtractorWorker
 from app.workers.analyst_worker import CognitiveAnalystWorker
 from app.workers.research_worker import CognitiveResearchWorker
