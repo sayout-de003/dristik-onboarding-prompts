@@ -369,12 +369,27 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
     return result
 
 def _read_search(channel: Any) -> Dict[str, Any]:
-    if not isinstance(channel, dict) or channel.get("state") != "MEASURED":
-        return {"clicks": None, "period": None, "property": None}
+    """Normalize Search Console totals; malformed values remain unavailable."""
+    if not isinstance(channel, dict) or str(channel.get("state") or "").upper() != "MEASURED":
+        return {"state": "NOT_MEASURED", "clicks": None, "period": None, "property": None}
+    base = {
+        "state": "MEASURED",
+        "clicks": None,
+        "period": channel.get("period"),
+        "property": channel.get("property"),
+    }
     clicks = channel.get("clicks")
-    if not isinstance(clicks, (int, float)) or isinstance(clicks, bool):
-        return {"clicks": None, "period": channel.get("period"), "property": channel.get("property")}
-    return {"clicks": int(clicks), "period": channel.get("period"), "property": channel.get("property")}
+    if (
+        isinstance(clicks, bool)
+        or not isinstance(clicks, (int, float))
+        or not math.isfinite(float(clicks))
+        or clicks < 0
+        or not float(clicks).is_integer()
+    ):
+        base["state"] = "INVALID_DATA"
+        return base
+    base["clicks"] = int(clicks)
+    return base
 
 
 def _read_wcag(wcag: Any) -> Optional[Dict[str, Any]]:
@@ -2966,7 +2981,7 @@ def _metrics(obs: _Obs) -> List[CroMetricResult]:
     window = analytics.get("period")
     conversion = rate(analytics.get("unique_converters"), analytics.get("eligible_users"))
     key_event_rate = rate(analytics.get("key_events"), analytics.get("sessions")) if analytics.get("key_events_present") else None
-    rpv = rate(analytics.get("revenue"), analytics.get("sessions"))
+    revenue_per_visitor = rate(analytics.get("revenue"), analytics.get("eligible_users"))
     aov = rate(analytics.get("revenue"), analytics.get("orders"))
     values = {
         "Conversion rate": (
@@ -2981,8 +2996,13 @@ def _metrics(obs: _Obs) -> List[CroMetricResult]:
             "sessions",
             "This is an event-count-per-session ratio, not a unique-user conversion rate; it can exceed 100%.",
         ),
-        "Revenue per visitor": (rpv, "attributed revenue", "sessions", "Shown only when both revenue and sessions were present."),
-        "Average order value": (aov, "net sales", "orders", "Shown only when both net sales and orders were present."),
+        "Revenue per visitor": (
+            revenue_per_visitor,
+            "attributed revenue",
+            "eligible users",
+            "Shown only when attributed revenue and eligible users are both present; sessions are not substituted for visitors.",
+        ),
+        "Average order value": (aov, "net sales", "orders", "Shown only when both net sales and completed orders were present."),
     }
     results = []
     for spec in METRIC_CATALOG:
