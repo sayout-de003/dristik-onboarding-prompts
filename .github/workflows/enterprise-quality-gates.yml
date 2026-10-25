@@ -26,7 +26,7 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install test dependencies
-        run: python -m pip install --upgrade pip pytest httpx "pydantic>=2.6,<3"
+        run: python -m pip install --upgrade pip pytest httpx fastapi sqlalchemy alembic jinja2 python-jose passlib bcrypt pydantic-settings python-dotenv cryptography anthropic beautifulsoup4 lxml "pydantic>=2.6,<3"
       - name: Compile backend modules
         run: python -m compileall -q app
       - name: Run evidence integrity tests
