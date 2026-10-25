@@ -145,7 +145,7 @@ async def test_model_router_does_not_repeat_exhausted_retries(monkeypatch):
     monkeypatch.setattr(
         type(router_settings),
         "get_llm_credentials",
-        lambda self: {"api_key": "test-key", "model_fast": "test-model", "model_reasoning": "test-model"},
+        lambda self, **kwargs: {"api_key": "test-key", "model_fast": "test-model", "model_reasoning": "test-model"},
     )
     router = ModelRouter()
     mock_client = AsyncMock()
