@@ -1871,7 +1871,8 @@ class AnalysisOrchestrator:
                 run.status = AnalysisStage.FAILED
                 run.error = "COMPLETION_STATE_PERSISTENCE_FAILED"
                 run.current_step = "Completion state could not be durably saved"
-                run.is_sealed = False
+                # The manifest file was sealed successfully; retain that fact even if
+                # the terminal database state could not be committed.
                 try:
                     self.repository.save_run(run)
                 except Exception:
