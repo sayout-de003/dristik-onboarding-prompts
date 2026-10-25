@@ -2019,6 +2019,13 @@ export interface CroIntelligenceReport {
     journey_execution_status?: string;
     note?: string;
   };
+  scoring_calibration?: {
+    status?: string;
+    basis?: string;
+    priority_calibration?: string;
+    experiment_outcomes_used?: boolean;
+    note?: string;
+  };
   dimensions?: CroDimensionScore[];
   metrics?: CroMetricResult[];
   sections?: CroSectionRecord[];
