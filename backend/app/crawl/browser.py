@@ -100,21 +100,24 @@ class BrowserRenderService:
                 nonlocal blocked_unsafe_request
                 req = route.request
                 rtype = req.resource_type
+                # Abort intentionally excluded resources before DNS validation; they
+                # will not be fetched and therefore do not need an egress lookup.
+                if rtype in ["image", "media", "font"]:
+                    await route.abort()
+                    return
+                if any(t in req.url.lower() for t in ["google-analytics", "googletagmanager", "hotjar", "facebook.net", "clarity.ms"]):
+                    await route.abort()
+                    return
                 if settings.SSRF_PROTECTION_ENABLED:
-                    # Validate every navigation, redirect, and subresource request;
-                    # validating only the starting URL is insufficient for a browser.
+                    # Validate every request that will actually be sent, including
+                    # top-level navigations, redirects, scripts, and XHR/fetch calls.
                     safe, reason = await asyncio.to_thread(is_safe_url, req.url)
                     if not safe:
                         blocked_unsafe_request = True
                         logger.warning("Blocked unsafe browser request %s: %s", req.url, reason)
                         await route.abort("blockedbyclient")
                         return
-                if rtype in ["image", "media", "font"]:
-                    await route.abort()
-                elif any(t in req.url.lower() for t in ["google-analytics", "googletagmanager", "hotjar", "facebook.net", "clarity.ms"]):
-                    await route.abort()
-                else:
-                    await route.continue_()
+                await route.continue_()
 
             await page.route("**/*", filter_route)
 
