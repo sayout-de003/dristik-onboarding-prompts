@@ -19,7 +19,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
-from app.crawl_orchestration import DeepCrawlStore, is_same_origin, normalize_url
+from app.crawl_orchestration import DeepCrawlStore, is_public_http_target, is_same_origin, normalize_url
 from app.identity.deps import get_current_user, require_permission
 from app.identity.authorizer import UserIdentity
 
@@ -42,6 +42,11 @@ async def _worker(job_id: str, org_id: str) -> None:
     snapshot = store.get_job(job_id, org_id)
     origin = snapshot["origin_url"]
     robots = RobotFileParser()
+    if not is_public_http_target(origin):
+        store.finish_url(job_id, org_id, origin, "FAILED", error_code="SSRF_TARGET_BLOCKED")
+        with store._connect() as db:
+            db.execute("UPDATE deep_crawl_jobs SET status='PARTIAL',updated_at=? WHERE job_id=? AND org_id=?", (datetime.now(timezone.utc).isoformat(), job_id, org_id))
+        return
     robots_url = urljoin(origin, "/robots.txt")
     async with httpx.AsyncClient(timeout=httpx.Timeout(15.0), follow_redirects=False, headers={"User-Agent": "DristikBot/1.0 (+https://dristik.ai/bot)"}) as client:
         try:
@@ -67,7 +72,7 @@ async def _worker(job_id: str, org_id: str) -> None:
         root_url = origin
         for sitemap_url in sitemap_urls[:10]:
             normalized_sitemap = normalize_url(sitemap_url)
-            if not normalized_sitemap or not is_same_origin(normalized_sitemap, origin):
+            if not normalized_sitemap or not is_same_origin(normalized_sitemap, origin) or not is_public_http_target(normalized_sitemap):
                 continue
             try:
                 sitemap_response = await client.get(normalized_sitemap)
@@ -92,6 +97,9 @@ async def _worker(job_id: str, org_id: str) -> None:
             if item is None:
                 break
             url = item["normalized_url"]
+            if not is_public_http_target(url):
+                store.finish_url(job_id, org_id, url, "EXCLUDED", error_code="SSRF_TARGET_BLOCKED")
+                continue
             if not robots.can_fetch("DristikBot", url):
                 store.finish_url(job_id, org_id, url, "EXCLUDED", error_code="ROBOTS_DISALLOW")
                 continue
@@ -152,6 +160,8 @@ async def create_deep_crawl(
     origin = normalize_url(payload.website_url)
     if not origin:
         raise HTTPException(status_code=422, detail="website_url must be a valid HTTP(S) URL")
+    if not is_public_http_target(origin):
+        raise HTTPException(status_code=422, detail="Deep crawl targets must resolve exclusively to public IP addresses.")
     job_id = "crawl_" + uuid.uuid4().hex
     try:
         _store().create_job(job_id, user.org_id, origin, payload.max_pages, payload.max_depth)
