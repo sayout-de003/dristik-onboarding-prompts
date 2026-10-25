@@ -259,8 +259,13 @@ def _unsign(state: str) -> Dict[str, str]:
     return {str(k): str(v) for k, v in data.items()}
 
 
+def _state_signing_ready() -> bool:
+    secret = settings.AUTH_SECRET or ""
+    return len(secret) >= 32 and secret != "dristik-dev-secret-change-me"
+
+
 def _configured(spec: Dict[str, Any]) -> bool:
-    return bool(_setting(spec["client_id"]) and _setting(spec["client_secret"]))
+    return bool(_setting(spec["client_id"]) and _setting(spec["client_secret"]) and _state_signing_ready())
 
 
 def provider_status(request: Optional[Request] = None) -> Dict[str, Any]:
@@ -481,6 +486,8 @@ def oauth_authorize(
     spec = PROVIDERS.get(provider)
     if spec is None:
         raise HTTPException(status_code=404, detail="This connector has no OAuth sign-in.")
+    if not _state_signing_ready():
+        raise HTTPException(status_code=503, detail="OAuth state signing requires a configured secret of at least 32 characters.")
     if not _configured(spec):
         raise HTTPException(
             status_code=503,
