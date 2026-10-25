@@ -1014,7 +1014,7 @@ class CompleteGeoReportGenerator:
                     <tr><th>Source Class</th><th>Attribution Rate</th><th>Strategic Significance</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td>First-Party Website ({domain})</td><td>{cit_display}</td><td>Direct citation to official documentation and commercial pricing</td></tr>
+                    <tr><td>First-Party Website ({domain})</td><td>Not measured</td><td>Requires source-level citation URL counts, not overall citation rate</td></tr>
                     <tr><td>Third-Party Industry Reviews (G2, Capterra)</td><td>Not assessed</td><td>Requires observed third-party source evidence</td></tr>
                     <tr><td>Independent Authoritative Press</td><td>Not assessed</td><td>Requires observed independent source evidence</td></tr>
                 </tbody>
@@ -1049,11 +1049,11 @@ class CompleteGeoReportGenerator:
             <p>Peer comparison against direct category competitors across identical commercial query sets:</p>
             <table>
                 <thead>
-                    <tr><th>Entity</th><th>Observed AI Citation Share</th><th>Passage Extractability</th><th>Primary Strengths</th></tr>
+                    <tr><th>Entity</th><th>Observed mention/citation rate</th><th>Readiness score</th><th>Evidence status</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td><strong>{domain} (Target)</strong></td><td>{cit_display}</td><td>{ext_display}/100</td><td>Strong technical architecture and clean DOM semantics</td></tr>
-                    <tr><td>Leading Category Competitor</td><td>Benchmarking...</td><td>78/100</td><td>Extensive third-party review citations and comparative guides</td></tr>
+                    <tr><td><strong>{domain} (Target)</strong></td><td>{cit_display}</td><td>{ext_display}</td><td>Based on measured report fields; see evidence register</td></tr>
+                    <tr><td>Competitors</td><td>Not measured</td><td>Not measured</td><td>Requires a configured competitor set and comparable live query results</td></tr>
                 </tbody>
             </table>
         </section>
