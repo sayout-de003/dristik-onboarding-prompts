@@ -97,15 +97,16 @@ def test_google_analytics_connector_alias_and_oauth_routes():
     import uuid
 
     client = TestClient(app)
+    email = f"ga_{uuid.uuid4().hex[:8]}@example.com"
     signup = client.post("/api/v1/auth/signup", json={
         "full_name": "GA User",
-        "email": f"ga_{uuid.uuid4().hex[:8]}@example.com",
+        "email": email,
         "password": "Password123",
         "organization_name": "GA Org",
     })
     assert signup.status_code == 200
     login = client.post("/api/v1/auth/login", json={
-        "email": f"ga_{uuid.uuid4().hex[:8]}@example.com",
+        "email": email,
         "password": "Password123",
     })
     assert login.status_code == 200, login.text
