@@ -2589,7 +2589,24 @@ export type ConnectorType =
   | 'dataforseo'
   | 'live_ai_search'
   | 'crux'
-  | 'generic';
+  | 'generic'
+  | 'framer'
+  | 'wix'
+  | 'sanity'
+  | 'openai_search'
+  | 'perplexity'
+  | 'claude'
+  | 'gemini'
+  | 'linkedin'
+  | 'x'
+  | 'tiktok'
+  | 'instagram'
+  | 'whatsapp_business'
+  | 'telegram'
+  | 'slack'
+  | 'hubspot'
+  | 'salesforce'
+  | 'stripe';
 export type ConnectorHealthStatus = 'connected' | 'disconnected' | 'error' | 'unauthorized';
 
 export interface RemediationPatch {
