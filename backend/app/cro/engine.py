@@ -3001,7 +3001,10 @@ def _metrics(obs: _Obs) -> List[CroMetricResult]:
                 note=note,
             ))
             continue
-        reason = "The numerator and denominator were not both available. Zero was not substituted, and no lift was assumed."
+        reason = (
+            "Sessions are not substituted for visitors. The numerator and denominator "
+            "were not both available, so zero was not substituted and no lift was assumed."
+        )
         if spec["metric"] == "Conversion rate":
             reason = "Unique converters and eligible users were not both returned by GA4. Key events ÷ sessions is not substituted for conversion rate."
         results.append(CroMetricResult(
