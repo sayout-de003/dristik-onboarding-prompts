@@ -1,7 +1,9 @@
 from types import SimpleNamespace
+from contextlib import asynccontextmanager
 
 import pytest
 
+from app.crawl.crawler import CrawlerService
 from app.crawl.response_limits import ResponseTooLargeError, read_response_limited
 
 
@@ -41,3 +43,29 @@ async def test_response_limit_rejects_declared_oversize_before_reading():
 async def test_response_limit_rejects_non_positive_limit():
     with pytest.raises(ValueError, match="must be positive"):
         await read_response_limited(FakeStreamResponse([]), 0)
+
+
+
+@pytest.mark.asyncio
+async def test_oversized_direct_response_does_not_trigger_second_renderer(monkeypatch):
+    class FakeHTTPResponse(FakeStreamResponse):
+        status_code = 200
+        encoding = "utf-8"
+        headers = {"content-length": "100"}
+
+    class FakeClient:
+        @asynccontextmanager
+        async def stream(self, method, url):
+            yield FakeHTTPResponse([b"x" * 100], content_length=100)
+
+    crawler = CrawlerService()
+
+    async def should_not_render(*args, **kwargs):
+        raise AssertionError("oversized response must not trigger renderer fallback")
+
+    monkeypatch.setattr(crawler, "_js_render_page", should_not_render)
+    result = await crawler._fetch_page_with_fallbacks(
+        "https://example.com/", FakeClient()
+    )
+    assert result[0] is None
+    assert "response exceeds configured" in (result[5] or "")
