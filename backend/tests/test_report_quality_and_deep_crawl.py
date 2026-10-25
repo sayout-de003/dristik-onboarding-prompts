@@ -133,9 +133,9 @@ def test_report_assembly_deduplicates_same_title_and_url_but_not_distinct_pages(
     from app.report_finding_registry import canonicalize_report_findings as _report_findings
 
     report = SimpleNamespace(findings=[
-        {"finding_id": "f1", "title": "Missing title tag", "url": "https://example.com/"},
-        {"finding_id": "f2", "title": "  Missing   title tag ", "url": "https://example.com/"},
-        {"finding_id": "f3", "title": "Missing title tag", "url": "https://example.com/about"},
+        {"finding_id": "f1", "title": "Missing title tag", "url": "https://example.com/", "root_cause_category": "metadata", "how_to_fix": "Add a unique title tag"},
+        {"finding_id": "f2", "title": "  Missing   title tag ", "url": "https://example.com/", "root_cause_category": "metadata", "how_to_fix": "Add a unique title tag"},
+        {"finding_id": "f3", "title": "Missing title tag", "url": "https://example.com/about", "root_cause_category": "metadata", "how_to_fix": "Add a unique title tag"},
     ])
 
     result = _report_findings(report)
