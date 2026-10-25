@@ -2,6 +2,7 @@ import { AppView, TabId } from '../types';
 
 export const VIEWS = new Set<AppView>([
   'home',
+  'analytics',
   'grader',
   'pricing',
   'login',
@@ -16,6 +17,7 @@ export const VIEWS = new Set<AppView>([
 
 export const VIEW_LABELS: Record<AppView, string> = {
   home: 'Audits',
+  analytics: 'Delta Analytics',
   grader: 'Public grader',
   pricing: 'Pricing',
   login: 'Sign in',
