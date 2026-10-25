@@ -259,6 +259,56 @@ async def update_integration_credentials(
     return {"success": health.authenticated, "integration": integration, "health": health}
 
 
+@router.post("/{integration_id}/refresh")
+async def refresh_integration_credentials(
+    integration_id: str,
+    user: UserIdentity = Depends(require_permission("patches:generate")),
+):
+    """Refresh OAuth credentials when the provider supports a refresh flow, then re-test."""
+    integration = _owned_integration(integration_id, user)
+    if (integration.settings or {}).get("auth_mode") != "oauth2":
+        raise HTTPException(status_code=409, detail="This integration was not connected through the configured OAuth flow.")
+    provider_key = str((integration.settings or {}).get("oauth_provider") or "")
+    credentials = connector_store.get_credentials(integration_id)
+    if credentials is None:
+        raise HTTPException(status_code=404, detail="Integration credentials not found")
+    from app.connectors.oauth_providers import refresh_provider_credentials
+    token_data = await refresh_provider_credentials(provider_key, credentials)
+    stored = {}
+    if credentials.api_key:
+        try:
+            parsed = json.loads(credentials.api_key)
+            if isinstance(parsed, dict):
+                stored = parsed
+        except (TypeError, ValueError):
+            stored = {}
+    stored.update({
+        "type": "oauth2",
+        "provider": provider_key,
+        "access_token": token_data.get("access_token"),
+        "refresh_token": token_data.get("refresh_token") or credentials.refresh_token or stored.get("refresh_token") or "",
+    })
+    updated_credentials = credentials.model_copy(update={
+        "access_token": token_data.get("access_token"),
+        "refresh_token": token_data.get("refresh_token") or credentials.refresh_token,
+        "api_key": json.dumps(stored),
+    })
+    connector_store.update_credentials(integration_id, updated_credentials)
+    connector = connector_store.get_connector_for_org(integration_id, user.org_id)
+    if not connector:
+        raise HTTPException(status_code=500, detail="Could not initialize connector after token refresh.")
+    health = await connector.test_connection()
+    integration.status = health.status
+    connector_store.persist(integration)
+    connector_store.record_event(
+        org_id=integration.org_id, action="OAUTH_TOKEN_REFRESH",
+        result="SUCCESS" if health.authenticated else health.status.value.upper(),
+        integration_id=integration_id, actor_id=_actor_id(user),
+        details={"provider": provider_key, "authenticated": health.authenticated},
+    )
+    return {"success": health.authenticated, "integration": integration, "health": health}
+
+
 @router.post("/{integration_id}/reconnect")
 async def reconnect_integration(
     integration_id: str,
