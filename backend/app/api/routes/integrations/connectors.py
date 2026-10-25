@@ -161,7 +161,7 @@ async def connect_platform(
         github_token=req.github_token,
         repository=req.repository,
         branch=req.branch or "main",
-        scopes=req.scopes
+        scopes=[]  # Client-declared scopes are not evidence of provider-granted permissions.
     )
 
     integration = connector_store.add_integration(
