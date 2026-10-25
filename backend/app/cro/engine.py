@@ -1506,12 +1506,16 @@ class _Rules:
 
     def metric_rpv(self, check: Dict[str, Any]) -> Dict[str, Any]:
         analytics = self.obs.analytics
-        value = rate(analytics.get("revenue"), analytics.get("sessions"))
+        eligible_visitors = analytics.get("eligible_visitors")
+        value = rate(analytics.get("revenue"), eligible_visitors)
         if value is None:
-            return self.un(check, "Revenue per visitor was not calculated. Attributed revenue and eligible visitors were not both present.")
+            return self.un(
+                check,
+                "Revenue per visitor was not calculated. Attributed revenue and an explicit eligible-visitor denominator were not both present; sessions were not substituted for visitors.",
+            )
         return self.observed(
             check,
-            f"{analytics['revenue']} revenue ÷ {analytics['sessions']} sessions = {value:.4f} over {analytics.get('period') or 'the connected period'}.",
+            f"{analytics['revenue']} attributed revenue ÷ {eligible_visitors} eligible visitors = {value:.4f} over {analytics.get('period') or 'the connected period'}.",
             state="VERIFIED",
         )
 
