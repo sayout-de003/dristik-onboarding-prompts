@@ -3002,7 +3002,7 @@ def _metrics(obs: _Obs) -> List[CroMetricResult]:
             ))
             continue
         reason = (
-            "Sessions are not substituted for visitors. The numerator and denominator "
+            "sessions are not substituted for visitors. The numerator and denominator "
             "were not both available, so zero was not substituted and no lift was assumed."
         )
         if spec["metric"] == "Conversion rate":
