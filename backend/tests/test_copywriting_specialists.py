@@ -2,15 +2,15 @@
 Tests for the 5 specialized copywriting agents and section-wise page copy intelligence.
 """
 import pytest
-from app.agents.runtime.registry import (
+from app.orchestration.runtime.registry import (
     COPYWRITING_AGENTS_V3,
     AGENT_REGISTRY,
     list_copywriting_specialists,
     get_agent_definition,
 )
-from app.agents.runtime.task_cards import ALL_TASK_CARDS, task_card_for
+from app.orchestration.runtime.task_cards import ALL_TASK_CARDS, task_card_for
 from app.domain.models import BusinessProfile, PageEvidence, PageSeoAudit
-from app.agents.page.intelligence import fallback_copy_audit, _fallback_suggested
+from app.crawl.page_intelligence import fallback_copy_audit, _fallback_suggested
 
 
 def test_5_copywriting_agents_registered():
