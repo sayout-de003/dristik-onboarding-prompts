@@ -491,7 +491,7 @@ async def oauth_callback(
         token_data = await _exchange(provider, code, shop_host, redirect_uri)
     except HTTPException as exc:
         return _oauth_fail(str(exc.detail))
-    target = saved.get("domain") or shop_host or saved.get("repository") or spec["label"]
+    target = token_data.get("instance_url") or saved.get("domain") or shop_host or saved.get("repository") or spec["label"]
 
     discovered_prop = saved.get("property_id") or ""
     if provider in ("google_analytics_4", "google_analytics") and not discovered_prop:
@@ -540,6 +540,8 @@ async def oauth_callback(
         provider=spec["connector"],
         api_url=target if str(target).startswith("http") else f"https://{target}",
         api_key=json.dumps(stored),
+        access_token=token_data.get("access_token"),
+        refresh_token=token_data.get("refresh_token"),
         github_token=token_data.get("access_token") if provider == "github" else None,
         repository=saved.get("repository") or None,
     )
@@ -552,9 +554,33 @@ async def oauth_callback(
         settings={"auth_mode": "oauth2", "oauth_provider": provider, "property_id": discovered_prop},
         org_id=org_id,
     )
-    # Zero-Fake: Authenticated tokens elevate status to CONNECTED
-    integration.status = ConnectorHealthStatus.CONNECTED
+    # Authorization is not the same as a working integration. Verify against the real API.
+    connector = connector_store.get_connector_for_org(integration.integration_id, org_id)
+    if not connector:
+        integration.status = ConnectorHealthStatus.ERROR
+        connector_store.persist(integration)
+        connector_store.record_event(
+            org_id=org_id, action="OAUTH_CALLBACK", result="ADAPTER_UNAVAILABLE",
+            integration_id=integration.integration_id,
+            details={"provider": provider, "token_received": True, "live_verification": "FAILED"},
+        )
+        return _page("Connection verification failed", "Authorization returned a token, but Dristik could not initialize the provider adapter. The connection was not marked connected.", success=False)
+
+    health = await connector.test_connection()
+    integration.status = health.status
     connector_store.persist(integration)
+    connector_store.record_event(
+        org_id=org_id, action="OAUTH_CALLBACK",
+        result="SUCCESS" if health.authenticated else health.status.value.upper(),
+        integration_id=integration.integration_id,
+        details={"provider": provider, "token_received": True, "live_verification": "PASSED" if health.authenticated else "FAILED"},
+    )
+    if not health.authenticated:
+        return _page(
+            "Connection verification failed",
+            "Authorization returned a token, but the provider API handshake did not pass: " + html.escape(health.message) + ". The connection remains unverified.",
+            success=False,
+        )
 
     # Sync singleton connector references if applicable
     if provider in ("google_analytics_4", "google_analytics"):
