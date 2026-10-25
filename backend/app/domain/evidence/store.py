@@ -20,7 +20,7 @@ class EvidenceStore:
 
     def _ensure_snapshots(self):
         if self.snapshots is None:
-            from app.audit.snapshots import SnapshotStore
+            from app.crawl.audit.snapshots import SnapshotStore
             self.snapshots = SnapshotStore(self.run_id)
         return self.snapshots
 
