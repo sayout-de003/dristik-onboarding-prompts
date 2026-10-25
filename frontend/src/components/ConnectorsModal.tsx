@@ -408,10 +408,41 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
 
   const handleDisconnect = async (integrationId: string) => {
     try {
-      await fetch(`/api/v1/connectors/${integrationId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/v1/connectors/${integrationId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setStatusMessage(data.detail || 'Disconnect failed.');
+        return;
+      }
+      setStatusMessage('Disconnected and removed local connection.');
       await fetchIntegrations();
+      await fetchProviderRegistry();
     } catch (e) {
-      console.error(e);
+      setStatusMessage('Disconnect failed: network error.');
+    }
+  };
+
+  const handleConnectorAction = async (integrationId: string, action: 'test' | 'reconnect' | 'revoke') => {
+    setLoading(true);
+    try {
+      const route = action === 'test'
+        ? `/api/v1/connectors/${integrationId}/health`
+        : `/api/v1/connectors/${integrationId}/${action}`;
+      const res = await fetch(route, { method: action === 'test' ? 'GET' : 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setStatusMessage(data.detail || `${action} failed.`);
+      } else if (action === 'test') {
+        setStatusMessage(data.authenticated ? `✓ Live provider handshake passed: ${data.message || 'authenticated'}` : `Connection check failed: ${data.message || data.status || 'not authenticated'}`);
+      } else {
+        setStatusMessage(data.message || (data.success ? `${action} completed.` : `${action} did not complete.`));
+      }
+      await fetchIntegrations();
+      await fetchProviderRegistry();
+    } catch {
+      setStatusMessage(`${action} failed: network error.`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1365,7 +1396,7 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-good"></span>
+                          <span className={`w-2 h-2 rounded-full ${String(integ.status).toLowerCase() === 'connected' ? 'bg-good' : 'bg-paper-300 border border-line'}`}></span>
                           <span className="text-sm font-semibold text-ink truncate max-w-[180px]">
                             {integ.name}
                           </span>
@@ -1380,13 +1411,13 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
                       </div>
 
                       <div className="flex items-center justify-between pt-2 border-t border-line text-[11px]">
-                        <span className="text-good font-mono">● {integ.status}</span>
-                        <button
-                          onClick={() => handleDisconnect(integ.integration_id)}
-                          className="text-bad hover:underline transition font-mono"
-                        >
-                          Disconnect
-                        </button>
+                        <span className={`font-mono uppercase ${String(integ.status).toLowerCase() === 'connected' ? 'text-good' : 'text-ink-500'}`}>{integ.status}</span>
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <button type="button" disabled={loading} onClick={() => handleConnectorAction(integ.integration_id, 'test')} className="text-ink-700 hover:underline disabled:opacity-50">Test</button>
+                          <button type="button" disabled={loading} onClick={() => handleConnectorAction(integ.integration_id, 'reconnect')} className="text-ink-700 hover:underline disabled:opacity-50">Reconnect</button>
+                          <button type="button" disabled={loading} onClick={() => handleConnectorAction(integ.integration_id, 'revoke')} className="text-ink-700 hover:underline disabled:opacity-50">Forget credentials</button>
+                          <button type="button" disabled={loading} onClick={() => handleDisconnect(integ.integration_id)} className="text-bad hover:underline disabled:opacity-50">Delete</button>
+                        </div>
                       </div>
                     </div>
                   ))
