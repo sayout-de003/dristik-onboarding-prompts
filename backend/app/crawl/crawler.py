@@ -302,7 +302,6 @@ class CrawlerService:
                             None,
                         )
                 return None, None, fc_resp.status_code, (time.time() - start_time) * 1000, {}, 0, f"firecrawl HTTP {fc_resp.status_code}", None
-            return None, None, fc_resp.status_code, (time.time() - start_time) * 1000, {}, 0, f"firecrawl HTTP {fc_resp.status_code}", None
         except Exception as exc:
             return None, None, 0, (time.time() - start_time) * 1000, {}, 0, str(exc), None
 
