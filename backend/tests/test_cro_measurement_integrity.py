@@ -215,6 +215,8 @@ def test_html_report_exposes_sample_coverage_and_execution_limits():
     )
     html = cro_report_generator.render_html_report(report, domain="example.com")
     assert "Coverage and execution limits" in html
+    assert "Scoring calibration" in html
+    assert "NOT_BENCHMARK_CALIBRATED" in html
     assert "NOT_VERIFIED_BY_CRO_ENGINE" in html
     assert "NOT_EXECUTED" in html
     assert "25.0%" in html
