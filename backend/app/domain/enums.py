@@ -532,10 +532,7 @@ class ConnectorType(str, Enum):
     HUBSPOT = "hubspot"
     SALESFORCE = "salesforce"
     STRIPE = "stripe"
-    # CMS and commerce integration aliases
-    WORDPRESS = "wordpress"
-    # WordPress, Shopify, Webflow, GitHub, GSC, GA4, CrUX, DataForSEO, CRM,
-    # live_ai_search and generic are declared above.
+    # Existing provider aliases remain available for backwards compatibility.
 
 
 class ConnectorHealthStatus(str, Enum):
