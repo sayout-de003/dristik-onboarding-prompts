@@ -133,6 +133,7 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
   const [providerResource, setProviderResource] = useState('');
   const [providerDataset, setProviderDataset] = useState('');
   const [providerApiUrl, setProviderApiUrl] = useState('');
+  const [resourcePreview, setResourcePreview] = useState<{ integrationId: string; resource: string; result: any } | null>(null);
   const [providerRegistry, setProviderRegistry] = useState<Record<string, { implementation_status?: string; connection_status?: string; notes?: string | null }>>({});
 
   const fetchIntegrations = async () => {
@@ -456,6 +457,25 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
       await fetchProviderRegistry();
     } catch {
       setStatusMessage(`${action} failed: network error.`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReadResource = async (integrationId: string, resource: string) => {
+    setLoading(true);
+    setResourcePreview(null);
+    try {
+      const res = await fetch(`/api/v1/connectors/${integrationId}/resources/${encodeURIComponent(resource)}?limit=5`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setStatusMessage(data.detail || `Could not read ${resource}.`);
+        return;
+      }
+      setResourcePreview({ integrationId, resource, result: data });
+      setStatusMessage(data.status === 'LIVE_DATA' ? `✓ Read ${data.resource_count ?? 0} live ${resource} records.` : (data.message || `Resource status: ${data.status || 'unavailable'}`));
+    } catch {
+      setStatusMessage(`Could not read ${resource}: network error.`);
     } finally {
       setLoading(false);
     }
@@ -1435,6 +1455,26 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
                         {integ.target_url || integ.repository}
                       </div>
 
+                      {(({
+                        hubspot: ['contacts', 'companies', 'deals'],
+                        salesforce: ['accounts', 'leads', 'opportunities', 'campaigns'],
+                        stripe: ['customers', 'subscriptions', 'payment_intents'],
+                        sanity: ['documents'],
+                      } as Record<string, string[]>)[integ.provider] || []).length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {(({
+                            hubspot: ['contacts', 'companies', 'deals'],
+                            salesforce: ['accounts', 'leads', 'opportunities', 'campaigns'],
+                            stripe: ['customers', 'subscriptions', 'payment_intents'],
+                            sanity: ['documents'],
+                          } as Record<string, string[]>)[integ.provider] || []).map((resource) => (
+                            <button key={resource} type="button" disabled={loading || String(integ.status).toLowerCase() !== 'connected'} onClick={() => handleReadResource(integ.integration_id, resource)} className="rounded border border-line px-2 py-1 text-[10px] text-ink-700 hover:bg-paper-100 disabled:opacity-40">
+                              Read {resource.replace('_', ' ')}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
                       <div className="flex items-center justify-between pt-2 border-t border-line text-[11px]">
                         <span className={`font-mono uppercase ${String(integ.status).toLowerCase() === 'connected' ? 'text-good' : 'text-ink-500'}`}>{integ.status}</span>
                         <div className="flex flex-wrap justify-end gap-2">
@@ -1446,6 +1486,21 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
                       </div>
                     </div>
                   ))
+                )}
+                {resourcePreview && (
+                  <div className="rounded-lg border border-line bg-paper-50 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs font-semibold text-ink">Live resource preview: {resourcePreview.resource}</div>
+                      <button type="button" onClick={() => setResourcePreview(null)} className="text-xs text-ink-500 hover:text-ink">Close</button>
+                    </div>
+                    <div className="text-[10px] font-mono text-ink-500">
+                      {resourcePreview.result.status || 'UNKNOWN'} · {resourcePreview.result.resource_count ?? 'count not reported'} records
+                    </div>
+                    <pre className="max-h-56 overflow-auto rounded bg-paper-100 p-2 text-[10px] leading-relaxed text-ink-700 whitespace-pre-wrap break-words">{JSON.stringify(resourcePreview.result.records || resourcePreview.result, null, 2)}</pre>
+                    {resourcePreview.result.evidence?.response_sha256 && (
+                      <div className="text-[9px] font-mono text-ink-400 break-all">SHA-256: {resourcePreview.result.evidence.response_sha256}</div>
+                    )}
+                  </div>
                 )}
               </div>
             )}
