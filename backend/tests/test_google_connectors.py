@@ -45,7 +45,7 @@ def test_integrations_api_router_zero_synthetic():
     from app.main import app
 
     import uuid
-    client = TestClient(app)
+    client = TestClient(app, base_url="https://testserver")
     signup = client.post("/api/v1/auth/signup", json={
         "full_name": "Integrations Owner",
         "email": f"integ_{uuid.uuid4().hex[:8]}@example.com",
