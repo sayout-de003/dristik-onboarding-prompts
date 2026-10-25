@@ -60,7 +60,7 @@ def test_unmeasured_external_authority_has_no_neutral_credit():
     dimension = _score_external_authority(None)
     assert dimension.is_measured is False
     assert dimension.score == 0.0
-    assert "not be measured" in dimension.summary.lower()
+    assert "cannot be measured" in dimension.summary.lower()
 
 
 def test_composite_with_no_measured_dimensions_is_none_not_fifty():
