@@ -266,8 +266,11 @@ def _unsign(state: str) -> Dict[str, str]:
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail="OAuth state timestamp is invalid.") from exc
     now = int(time.time())
-    if not data.get("nonce") or issued_at > now + 60 or now - issued_at > 900:
+    nonce = str(data.get("nonce") or "")
+    if not nonce or issued_at > now + 60 or now - issued_at > 900:
         raise HTTPException(status_code=400, detail="OAuth state has expired or is incomplete.")
+    if not connector_store.consume_oauth_nonce(nonce, issued_at + 900):
+        raise HTTPException(status_code=400, detail="OAuth state was already used or has expired.")
     return {str(k): str(v) for k, v in data.items()}
 
 
