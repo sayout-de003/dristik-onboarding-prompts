@@ -91,6 +91,27 @@ def test_lifecycle_revenue_intelligence_service():
     assert "unmeasured" in flagged.summary.lower()
 
 
+
+def test_lifecycle_revenue_connected_but_missing_nullable_metrics_stay_unknown():
+    from app.domain.models import GscAttributionData, Ga4AttributionData, CrmAttributionData
+
+    svc = LifecycleRevenueService()
+    result = svc.synthesize_lifecycle_intelligence(
+        "example.com",
+        gsc_data=GscAttributionData(is_connected=True, ctr=None),
+        ga4_data=Ga4AttributionData(
+            is_connected=True,
+            engagement_rate=None,
+            conversion_rate=None,
+        ),
+        crm_data=CrmAttributionData(is_connected=True, lead_quality_score=None),
+    )
+    assert result.stages["search"]["metrics"]["ctr"] == "UNKNOWN"
+    assert result.stages["visitor"]["metrics"]["engagement_rate"] == "UNKNOWN"
+    assert result.stages["visitor"]["metrics"]["conversion_rate"] == "UNKNOWN"
+    assert result.stages["lead"]["metrics"]["lead_quality"] == "UNKNOWN"
+
+
 def test_visual_ux_testing_engine():
     tester = VisualUxTester()
     report = tester.inspect_website_visual_ux("example.com", "https://example.com")
