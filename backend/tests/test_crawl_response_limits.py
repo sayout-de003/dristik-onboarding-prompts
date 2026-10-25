@@ -58,6 +58,8 @@ async def test_oversized_direct_response_does_not_trigger_second_renderer(monkey
         async def stream(self, method, url):
             yield FakeHTTPResponse([], content_length=6 * 1024 * 1024)
 
+    import app.crawl.crawler as crawler_module
+    monkeypatch.setattr(crawler_module, "is_safe_url", lambda url: (True, "test-safe"))
     crawler = CrawlerService()
 
     async def should_not_render(*args, **kwargs):
