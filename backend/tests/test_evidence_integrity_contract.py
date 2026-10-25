@@ -107,3 +107,28 @@ def test_finding_evidence_does_not_assume_http_success_or_crawl_source():
     assert evidence.source is None
     assert evidence.test_method is None
     assert evidence.evidence_subtype is None
+
+
+def test_publication_cover_does_not_claim_missing_scores_or_certification():
+    from app.reports.publishing_engine import (
+        CoverGenerator,
+        PublicationDocument,
+        PublicationMetadata,
+    )
+
+    metadata = PublicationMetadata(
+        family="SEO",
+        title="SEO audit",
+        subtitle="Scope and findings",
+        domain="example.test",
+        brand_name="Example",
+        audit_date="Timestamp unavailable",
+    )
+    document = PublicationDocument(metadata=metadata)
+    rendered = CoverGenerator.render_cover_html(document)
+    assert "NOT MEASURED" in rendered
+    assert "NOT GRADED" in rendered
+    assert "Crawl coverage not recorded" in rendered
+    assert "Finding count not recorded" in rendered
+    assert "ZERO-FAKE AST CERTIFIED" not in rendered
+    assert "SUBJECT ENTITY UNDER ASSURANCE" not in rendered
