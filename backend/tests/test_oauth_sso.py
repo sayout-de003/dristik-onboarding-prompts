@@ -17,7 +17,7 @@ from app.identity.authorizer import UserRole
 from app.identity.security import SESSION_COOKIE
 import app.identity.oauth_service as oauth_service
 
-client = TestClient(app)
+client = TestClient(app, base_url="https://testserver")
 
 
 def test_auth_providers_discovery():
