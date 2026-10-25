@@ -45,6 +45,7 @@ const DevPatchPackView = lazyWithRetry(() => import('./components/DevPatchPackVi
 const VerificationWorkspaceView = lazyWithRetry(() => import('./components/VerificationWorkspaceView').then((m) => ({ default: m.VerificationWorkspaceView })));
 const Pages = lazyWithRetry(() => import('./components/Pages').then((m) => ({ default: m.Pages })));
 const CostLedgerView = lazyWithRetry(() => import('./components/CostLedgerView').then((m) => ({ default: m.CostLedgerView })));
+const ContinuousIntelligenceView = lazyWithRetry(() => import('./components/ContinuousIntelligenceView').then((m) => ({ default: m.ContinuousIntelligenceView })));
 
 export function App() {
   const initial = parseNavigation();
@@ -710,6 +711,8 @@ export function App() {
             </Suspense>
           )}
           {view === 'analytics' && user && <DeltaAnalyticsDashboard />}
+          {view === 'continuous' && user && <Suspense fallback={<LoadingBlock label="Loading continuous intelligence" />}><ContinuousIntelligenceView /></Suspense>}
+          {view === 'continuous' && !user && <LoginScreen onAuthed={async () => { setUser(await fetchMe()); go('continuous'); }} onView={go} />}
           {view === 'analytics' && !user && <LoginScreen onAuthed={async () => { setUser(await fetchMe()); go('analytics'); }} onView={go} />}
           {view === 'grader' && (
             <PublicGrader onStartAudit={() => go('home')} />

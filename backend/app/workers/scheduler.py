@@ -117,6 +117,17 @@ class DristikScheduler:
             except Exception as exc:
                 logger.error("Weekly sync failed: %s", exc, exc_info=True)
 
+        # 5. Subscription-plan eligible monthly website intelligence. The ledger makes
+        # this safe to check on every tick and supports catch-up after a restart.
+        try:
+            from app.continuous_intelligence import process_due_monthly_runs
+            monthly_result = await process_due_monthly_runs()
+            if monthly_result.get("runs_started"):
+                executed.append(f"continuous_intelligence_monthly_{monthly_result['runs_started']}")
+                self.total_jobs_executed += monthly_result["runs_started"]
+        except Exception as exc:
+            logger.error("Continuous intelligence monthly processing failed: %s", exc, exc_info=True)
+
         # 4. Monthly Backlink Sync (1st day of month)
         if now.day == 1 and self._last_monthly_month != month_str:
             try:

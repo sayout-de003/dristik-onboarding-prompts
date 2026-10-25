@@ -20,6 +20,7 @@ from app.api.routes.platform.system import router as system_router
 from app.api.routes.platform.workspaces import router as workspaces_router
 from app.geo.api.routes import router as geo_pipeline_router
 from app.api.routes.intelligence.keywords import router as keywords_router
+from app.api.routes.intelligence.continuous import router as continuous_intelligence_router
 from app.api.routes.intelligence.outcomes import router as outcomes_router
 from app.api.routes.intelligence.radar import router as radar_router
 from app.api.routes.intelligence.strategic import router as intelligence_router
@@ -55,6 +56,7 @@ _PREFIXED_ROUTERS = (
     outcomes_router,
     geo_pipeline_router,
     keywords_router,
+    continuous_intelligence_router,
     meta_router,
     integrations_router,
     workspaces_router,

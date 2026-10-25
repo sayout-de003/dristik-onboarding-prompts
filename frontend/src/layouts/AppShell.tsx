@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Bell,
+  Activity,
   BarChart3,
   Contact,
   CreditCard,
@@ -131,6 +132,7 @@ export function AppShell(props: AppShellProps) {
     const items: CommandAction[] = [
       { id: 'home', label: 'New audit', group: 'Workspace', onSelect: onNewAudit },
       { id: 'analytics', label: 'Delta Analytics', group: 'Workspace', onSelect: () => onNavigate('analytics') },
+      ...(user ? [{ id: 'continuous', label: 'Continuous Intelligence', group: 'Workspace', onSelect: () => onNavigate('continuous') }] : []),
       { id: 'grader', label: 'Public grader', group: 'Workspace', onSelect: () => onNavigate('grader') },
       { id: 'pricing', label: 'Pricing', group: 'Workspace', onSelect: () => onNavigate('pricing') },
       { id: 'contact', label: 'Contact', group: 'Workspace', onSelect: () => onNavigate('contact') },
@@ -210,6 +212,7 @@ export function AppShell(props: AppShellProps) {
   const productLinks = [
     { id: 'home', label: 'Audits', icon: LayoutDashboard, active: view === 'home', onClick: () => onNavigate('home') },
     ...(user ? [{ id: 'analytics', label: 'Delta Analytics', icon: BarChart3, active: view === 'analytics', onClick: () => onNavigate('analytics') }] : []),
+    ...(user ? [{ id: 'continuous', label: 'Continuous Intelligence', icon: Activity, active: view === 'continuous', onClick: () => onNavigate('continuous') }] : []),
     { id: 'pricing', label: 'Pricing', icon: CreditCard, active: view === 'pricing', onClick: () => onNavigate('pricing') },
     { id: 'contact', label: 'Contact', icon: Contact, active: view === 'contact', onClick: () => onNavigate('contact') },
     ...(user
