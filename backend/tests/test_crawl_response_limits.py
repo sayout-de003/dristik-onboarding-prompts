@@ -56,7 +56,7 @@ async def test_oversized_direct_response_does_not_trigger_second_renderer(monkey
     class FakeClient:
         @asynccontextmanager
         async def stream(self, method, url):
-            yield FakeHTTPResponse([b"x" * 100], content_length=100)
+            yield FakeHTTPResponse([], content_length=6 * 1024 * 1024)
 
     crawler = CrawlerService()
 
