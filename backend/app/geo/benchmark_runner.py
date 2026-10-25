@@ -13,7 +13,7 @@ import re
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional, Tuple
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit
 import httpx
 from pydantic import BaseModel, Field
 
@@ -133,7 +133,7 @@ class GeoBenchmarkReport(BaseModel):
     evaluations: List[EvaluatedQueryRun] = Field(default_factory=list)
     critical_blindspots: List[str] = Field(default_factory=list)
     reproducibility_hash: str
-    is_live_measurement: bool = True
+    is_live_measurement: bool = False
     summary: str = ""
     sentiment_audit: Optional[Dict[str, Any]] = None
     offpage_citation_summary: Optional[Dict[str, Any]] = None
@@ -147,72 +147,95 @@ class GeoBenchmarkRunner:
     def __init__(self):
         self.store = geo_pipeline_store
 
+    @staticmethod
+    def _normalize_hostname(value: str) -> str:
+        """Normalize a URL or hostname without accepting substring lookalikes."""
+        raw = (value or "").strip().lower()
+        if not raw:
+            return ""
+        try:
+            parsed = urlsplit(raw if "://" in raw else f"//{raw}")
+            host = (parsed.hostname or "").rstrip(".").lower()
+        except ValueError:
+            return ""
+        return host[4:] if host.startswith("www.") else host
+
+    @classmethod
+    def _is_first_party_host(cls, candidate: str, target_domain: str) -> bool:
+        host = cls._normalize_hostname(candidate)
+        target = cls._normalize_hostname(target_domain)
+        return bool(host and target and (host == target or host.endswith("." + target)))
+
+    @staticmethod
+    def _contains_term(text: str, term: str) -> bool:
+        """Match a whole brand/domain token, not a substring of another word."""
+        if not text or not term:
+            return False
+        return re.search(r"(?<!\w)" + re.escape(term) + r"(?!\w)", text, flags=re.IGNORECASE) is not None
+
     def _classify_sources(self, citations: List[str], raw_text: str, target_domain: str) -> Tuple[List[str], SourceQuality, bool]:
-        low_domain = target_domain.lower()
         extracted_domains = set()
+        for citation in citations or []:
+            host = self._normalize_hostname(str(citation))
+            if host:
+                extracted_domains.add(host)
 
-        for c in citations:
-            try:
-                netloc = urlparse(str(c)).netloc.lower()
-                if netloc:
-                    extracted_domains.add(netloc.replace("www.", ""))
-            except Exception:
-                pass
+        for match in re.finditer(r"""https?://([^\s/<>\"'?#]+)""", raw_text or "", flags=re.IGNORECASE):
+            host = self._normalize_hostname(match.group(1).rstrip(".,);]"))
+            if host:
+                extracted_domains.add(host)
 
-        for match in re.finditer(r"https?://([a-zA-Z0-9\.\-]+)", raw_text):
-            extracted_domains.add(match.group(1).lower().replace("www.", ""))
-
-        domain_list = sorted(list(extracted_domains))
-        was_first_party = any(low_domain in d for d in domain_list)
-
+        domain_list = sorted(extracted_domains)
+        was_first_party = any(self._is_first_party_host(host, target_domain) for host in domain_list)
+        social_domains = ("linkedin.com", "twitter.com", "x.com", "crunchbase.com", "github.com", "clutch.co", "g2.com")
+        is_social = any(
+            any(host == social or host.endswith("." + social) for social in social_domains)
+            for host in domain_list
+        )
         if was_first_party:
             quality: SourceQuality = "first_party"
-        elif any(any(soc in d for soc in ["linkedin", "twitter", "x.com", "crunchbase", "github", "clutch", "g2"]) for d in domain_list):
-            quality = "social_directory"
-        elif len(domain_list) > 0:
-            quality = "third_party"
+        elif is_social:
+            quality: SourceQuality = "social_directory"
+        elif domain_list:
+            quality: SourceQuality = "third_party"
         else:
-            quality = "unsourced"
-
+            quality: SourceQuality = "unsourced"
         return domain_list, quality, was_first_party
 
     def _detect_mention_and_position(self, raw_text: str, brand: str, domain: str) -> Tuple[bool, Optional[int]]:
-        low_text = (raw_text or "").lower()
-        low_brand = (brand or "").lower().strip()
-        low_domain = (domain or "").lower().strip()
-
-        if not low_text or raw_text.startswith("API Error") or "Missing API key" in raw_text:
+        text = raw_text or ""
+        if not text or text.startswith("API Error") or "Missing API key" in text:
             return False, None
 
-        has_mention = bool(
-            (low_brand and low_brand in low_text) or
-            (low_domain and low_domain in low_text)
-        )
+        low_text = text.lower()
+        low_brand = (brand or "").strip().lower()
+        low_domain = self._normalize_hostname(domain)
+        has_mention = self._contains_term(text, low_brand) or self._contains_term(text, low_domain)
+        if not has_mention:
+            return False, None
 
         position = None
-        if has_mention:
-            # Check ordinal rankings in recommendation lists
-            lines = raw_text.split("\n")
-            for line in lines:
-                low_line = line.lower()
-                if (low_brand and low_brand in low_line) or (low_domain and low_domain in low_line):
-                    m_hash = re.search(r"#([0-9]+)", line)
-                    if m_hash:
-                        position = int(m_hash.group(1))
-                        break
-                    m_num = re.match(r"^\s*([0-9]+)[\.\)]", line)
-                    if m_num:
-                        position = int(m_num.group(1))
-                        break
+        for line in text.splitlines():
+            if not (self._contains_term(line, low_brand) or self._contains_term(line, low_domain)):
+                continue
+            match = re.search(r"#([0-9]+)", line)
+            if match:
+                position = int(match.group(1))
+                break
+            match = re.match(r"^\s*([0-9]+)[\.\)]", line)
+            if match:
+                position = int(match.group(1))
+                break
 
-            if position is None:
-                if re.search(rf"(?:1\.|#1|first|top choice|primary).*?{re.escape(low_brand)}", low_text):
-                    position = 1
-                elif re.search(rf"(?:2\.|#2|second).*?{re.escape(low_brand)}", low_text):
-                    position = 2
-                elif re.search(rf"(?:3\.|#3|third).*?{re.escape(low_brand)}", low_text):
-                    position = 3
-
+        if position is None and low_brand:
+            for pattern, rank in (
+                (rf"(?:1\.|#1|first|top choice|primary).*?{re.escape(low_brand)}", 1),
+                (rf"(?:2\.|#2|second).*?{re.escape(low_brand)}", 2),
+                (rf"(?:3\.|#3|third).*?{re.escape(low_brand)}", 3),
+            ):
+                if re.search(pattern, low_text):
+                    position = rank
+                    break
         return has_mention, position
 
     async def execute_benchmark(
@@ -307,29 +330,50 @@ class GeoBenchmarkRunner:
                             )
                             disabled_engines[ad.engine_id] = resp
 
-            has_mention, pos = self._detect_mention_and_position(resp.raw_content, brand, clean_domain)
-            sources, quality, is_1p = self._classify_sources(resp.citations, resp.raw_content, clean_domain)
-
-            # Compute Aggarwal et al. continuous impression metrics & sentence breakdown
-            imp_res = calculate_response_impressions(
-                raw_response=resp.raw_content or "",
-                citations=resp.citations or [],
-                target_domain=clean_domain,
-                brand_name=brand,
-            )
-
-            # Cost estimation (~$0.003/1k input words, ~$0.015/1k output words)
-            in_words = len((q.query_text or "").split())
-            out_words = len((resp.raw_content or "").split())
-            run_cost = round((in_words * 0.000003) + (out_words * 0.000015), 6)
-
-            status = "SUCCESS"
-            if resp.status_code == 401 or "Missing" in (resp.error or ""):
+            # Classify provider outcome before extracting evidence. Error payloads must
+            # never become successful negative mentions or citation observations.
+            error_text = (resp.error or "").lower()
+            raw_text = resp.raw_content or ""
+            if resp.status_code == 401 or "missing api key" in error_text or "missing api key" in raw_text.lower():
                 status = "KEY_MISSING"
-            elif resp.status_code == 504:
+            elif resp.status_code == 429:
+                status = "RATE_LIMITED"
+            elif resp.status_code in (408, 504):
                 status = "TIMEOUT"
-            elif resp.error:
+            elif resp.status_code < 200 or resp.status_code >= 300 or resp.error:
                 status = "ERROR"
+            else:
+                status = "SUCCESS"
+
+            if status == "SUCCESS":
+                has_mention, pos = self._detect_mention_and_position(raw_text, brand, clean_domain)
+                sources, quality, is_1p = self._classify_sources(resp.citations, raw_text, clean_domain)
+                imp_res = calculate_response_impressions(
+                    raw_response=raw_text,
+                    citations=resp.citations or [],
+                    target_domain=clean_domain,
+                    brand_name=brand,
+                )
+                word_count_impression_pct = imp_res.word_count_impression_pct
+                position_adjusted_impression_pct = imp_res.position_adjusted_impression_pct
+                dristik_adjusted_impression_pct = imp_res.dristik_adjusted_impression_pct
+                unlinked_brand_mentions = imp_res.unlinked_brand_sentences
+                sentence_count = imp_res.total_sentences
+                total_words = imp_res.total_words
+            else:
+                has_mention, pos = False, None
+                sources, quality, is_1p = [], "unsourced", False
+                word_count_impression_pct = 0.0
+                position_adjusted_impression_pct = 0.0
+                dristik_adjusted_impression_pct = 0.0
+                unlinked_brand_mentions = 0
+                sentence_count = 0
+                total_words = 0
+
+            # Cost estimate is retained for budget accounting, including failed attempts.
+            in_words = len((q.query_text or "").split())
+            out_words = len(raw_text.split())
+            run_cost = round((in_words * 0.000003) + (out_words * 0.000015), 6)
 
             return EvaluatedQueryRun(
                 query_id=q.query_id,
@@ -341,17 +385,17 @@ class GeoBenchmarkRunner:
                 timestamp=resp.queried_at,
                 locale=locale,
                 latency_ms=resp.latency_ms,
-                raw_response=resp.raw_content,
+                raw_response=raw_text,
                 citations=resp.citations,
                 was_mentioned=has_mention,
                 mention_position=pos,
                 was_first_party_cited=is_1p,
-                word_count_impression_pct=imp_res.word_count_impression_pct,
-                position_adjusted_impression_pct=imp_res.position_adjusted_impression_pct,
-                dristik_adjusted_impression_pct=imp_res.dristik_adjusted_impression_pct,
-                unlinked_brand_mentions=imp_res.unlinked_brand_sentences,
-                sentence_count=imp_res.total_sentences,
-                total_words=imp_res.total_words,
+                word_count_impression_pct=word_count_impression_pct,
+                position_adjusted_impression_pct=position_adjusted_impression_pct,
+                dristik_adjusted_impression_pct=dristik_adjusted_impression_pct,
+                unlinked_brand_mentions=unlinked_brand_mentions,
+                sentence_count=sentence_count,
+                total_words=total_words,
                 cost_usd=run_cost,
                 source_domains=sources,
                 source_quality=quality,
