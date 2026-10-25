@@ -220,11 +220,11 @@ class ConnectorStore:
             name=name,
             target_url=target_url,
             status=ConnectorHealthStatus.DISCONNECTED,
-            scopes=credentials.scopes or ["read", "write_patches"],
+            scopes=credentials.scopes,
             repository=repository,
             branch=branch,
             created_at=now,
-            last_synced_at=now,
+            last_synced_at=None,
             settings=settings or {}
         )
         self._integrations[integration_id] = integration
@@ -232,7 +232,9 @@ class ConnectorStore:
         try:
             self._write(integration)
         except Exception:
-            pass
+            self._integrations.pop(integration_id, None)
+            self._credentials.pop(integration_id, None)
+            raise
         return integration
 
 
@@ -241,28 +243,36 @@ class ConnectorStore:
         return self._credentials.get(integration_id)
 
     def update_credentials(self, integration_id: str, credentials: ConnectorCredentials) -> Optional[Integration]:
-        """Replace encrypted credentials for an existing integration and persist atomically."""
+        """Replace encrypted credentials and roll back in-memory state if persistence fails."""
         integration = self._integrations.get(integration_id)
         if integration is None:
             return None
+        previous_credentials = self._credentials.get(integration_id)
+        previous_status = integration.status
         self._credentials[integration_id] = credentials
         integration.status = ConnectorHealthStatus.DISCONNECTED
         self._integrations[integration_id] = integration
-        self._write(integration)
+        try:
+            self._write(integration)
+        except Exception:
+            if previous_credentials is not None:
+                self._credentials[integration_id] = previous_credentials
+            integration.status = previous_status
+            self._integrations[integration_id] = integration
+            raise
         return integration
 
     def delete_integration(self, integration_id: str) -> bool:
-        if integration_id in self._integrations:
-            del self._integrations[integration_id]
-            self._credentials.pop(integration_id, None)
-            try:
-                with self._connect() as conn:
-                    conn.execute("DELETE FROM connector_integrations WHERE integration_id = ?", (integration_id,))
-                    conn.commit()
-            except Exception:
-                pass
-            return True
-        return False
+        if integration_id not in self._integrations:
+            return False
+        # Commit the durable delete before mutating process memory. Never report success
+        # while encrypted credentials remain persisted.
+        with self._connect() as conn:
+            conn.execute("DELETE FROM connector_integrations WHERE integration_id = ?", (integration_id,))
+            conn.commit()
+        del self._integrations[integration_id]
+        self._credentials.pop(integration_id, None)
+        return True
 
     def get_connector(self, integration_id: str) -> Optional[BaseConnector]:
         integ = self.get_integration(integration_id)
