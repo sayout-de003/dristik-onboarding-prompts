@@ -3,6 +3,7 @@ import { AnalysisRun, AnalysisSummary, AppView, AuthUser, ConnectorType, Finding
 import { deleteAnalysis, getAnalysis, listAnalyses, openAnalysisStream, startAnalysis } from './services/api';
 import { can, fetchMe, logout } from './services/auth';
 import { AuditForm } from './components/AuditForm';
+import { DeltaAnalyticsDashboard } from './components/DeltaAnalyticsDashboard';
 import { Pipeline } from './components/Pipeline';
 import { Telemetry } from './components/Telemetry';
 import { Drawer } from './components/Drawer';
@@ -708,6 +709,8 @@ export function App() {
               <SystemPanel />
             </Suspense>
           )}
+          {view === 'analytics' && user && <DeltaAnalyticsDashboard />}
+          {view === 'analytics' && !user && <LoginScreen onAuthed={async () => { setUser(await fetchMe()); go('analytics'); }} onView={go} />}
           {view === 'grader' && (
             <PublicGrader onStartAudit={() => go('home')} />
           )}
