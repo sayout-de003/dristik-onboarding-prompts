@@ -104,15 +104,24 @@ class CrawlerService:
         client: httpx.AsyncClient,
         max_sitemap_urls: int = 500
     ) -> Tuple[bool, Optional[str], List[str], bool]:
-        candidate_sitemaps = declared_sitemaps + [
+        """Discover same-site URLs from bounded sitemap responses.
+
+        Sitemap bodies are streamed under a byte budget, nested sitemap fetches
+        are bounded, and every sitemap URL is checked before it is requested.
+        """
+        candidate_sitemaps = list(dict.fromkeys(declared_sitemaps + [
             f"{base_origin}/sitemap.xml",
             f"{base_origin}/sitemap_index.xml",
-            f"{base_origin}/wp-sitemap.xml"
-        ]
+            f"{base_origin}/wp-sitemap.xml",
+        ]))
         discovered_urls: List[str] = []
         found_sitemap_url: Optional[str] = None
         visited_xml_sitemaps: Set[str] = set()
         truncated = False
+        max_sitemap_bytes = int(
+            getattr(settings, "CRAWL_MAX_SITEMAP_BYTES", 2 * 1024 * 1024)
+            or 2 * 1024 * 1024
+        )
 
         def at_cap() -> bool:
             nonlocal truncated
@@ -128,48 +137,89 @@ class CrawlerService:
             if norm and norm not in discovered_urls:
                 discovered_urls.append(norm)
 
-        for s_url in candidate_sitemaps:
-            if s_url in visited_xml_sitemaps:
-                continue
-            visited_xml_sitemaps.add(s_url)
+        async def read_sitemap(sitemap_url: str, timeout: float) -> Optional[str]:
+            if settings.SSRF_PROTECTION_ENABLED:
+                safe, reason = is_safe_url(sitemap_url)
+                if not safe:
+                    logger.warning("Blocked unsafe sitemap URL %s: %s", sitemap_url, reason)
+                    return None
             try:
-                async with client.stream("GET", s_url, headers=self.headers, timeout=6.0) as resp:
-                    if resp.status_code != 200:
-                        continue
-                    max_bytes = int(getattr(settings, "CRAWL_MAX_SITEMAP_BYTES", 2 * 1024 * 1024) or 2 * 1024 * 1024)
-                    sitemap_body = await read_response_limited(resp, max_bytes)
-                    sitemap_text = sitemap_body.decode("utf-8", errors="replace")
-                    if "xml" in resp.headers.get("content-type", "") or sitemap_text.startswith("<?xml") or "<urlset" in sitemap_text or "<sitemapindex" in sitemap_text:
-                        found_sitemap_url = s_url
-                        locs = re.findall(r"<loc>(.*?)</loc>", sitemap_text, re.IGNORECASE)
-                    for loc in locs:
-                        if at_cap():
-                            break
-                        loc_clean = loc.strip()
-                        if loc_clean.endswith(".xml") or "sitemap" in loc_clean.lower():
-                            if loc_clean not in visited_xml_sitemaps and len(visited_xml_sitemaps) < 25:
-                                visited_xml_sitemaps.add(loc_clean)
-                                try:
-                                    async with client.stream("GET", loc_clean, headers=self.headers, timeout=5.0) as sub_resp:
-                                        if sub_resp.status_code == 200:
-                                            max_bytes = int(getattr(settings, "CRAWL_MAX_SITEMAP_BYTES", 2 * 1024 * 1024) or 2 * 1024 * 1024)
-                                            sub_body = await read_response_limited(sub_resp, max_bytes)
-                                            sub_text = sub_body.decode("utf-8", errors="replace")
-                                            sub_locs = re.findall(r"<loc>(.*?)</loc>", sub_text, re.IGNORECASE)
-                                            for s_loc in sub_locs:
-                                            if at_cap():
-                                                break
-                                            add_page(s_loc.strip())
-                                except Exception:
-                                    pass
-                        else:
-                            add_page(loc_clean)
-                    if discovered_urls:
-                        return True, found_sitemap_url, discovered_urls[:max_sitemap_urls], truncated
-            except Exception:
+                async with client.stream(
+                    "GET", sitemap_url, headers=self.headers, timeout=timeout
+                ) as response:
+                    if response.status_code != 200:
+                        logger.info("Sitemap fetch returned HTTP %s for %s", response.status_code, sitemap_url)
+                        return None
+                    body = await read_response_limited(response, max_sitemap_bytes)
+                    text = body.decode("utf-8", errors="replace")
+                    content_type = response.headers.get("content-type", "").lower()
+                    looks_like_xml = (
+                        "xml" in content_type
+                        or text.lstrip().startswith("<?xml")
+                        or "<urlset" in text.lower()
+                        or "<sitemapindex" in text.lower()
+                    )
+                    return text if looks_like_xml else None
+            except Exception as exc:
+                logger.info("Sitemap fetch failed for %s: %s", sitemap_url, type(exc).__name__)
+                return None
+
+        for sitemap_url in candidate_sitemaps:
+            if sitemap_url in visited_xml_sitemaps or len(visited_xml_sitemaps) >= 25:
+                continue
+            visited_xml_sitemaps.add(sitemap_url)
+            sitemap_text = await read_sitemap(sitemap_url, 6.0)
+            if not sitemap_text:
                 continue
 
-        return (found_sitemap_url is not None), found_sitemap_url, discovered_urls[:max_sitemap_urls], truncated
+            found_sitemap_url = found_sitemap_url or sitemap_url
+            try:
+                root = ET.fromstring(sitemap_text)
+            except ET.ParseError:
+                logger.info("Ignoring malformed XML sitemap: %s", sitemap_url)
+                continue
+
+            locs = [
+                (element.text or "").strip()
+                for element in root.iter()
+                if element.tag.rsplit("}", 1)[-1].lower() == "loc"
+            ]
+            is_index = root.tag.rsplit("}", 1)[-1].lower() == "sitemapindex"
+            for loc in locs:
+                if at_cap():
+                    break
+                if not loc:
+                    continue
+                is_nested = loc.lower().split("?", 1)[0].endswith(".xml") or "sitemap" in loc.lower()
+                if is_index and is_nested:
+                    nested_url = urljoin(sitemap_url, loc)
+                    if nested_url in visited_xml_sitemaps or len(visited_xml_sitemaps) >= 25:
+                        continue
+                    visited_xml_sitemaps.add(nested_url)
+                    nested_text = await read_sitemap(nested_url, 5.0)
+                    if not nested_text:
+                        continue
+                    try:
+                        nested_root = ET.fromstring(nested_text)
+                    except ET.ParseError:
+                        logger.info("Ignoring malformed nested sitemap: %s", nested_url)
+                        continue
+                    for nested_element in nested_root.iter():
+                        if nested_element.tag.rsplit("}", 1)[-1].lower() == "loc":
+                            nested_loc = (nested_element.text or "").strip()
+                            if nested_loc and not (
+                                nested_loc.lower().split("?", 1)[0].endswith(".xml")
+                                or "sitemap" in nested_loc.lower()
+                            ):
+                                add_page(nested_loc)
+                            if at_cap():
+                                break
+                else:
+                    add_page(loc)
+            if discovered_urls:
+                return True, found_sitemap_url, discovered_urls[:max_sitemap_urls], truncated
+
+        return found_sitemap_url is not None, found_sitemap_url, discovered_urls[:max_sitemap_urls], truncated
 
     async def _js_render_page(
         self,
