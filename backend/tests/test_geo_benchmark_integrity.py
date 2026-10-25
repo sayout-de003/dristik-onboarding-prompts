@@ -108,7 +108,7 @@ def test_share_of_model_uses_observed_competitor_mention_denominator():
     )
     assert metric.total_evaluated_queries == 2
     assert metric.share_of_model_pct == 50.0
-    assert metric.competitor_shares["CompetitorCo"] == 50.0
+    assert metric.competitor_shares["competitorco"] == 50.0
 
 
 def test_share_of_model_is_not_relabelled_mention_rate_without_competitors():
