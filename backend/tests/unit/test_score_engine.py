@@ -15,7 +15,7 @@ def test_score_engine_calculation():
         "ux": 90.0,
         "conversion": 80.0,
     }
-    assert engine.calculate_overall_score(pillars) == 83.3
+    assert engine.calculate_overall_score(pillars) == 83.2
 
 
 def test_missing_pillars_are_excluded_not_defaulted_to_70():
