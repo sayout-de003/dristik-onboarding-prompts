@@ -19,6 +19,8 @@ import html
 import re
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from app.domain.evidence.integrity import validate_score
+
 from app.reports.publishing_engine import (
     ChapterSpec,
     PartSpec,
@@ -128,14 +130,14 @@ def build_publication_manifest(
     """
     Constructs the publication manifest including chapter descriptors and metadata.
     """
-    domain = getattr(report, "domain", None) or getattr(report, "website_url", "target-domain.com")
+    domain = getattr(report, "domain", None) or getattr(report, "website_url", None) or "Target domain not recorded"
     domain_clean = str(domain).replace("https://", "").replace("http://", "").split("/")[0]
     profile = getattr(report, "business_profile", None)
     brand_name = getattr(profile, "business_name", None) or domain_clean
 
-    generated_at = str(getattr(report, "generated_at", "Measured on audit execution"))
+    generated_at = str(getattr(report, "generated_at", None) or "Timestamp unavailable")
     date_clean = generated_at[:10] if len(generated_at) >= 10 else generated_at
-    analysis_id = str(getattr(report, "analysis_id", None) or getattr(report, "report_id", "audit-000"))
+    analysis_id = str(getattr(report, "analysis_id", None) or getattr(report, "report_id", None) or "Report reference unavailable")
     report_ref = analysis_id[:12].upper()
 
     TITLES: Dict[str, Dict[str, str]] = {
@@ -144,28 +146,28 @@ def build_publication_manifest(
             "badge": "COMPLETE DIGITAL ASSET AUDIT DOSSIER",
             "title": "Complete Website Intelligence Audit",
             "subtitle": "SEO · GEO · AEO · CRO · TECHNICAL HEALTH & ENTITY READINESS",
-            "purpose": f"Comprehensive multi-discipline assurance evaluating search crawlability, generative AI extractability, live answer visibility, and conversion ergonomics for {brand_name}.",
+            "purpose": f"Multi-discipline assessment of available crawl, search, answer-engine, and conversion evidence for {brand_name}; coverage depends on configured sources.",
         },
         "SEO": {
             "displayName": "Technical SEO & Organic Search Audit",
             "badge": "TECHNICAL SEO & SEARCH ARCHITECTURE AUDIT",
             "title": "Technical SEO & Organic Search Audit",
             "subtitle": "CRAWL INFRASTRUCTURE · INDEXABILITY · CANONICAL ROUTING · CORE WEB VITALS",
-            "purpose": f"Independent engineering audit examining technical indexability, response latencies, sitemaps, heading hierarchy, and search discoverability for {domain_clean}.",
+            "purpose": f"Assessment of available technical crawl, response, sitemap, heading, and search-discoverability evidence for {domain_clean}.",
         },
         "GEO": {
             "displayName": "Generative Engine Optimization (GEO) Assessment",
             "badge": "GENERATIVE ENGINE OPTIMIZATION AUDIT",
             "title": "Generative Engine Optimization Assessment",
             "subtitle": "FIRST-PARTY EXTRACTABILITY · ENTITY CLARITY · LLM BOT DIRECTIVES",
-            "purpose": f"In-depth analysis of first-party DOM extractability, /llms.txt bot accessibility, and machine-readable entity clarity for generative models.",
+            "purpose": f"Assessment of observed content extractability, bot directives, and machine-readable entity signals where these checks were run.",
         },
         "AEO": {
             "displayName": "Answer Engine Optimization (AEO) Audit",
             "badge": "ANSWER ENGINE OPTIMIZATION AUDIT",
             "title": "Answer Engine Optimization (AEO) Audit",
             "subtitle": "QUERY INTENT · PASSAGE EXTRACTABILITY · MULTI-MODEL CITATION BENCHMARK",
-            "purpose": f"Systematic evaluation of question coverage, direct answer clarity, and live citation visibility across ChatGPT, Perplexity, Gemini, Claude, and Google AIO.",
+            "purpose": f"Assessment of question coverage and answer clarity; live platform citation visibility is included only where actual measurements are available.",
         },
         "CRO": {
             "displayName": "Conversion Experience & CRO Audit",
@@ -179,7 +181,7 @@ def build_publication_manifest(
             "badge": "COMPETITIVE INTELLIGENCE & BENCHMARK",
             "title": "Competitive Digital Visibility Analysis",
             "subtitle": "HEAD-TO-HEAD INQUIRY TESTING · PARITY MATRIX · MARKET GAP ANALYSIS",
-            "purpose": f"Head-to-head empirical comparison of brand visibility, schema coverage, and commercial question presence against recorded industry competitors.",
+            "purpose": f"Comparison of recorded competitor evidence and available schema or query measurements; unavailable competitor data remains undisclosed rather than inferred.",
         },
         "HYBRID": {
             "displayName": "Multi-Discipline Digital Audit",
@@ -233,7 +235,7 @@ def build_publication_manifest(
             "num": "03" if family == "COMPLETE" else ("01" if family == "AEO" else "02"),
             "part": "PART II: AUDIT CHAPTERS",
             "title": "Answer Engine Visibility (AEO) & AI Citations",
-            "desc": "Live visibility across ChatGPT, Perplexity, Google AIO, Claude & Gemini. Dynamic question digest & Re-Query uplift delta.",
+            "desc": "Question coverage and answer-engine observations where measured; platform coverage and sampling limitations are disclosed.",
         })
 
     if family in ("COMPLETE", "COMPETITOR"):
@@ -284,7 +286,7 @@ def build_publication_manifest(
         "num": "APP",
         "part": "PART IV: APPENDICES & REGISTERS",
         "title": "Institutional Findings Register & Evidence Ledger",
-        "desc": "Exhaustive verified defect register, production code patches with file paths, and cryptographic SHA-256 AST ledger.",
+        "desc": "Findings register, available evidence references, remediation recommendations, and integrity details where recorded.",
     })
 
     # Renumber sequentially
@@ -366,14 +368,14 @@ def _format_finding_cards(findings: List[Any], limit: int = 8) -> str:
 
 
 def _build_ch_brief(report: Any, manifest: Dict[str, Any]) -> str:
-    story = _esc(getattr(report, "story_summary", None) or "Independent digital intelligence audit conducted under Dristik Zero-Fake evidence governance.")
-    primary_opp = _esc(getattr(report, "primary_strategic_opportunity", None) or "Deploy schema.org Organization and canonical routing directives.")
-    ignore_advice = _esc(getattr(report, "consultant_advice_what_to_ignore", None) or "Avoid optimizing vanity traffic on low-intent non-commercial routes.")
+    story = _esc(getattr(report, "story_summary", None) or "No executive summary was recorded for this audit run.")
+    primary_opp = _esc(getattr(report, "primary_strategic_opportunity", None) or "No primary opportunity was recorded; review evidence-backed findings to select the next action.")
+    ignore_advice = _esc(getattr(report, "consultant_advice_what_to_ignore", None) or "No exclusion advice was recorded for this audit run.")
 
     p = getattr(report, "three_way_comparison", None) or getattr(report, "perspective", None)
-    human_p = _esc(getattr(p, "human_visitor_perspective", None) or "Clear initial value proposition with minor conversion friction on mobile viewports.")
-    search_p = _esc(getattr(p, "search_engine_perspective", None) or "Standard technical crawling access without recursive redirect loops.")
-    ai_p = _esc(getattr(p, "ai_answer_engine_perspective", None) or "Dense factual statements extractable; schema attribution recommended for citation grounding.")
+    human_p = _esc(getattr(p, "human_visitor_perspective", None) or "No evidence-backed visitor perspective was recorded for this run.")
+    search_p = _esc(getattr(p, "search_engine_perspective", None) or "No evidence-backed search-engine perspective was recorded for this run.")
+    ai_p = _esc(getattr(p, "ai_answer_engine_perspective", None) or "No live answer-engine observation was recorded for this run.")
 
     scores = getattr(report, "scores", None)
     seo_s = getattr(scores, "seo_score", "—")
@@ -711,39 +713,55 @@ def _build_ch_page_by_page(report: Any, manifest: Dict[str, Any]) -> str:
 
 
 def _build_ch_roadmap(report: Any, manifest: Dict[str, Any]) -> str:
+    findings = list(getattr(report, "findings", []) or [])
     callout = render_section_business_callout(
-        generate_section_explanation("ch_roadmap", "Strategic Priorities & 90-Day Roadmap", report, getattr(report, "findings", []))
+        generate_section_explanation("ch_roadmap", "Prioritized Remediation Plan", report, findings)
     )
-
+    rows = []
+    for index, finding in enumerate(findings[:10], start=1):
+        title = getattr(finding, "title", None) or getattr(finding, "name", None) or "Untitled finding"
+        severity = getattr(finding, "severity", None)
+        severity_text = getattr(severity, "value", severity) or "Not classified"
+        recommendation = (
+            getattr(finding, "recommended_fix", None)
+            or getattr(finding, "remediation", None)
+            or getattr(finding, "recommendation", None)
+            or "Review the linked evidence and define an acceptance test before implementation."
+        )
+        rows.append(
+            "<tr>"
+            f"<td><strong>{index}</strong></td>"
+            f"<td>{_esc(title)}<div style='color:#64748b;font-size:7.5pt;margin-top:3px;'>{_esc(recommendation)}</div></td>"
+            f"<td>{_esc(severity_text)}</td>"
+            "<td>Not estimated</td>"
+            "<td>Unassigned</td>"
+            "</tr>"
+        )
+    table_rows = "".join(rows) or (
+        "<tr><td colspan='5'>No findings were recorded for this run. "
+        "This does not establish that the site has no issues.</td></tr>"
+    )
     return f"""
     {callout}
-
-    <div class="card" style="margin-bottom: 16px; border-left: 3.5px solid #10b981;">
-        <div class="card-kicker">EXECUTIVE PRIORITIES // TOP ACTION PLAN</div>
-        <p style="font-size: 8.5pt; color: #334155; margin: 4px 0 10px 0;">
-            Actions ordered by return-on-engineering-effort (Impact vs Complexity ratio).
+    <div class="card" style="margin-bottom:16px;">
+        <div class="card-kicker">REMEDIATION REGISTER // UP TO 10 FINDINGS</div>
+        <p style="font-size:8.5pt;color:#334155;margin:4px 0 10px 0;">
+            Items follow the finding order supplied by the audit. Effort, ownership, and business impact are not fabricated when unavailable.
         </p>
         <div class="data-table-wrapper">
             <table class="print-table">
-                <thead>
-                    <tr><th>Milestone</th><th>Remediation Item</th><th>Impact</th><th>Effort</th><th>Owner</th></tr>
-                </thead>
-                <tbody>
-                    <tr><td><strong>PHASE 1 (DAYS 1–7)</strong></td><td>Consolidate Canonical 301 Rules &amp; Eliminate Redirects</td><td>High (10)</td><td>Low (2)</td><td>DevOps</td></tr>
-                    <tr><td><strong>PHASE 1 (DAYS 1–7)</strong></td><td>Deploy /llms.txt AI Bot Permissions Manifesto</td><td>High (9)</td><td>Low (1)</td><td>Platform</td></tr>
-                    <tr><td><strong>PHASE 2 (DAYS 8–30)</strong></td><td>Inject Schema.org Organization &amp; SoftwareApplication</td><td>High (8)</td><td>Med (3)</td><td>Frontend</td></tr>
-                    <tr><td><strong>PHASE 2 (DAYS 8–30)</strong></td><td>Publish Direct Answer Passage Blocks on Key Routes</td><td>Med (7)</td><td>Med (4)</td><td>Content</td></tr>
-                    <tr><td><strong>PHASE 3 (DAYS 31–90)</strong></td><td>Closed-Loop Regression Re-Crawling &amp; Verification</td><td>Med (6)</td><td>Low (2)</td><td>QA Lead</td></tr>
-                </tbody>
+                <thead><tr><th>Order</th><th>Finding and proposed action</th><th>Severity</th><th>Effort</th><th>Owner</th></tr></thead>
+                <tbody>{table_rows}</tbody>
             </table>
         </div>
-        <div class="chart-explanation-note">Prioritization Index: Sequences remediation actions by return on engineering investment, focusing first on high-impact zero-regression updates.</div>
+        <div class="chart-explanation-note">A recommendation is not evidence of implementation. Mark a fix verified only after a fresh check confirms the expected condition.</div>
     </div>
     """
 
 
 def _build_ch_methodology(report: Any, manifest: Dict[str, Any]) -> str:
-    pages_count = manifest.get("pages_crawled", 1)
+    pages_count = manifest.get("pages_crawled")
+    coverage_text = f"{pages_count} URLs recorded in the crawl manifest" if isinstance(pages_count, int) else "Crawl coverage was not recorded for this run"
     callout = render_section_business_callout(
         generate_section_explanation("ch_methodology", "Research Methodology & Sampling Parameters", report, [])
     )
@@ -755,13 +773,13 @@ def _build_ch_methodology(report: Any, manifest: Dict[str, Any]) -> str:
         <div class="card">
             <div class="card-kicker">ZERO-FAKE EVIDENCE ASSURANCE</div>
             <p style="font-size: 8pt; color: #334155; margin: 4px 0 0 0;">
-                Dristik operates under strict deterministic telemetry. Every metric, finding, and recommendation generated in this dossier originates from direct AST DOM parsing and live answer-engine telemetry.
+                Only observations present in the audit evidence should be treated as measured. Derived, inferred, estimated, simulated, unavailable, and untested values must retain their explicit status.
             </p>
         </div>
         <div class="card">
             <div class="card-kicker">CRAWL DEPTH &amp; BOUNDARIES</div>
             <p style="font-size: 8pt; color: #334155; margin: 4px 0 0 0;">
-                Audit executed across primary origin routes ({pages_count} URLs). Staging subdomains and disconnected search consoles remain explicitly unmeasured without speculative zero-scores.
+                {coverage_text}. Uncrawled routes and disconnected providers are outside the verified scope.
             </p>
         </div>
     </div>
@@ -780,7 +798,7 @@ def _build_ch_appendix(report: Any, manifest: Dict[str, Any]) -> str:
     <div class="card" style="margin-bottom: 16px;">
         <div class="card-kicker">INSTITUTIONAL EVIDENCE REGISTER ({len(findings)} ITEMS)</div>
         <p style="font-size: 8pt; color: #475569; margin: 4px 0 10px 0;">
-            All verified defects mapped to deterministic DOM selectors and remediation criteria.
+            Finding status and evidence coverage depend on the recorded source data; not every finding is necessarily independently verified.
         </p>
         {_format_finding_cards(findings, limit=20)}
     </div>
@@ -811,13 +829,14 @@ def build_adaptive_publication_document(
     )
 
     scores = getattr(report, "scores", None)
-    score_val = getattr(scores, "overall_score", None)
-    score_display = f"{float(score_val):.1f}" if score_val is not None else "—"
-    grade_val = str(getattr(scores, "overall_grade", None) or getattr(scores, "grade", "—"))
+    score_val = validate_score(getattr(scores, "overall_score", None))
+    score_display = f"{score_val:.1f}" if score_val is not None else "NOT MEASURED"
+    grade_val = str((getattr(scores, "overall_grade", None) or getattr(scores, "grade", None)) if score_val is not None else "NOT GRADED")
 
     manifest_obj = getattr(report, "crawl_manifest", None)
     pages = getattr(manifest_obj, "pages", []) or getattr(report, "page_reports", []) or []
-    pages_count = len(pages) if pages else 1
+    pages_count = len(pages) if pages else None
+    manifest["pages_crawled"] = pages_count
     findings = list(getattr(report, "findings", []) or [])
 
     metadata = PublicationMetadata(
@@ -866,7 +885,7 @@ def build_adaptive_publication_document(
                 <div class="card">
                     <div class="card-kicker">02 // SCOPE BOUNDARIES</div>
                     <p style="font-size: 8pt; color: #334155; margin: 0;">
-                        This audit analyzed <strong>{_esc(str(pages_count))} primary origin URLs</strong>. Findings apply strictly to the observed crawl window and tested query sets under Zero-Fake evidence governance.
+                        {f"This audit recorded {pages_count} primary-origin URLs." if isinstance(pages_count, int) else "The number of crawled URLs was not recorded."} Findings apply only to the observed crawl window and tested query sets.
                     </p>
                 </div>
             </div>
@@ -880,7 +899,7 @@ def build_adaptive_publication_document(
                     <span class="ev-badge" style="background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 2px;">RECOMMENDED: PROPOSED REMEDY</span>
                     <span class="ev-badge" style="background: #f1f5f9; color: #64748b; padding: 2px 6px; border-radius: 2px;">UNMEASURED: NOT TESTED (NOT ZERO)</span>
                 </div>
-                <p style="font-size: 7.5pt; color: #64748b; margin-top: 6px;">All extracted assertions and DOM selectors are anchored with SHA-256 integrity hashes.</p>
+                <p style="font-size: 7.5pt; color: #64748b; margin-top: 6px;">Cryptographic integrity is asserted only for evidence records whose hashes are present and successfully validated.</p>
             </div>
         </div>
 
@@ -895,29 +914,29 @@ def build_adaptive_publication_document(
     back_matter = f"""
     <div class="chapter-start back-matter-page" style="padding: 0 4mm; border-bottom: 4px solid #0f172a;">
         <div class="running-header">
-            <div class="running-brand">DRISTIK // ASSURANCE SEAL</div>
+            <div class="running-brand">DRISTIK // REPORT LIMITATIONS</div>
             <div class="running-meta">{_esc(manifest['domain'])} · {_esc(manifest['report_ref'])}</div>
         </div>
 
         <div style="margin: 20px 0;">
-            <span class="section-kicker">AUDIT COMPLETION &amp; ATTESTATION</span>
-            <h2 class="serif" style="font-size: 22pt; margin: 4px 0 14px 0;">Certified Digital Intelligence Dossier</h2>
+            <span class="section-kicker">REPORT STATUS &amp; LIMITATIONS</span>
+            <h2 class="serif" style="font-size: 22pt; margin: 4px 0 14px 0;">Audit findings and verification status</h2>
             <div class="decorative-separator"></div>
 
-            <div class="card" style="margin-bottom: 16px; border-left: 3.5px solid #16a34a;">
+            <div class="card" style="margin-bottom: 16px; border-left: 3.5px solid #64748b;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                    <span class="mono" style="font-size: 8pt; font-weight: 700;">ZERO-FAKE EVIDENCE ATTESTATION</span>
-                    <span class="mono" style="font-size: 7pt; font-weight: 700; background: #dcfce7; color: #166534; padding: 2px 6px; border-radius: 2px;">AUDIT CERTIFIED</span>
+                    <span class="mono" style="font-size: 8pt; font-weight: 700;">EVIDENCE STATUS</span>
+                    <span class="mono" style="font-size: 7pt; font-weight: 700; background: #f1f5f9; color: #334155; padding: 2px 6px; border-radius: 2px;">{_esc(getattr(report, "certification_status", None) or "NOT_ASSESSED")}</span>
                 </div>
                 <p style="font-size: 8.5pt; color: #334155; margin: 0;">
-                    Every metric, finding, and recommendation generated in this dossier originates from deterministic AST DOM parsing and live answer-engine telemetry. Speculative, simulated, or placeholder data is strictly excluded under Dristik's evidence governance protocol.
+                    This report reflects the evidence and integrations recorded for the run. Inferred, estimated, simulated, unavailable, and untested items must not be interpreted as live measurements.
                 </p>
             </div>
 
             <div class="card" style="margin-bottom: 16px;">
                 <div class="card-kicker">RE-VERIFICATION PROTOCOL</div>
                 <p style="font-size: 8pt; color: #334155; margin: 0;">
-                    Proposed patches can be validated in staging environments. Execute a regression re-crawl to verify defect resolution against historical AST snapshots.
+                    A proposed patch is not a completed fix. Re-run the relevant checks and record fresh evidence before marking a remediation verified.
                 </p>
             </div>
 
