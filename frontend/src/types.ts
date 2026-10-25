@@ -1205,6 +1205,11 @@ export interface GoogleChannelPayload {
 }
 
 export interface ExecutiveReport {
+  certification_status?: 'CERTIFIED' | 'NOT_CERTIFIED' | 'NOT_ASSESSED' | string;
+  quality_gate_results?: Record<string, unknown>;
+  withheld_sections?: Array<{ section: string; reason: string }>;
+  evidence_ledger?: Record<string, Record<string, unknown>>;
+
   report_id: string;
   analysis_id?: string;
   project_id?: string;
@@ -2442,7 +2447,6 @@ export interface WebsiteIntelligenceRollup {
 
 export type AppView =
   | 'home'
-  | 'continuous'
   | 'analytics'
   | 'grader'
   | 'pricing'
