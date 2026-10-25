@@ -334,7 +334,8 @@ class ProviderApiConnector(BaseConnector):
                     version = max(version_rows, key=lambda row: float(row["version"]))["version"]
                     object_name, fields = allowed[resource]
                     query = f"SELECT {fields} FROM {object_name} LIMIT {bounded_limit}"
-                    response = await client.get(f"{base}/services/data/v{version}/query", headers=headers, params={"q": query})
+                    url = f"{base}/services/data/v{version}/query"
+                    params = {"q": query}
             except httpx.HTTPStatusError as exc:
                 return {"status": "UNAVAILABLE", "provider": provider.value, "resource": resource, "records": [], "http_status": exc.response.status_code, "message": "Salesforce rejected the read request; check scopes and object permissions."}
             except (httpx.HTTPError, ValueError, KeyError):
