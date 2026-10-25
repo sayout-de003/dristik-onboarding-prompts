@@ -371,6 +371,7 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
       payload.api_url = providerApiUrl || undefined;
       payload.repository = providerResource || undefined;
       payload.branch = providerDataset || undefined;
+      if (activeTab === 'slack' || activeTab === 'instagram') payload.account_id = providerResource || undefined;
       payload.target_url = providerApiUrl || siteUrl || ({
         sanity: 'https://api.sanity.io',
         openai_search: 'https://api.openai.com',
