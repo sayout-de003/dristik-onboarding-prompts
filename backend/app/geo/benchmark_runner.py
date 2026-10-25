@@ -94,10 +94,10 @@ class ShareOfModelMetric(BaseModel):
     target_domain: str
     brand_name: str
     total_evaluated_queries: int
-    share_of_model_pct: float
-    funnel_weighted_som_pct: float = 0.0
-    first_party_citation_share_pct: float
-    recommendation_rank_score: float  # 0 to 100 based on position weighting
+    share_of_model_pct: Optional[float] = None
+    funnel_weighted_som_pct: Optional[float] = None
+    first_party_citation_share_pct: Optional[float] = None
+    recommendation_rank_score: Optional[float] = None  # unmeasured when no successful evaluations
     ordinal_distribution: Dict[str, int] = Field(default_factory=dict)  # rank_1, rank_2_3, rank_4_plus, unranked
     stage_breakdown: Dict[str, Dict[str, Any]] = Field(default_factory=dict)  # awareness, consideration, decision
     competitor_shares: Dict[str, float] = Field(default_factory=dict)
