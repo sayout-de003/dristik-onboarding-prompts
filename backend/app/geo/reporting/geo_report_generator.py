@@ -73,7 +73,7 @@ class CompleteGeoReportGenerator:
             "website_url": report.website_url,
             "generated_at": report.generated_at,
             "report_type": "GEO_MASTER_AUDIT_2026",
-            "certification_status": getattr(report, "certification_status", "NOT_ASSESSED"),
+            "certification_status": (getattr(report, "certification_status", None) or "NOT_ASSESSED"),
             "kpis": {
                 "extractability_score": extractability_score,
                 "ai_visibility_status": visibility_status,
@@ -1175,7 +1175,7 @@ class CompleteGeoReportGenerator:
                 <tbody>
                     <tr><td>Evidence Ledger Size</td><td>{len(report.evidence_ledger) if report.evidence_ledger else 0} verified tokens</td></tr>
                     <tr><td>Scoring Rubric Version</td><td>{report.scoring_rubric_version}</td></tr>
-                    <tr><td>Report Manifest Status</td><td>{getattr(report, 'certification_status', 'NOT_ASSESSED')}</td></tr>
+                    <tr><td>Report Manifest Status</td><td>{(getattr(report, 'certification_status', None) or 'NOT_ASSESSED')}</td></tr>
                     <tr><td>Verification Rule</td><td>Fixed is not Verified. Retests must demonstrate crawler extraction.</td></tr>
                 </tbody>
             </table>
