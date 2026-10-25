@@ -4559,5 +4559,28 @@ DECK_TASK_CARDS: Dict[str, str] = {
 ALL_TASK_CARDS: Dict[str, str] = {**TASK_CARDS, **COPYWRITING_TASK_CARDS, **DECK_TASK_CARDS}
 
 
+COPYWRITING_SHARED_POLICY = """
+CROSS-DOMAIN CONTEXT AND KEYWORD FRESHNESS
+Use the actual current page copy and only the supplied, available audit context: SEO findings and search intent; GEO extractability/citability findings; AEO question, answer, entity and schema gaps; CRO friction and observed conversion evidence; competitor gaps; and the business profile. Do not assume a domain's other agents ran successfully. If a domain result or connector payload is missing, mark it unavailable and do not simulate its findings.
+
+Use trending or emerging keywords only when the task envelope contains real keyword-trend/provider data or a dated, attributable research result. Preserve source, observed date/range, geography, language, device/search surface, intent and any supplied volume/difficulty fields. Do not call a phrase 'trending' because a model generated it, and never invent search volume, difficulty, rank, traffic, CPC or trend direction. If live trend evidence is absent, use observed site language and verified keyword data that was supplied, and label trend research as unavailable.
+
+PAGE-BY-PAGE AND SECTION-BY-SECTION DECISION
+Evaluate each page independently and each relevant content section within that page. Consider the page's purpose, intent, existing copy, internal-link context, supported audience, cross-domain findings, brand voice, facts, limitations and existing differentiators. Do not rewrite everything by default or force every page into the same template.
+
+For every evaluated page/section, return an explicit decision using the existing output schema:
+- CHANGE_RECOMMENDED: name the evidenced defect/opportunity and provide exact source copy, replacement copy, evidence/locator, cross-domain rationale, confidence and validation criteria.
+- NO_CHANGE_NEEDED: preserve the existing copy and explain briefly why it is accurate, intent-aligned, clear and/or already satisfies the relevant criteria.
+- INSUFFICIENT_EVIDENCE: state exactly what content or measurement is missing; do not fabricate a before/after quote.
+Keep this decision in the closest existing status/rationale fields; do not introduce incompatible output fields unless the schema explicitly permits them.
+
+QUALITY AND SAFETY
+Prioritize only changes that improve a supported search intent, answerability, factual clarity or conversion path. Preserve factual claims, qualifiers, product/service boundaries, geography, pricing and limitations. Never invent proof, customer outcomes, claims, offers, urgency, certifications or guarantees. Do not equate readiness with actual rankings, citations, traffic or conversions. Cite only evidence IDs actually present in the input. Clearly separate observed defects from hypotheses and generated keyword ideas from measured trend data.
+"""
+
+
 def task_card_for(agent_id: str) -> str:
-    return ALL_TASK_CARDS.get(agent_id, TASK_CARDS.get(agent_id, "Audit only what the evidence pack contains. Cite verified evidence IDs from the pack. Never output literal [ev_xxx] placeholders. Invent nothing."))
+    card = ALL_TASK_CARDS.get(agent_id, TASK_CARDS.get(agent_id, "Audit only what the evidence pack contains. Cite verified evidence IDs from the pack. Never output literal [ev_xxx] placeholders. Invent nothing."))
+    if agent_id in COPYWRITING_TASK_CARDS:
+        return card + "\\n\\n" + COPYWRITING_SHARED_POLICY
+    return card
