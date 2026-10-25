@@ -22,6 +22,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
+from app.domain.evidence.integrity import validate_score
+
 try:
     import pypdf
 except ImportError:
@@ -237,12 +239,8 @@ class CoverGenerator:
         # Never turn missing score metadata into a numeric-looking score or grade.
         # The publication layer is a display boundary; canonical score validation
         # belongs to the scoring engine and evidence integrity gate.
-        score_value = m.overall_score
-        score_is_valid = (
-            isinstance(score_value, (int, float))
-            and math.isfinite(float(score_value))
-            and 0 <= float(score_value) <= 100
-        )
+        score_value = validate_score(m.overall_score)
+        score_is_valid = score_value is not None
         score_text = f"{float(score_value):.1f}" if score_is_valid else "NOT MEASURED"
         grade_text = (m.grade if m.grade and m.grade not in {"—", "-", "N/A"} else "NOT GRADED") if score_is_valid else "NOT GRADED"
         crawl_sample_text = (
