@@ -21,6 +21,12 @@ def _num(value: Any) -> Optional[float]:
     return number
 
 
+def _score(value: Any) -> Optional[float]:
+    """Accept only finite measured scores in the documented 0..100 range."""
+    number = _num(value)
+    return number if number is not None and 0.0 <= number <= 100.0 else None
+
+
 def _round_to(value: float, digits: int) -> float:
     factor = 10 ** digits
     return math.floor(value * factor + 0.5) / factor
@@ -144,13 +150,13 @@ def align_story_score(story: str, sealed_score: Any, composite: float) -> str:
 def _live_citation(payload: dict, honest: dict) -> Optional[float]:
     if not live_execution_proven(payload):
         return None
-    live = _num(honest.get("live_ai_citation_score"))
+    live = _score(honest.get("live_ai_citation_score"))
     if live is None and honest.get("ai_visibility_status") == "MEASURED":
-        live = _num(honest.get("ai_visibility_score"))
+        live = _score(honest.get("ai_visibility_score"))
     if live is None:
         card = payload.get("ai_visibility_scorecard") or {}
         if isinstance(card, dict):
-            live = _num(card.get("citation_rate_pct"))
+            live = _score(card.get("citation_rate_pct"))
     return live
 
 
@@ -168,16 +174,19 @@ def displayed_composite(report: Any) -> Optional[float]:
         category = categories.get(key) or {}
         if not isinstance(category, dict) or category.get("status") == "NOT_MEASURED":
             return None
-        return _num(category.get("score"))
+        status = str(category.get("status") or "MEASURED").upper()
+        if status in {"NOT_MEASURED", "UNAVAILABLE", "NOT_CONNECTED", "NOT_CONFIGURED", "SIMULATION_ONLY"}:
+            return None
+        return _score(category.get("score"))
 
     live = _live_citation(payload, honest if isinstance(honest, dict) else {})
     pillars = [
-        (0.30, _num(honest.get("google_score")) if _num(honest.get("google_score")) is not None else category_score("TECHNICAL_SEO")),
-        (0.25, _num(geo.get("extractability_score")) if _num(geo.get("extractability_score")) is not None else (
-            _num(honest.get("ai_readiness_score")) if _num(honest.get("ai_readiness_score")) is not None else category_score("GEO")
+        (0.30, _score(honest.get("google_score")) if _score(honest.get("google_score")) is not None else category_score("TECHNICAL_SEO")),
+        (0.25, _score(geo.get("extractability_score")) if _score(geo.get("extractability_score")) is not None else (
+            _score(honest.get("ai_readiness_score")) if _score(honest.get("ai_readiness_score")) is not None else category_score("GEO")
         )),
         (0.25, live),
-        (0.20, _num(honest.get("human_score")) if _num(honest.get("human_score")) is not None else category_score("UX_CONVERSION")),
+        (0.20, _score(honest.get("human_score")) if _score(honest.get("human_score")) is not None else category_score("UX_CONVERSION")),
     ]
     measured = [(weight, score) for weight, score in pillars if score is not None]
     if not measured:
