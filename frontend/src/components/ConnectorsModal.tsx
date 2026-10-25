@@ -161,6 +161,13 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
   };
 
   useEffect(() => {
+    setProviderToken('');
+    setProviderResource('');
+    setProviderDataset('');
+    setProviderApiUrl('');
+  }, [activeTab]);
+
+  useEffect(() => {
     if (isOpen) {
       fetchIntegrations();
       fetchProviderRegistry();
@@ -479,7 +486,7 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
               <h2 className="text-lg font-sans text-ink tracking-tight flex items-center gap-2">
                 Connectors & Integrations Hub
                 <span className="text-[11px] uppercase px-2 py-0.5 rounded bg-paper-200 text-ink-700 border border-line font-mono font-bold">
-                  {ALL_CONNECTORS.length} Connectors Available
+                  {ALL_CONNECTORS.length} Providers Listed
                 </span>
               </h2>
               <p className="text-xs text-ink-500">
