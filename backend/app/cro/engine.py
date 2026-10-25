@@ -3234,8 +3234,22 @@ def build_cro_intelligence(
     discovered_urls: Optional[int] = None,
 ) -> CroIntelligenceReport:
     """Build the CRO audit from a page sample and optional measured analytics."""
+    source_pages = list(pages or [])
+    rendered_page_count = sum(
+        1
+        for page in source_pages
+        if _get(page, "rendered") is True
+        and bool(_get(page, "rendered_dom") or _get(page, "html"))
+    )
+    rendered_dom_status = (
+        "RENDERED_DOM_VERIFIED_FOR_SAMPLE"
+        if source_pages and rendered_page_count == len(source_pages)
+        else "PARTIAL_RENDERED_DOM_SAMPLE"
+        if rendered_page_count > 0
+        else "NOT_VERIFIED_BY_CRO_ENGINE"
+    )
     obs = _observe(
-        pages or [],
+        source_pages,
         raw_html_map,
         business_profile,
         analytics,
@@ -3293,7 +3307,8 @@ def build_cro_intelligence(
                 and obs.discovered > 0 and obs.sample_size <= obs.discovered
                 else None
             ),
-            "rendered_dom_status": "NOT_VERIFIED_BY_CRO_ENGINE",
+            "rendered_dom_status": rendered_dom_status,
+            "rendered_pages": rendered_page_count,
             "journey_execution_status": "NOT_EXECUTED",
             "note": (
                 "The percentage compares inspected pages with the supplied discovery total only. "
