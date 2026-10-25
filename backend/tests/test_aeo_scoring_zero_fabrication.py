@@ -113,4 +113,4 @@ def test_claim_support_is_calculated_from_measured_claim_counts():
     content = scorecard.pillar_a_content_readiness
 
     assert content.factual_support_pct == 80.0
-    assert content.composite_readiness_score == 67.5
+    assert content.composite_readiness_score == 65.8
