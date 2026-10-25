@@ -60,3 +60,31 @@ def test_agent_status_is_normalized():
         "status": " COMPLETED ", "claims": []
     })
     assert result["status"] == "completed"
+
+
+
+def test_claims_must_be_objects_not_arbitrary_scalars():
+    result = validate_agent_result("seo.title", {
+        "status": "completed", "claims": ["this is not a claim object"]
+    })
+    assert result["status"] == "error"
+    assert result["error_code"] == "INVALID_CLAIMS_SHAPE"
+
+
+def test_unavailable_agent_cannot_publish_claims():
+    result = validate_agent_result("seo.title", {
+        "status": "unavailable",
+        "claims": [{"claim_id": "unsupported"}],
+    })
+    assert result["status"] == "error"
+    assert result["error_code"] == "CLAIMS_ON_NON_SUCCESS_STATUS"
+    assert result["claims"] == []
+
+
+def test_evidence_references_are_deduplicated():
+    result = validate_agent_result("seo.title", {
+        "status": "completed",
+        "claims": [],
+        "evidence_refs": ["ev_001", "ev_001"],
+    })
+    assert result["evidence_refs"] == ["ev_001"]
