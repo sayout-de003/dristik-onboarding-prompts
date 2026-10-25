@@ -153,6 +153,22 @@ class CroReportGenerator:
             for item in intel.chapters
         )
         rules = "".join(f"<li>{_esc(rule)}</li>" for rule in intel.measurement_rules)
+        coverage = intel.coverage or {}
+        coverage_html = (
+            "<section><h3>Coverage and execution limits</h3><p><strong>Status:</strong> {status}</p>"
+            "<p><strong>Inspected pages:</strong> {inspected} · <strong>Discovered URLs:</strong> {discovered} · "
+            "<strong>Sample coverage:</strong> {percentage}</p>"
+            "<p><strong>Rendered DOM:</strong> {rendered} · <strong>Journey execution:</strong> {journeys}</p>"
+            "<p>{note}</p></section>"
+        ).format(
+            status=_esc(coverage.get("status", "NOT_RECORDED")),
+            inspected=_esc(coverage.get("inspected_pages", intel.sample_size)),
+            discovered=_esc(coverage.get("discovered_urls", intel.discovered_urls)),
+            percentage=(f"{coverage['sample_coverage_pct']:.1f}%" if isinstance(coverage.get("sample_coverage_pct"), (int, float)) else "Unavailable"),
+            rendered=_esc(coverage.get("rendered_dom_status", "NOT_VERIFIED")),
+            journeys=_esc(coverage.get("journey_execution_status", "NOT_EXECUTED")),
+            note=_esc(coverage.get("note", "Coverage was not recorded.")),
+        )
         return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -184,6 +200,7 @@ a {{ color: #1c1915; }}
 <ol>{chapters}</ol>
 <h2>02. Executive summary and funnel scorecard</h2>
 <p>These four scores stay separate. None of them is a blended conversion rate.</p>
+{coverage_html}
 <div class="grid">{dimensions}</div>
 <h2>Measurement</h2>
 <ul>{rules}</ul>
