@@ -37,7 +37,7 @@ async def test_ga4_connector_lifecycle():
     data = await conn_auth.fetch_attribution_data("example.com")
     assert data.is_connected is False
     assert data.landing_pages == []
-    assert data.conversion_rate == 0
+    assert data.conversion_rate is None
     assert data.funnels == []
 
 

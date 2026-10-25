@@ -86,9 +86,9 @@ async def test_ga4_connector_unconfigured_fail_closed():
     assert res.connector_id == "ga4"
     assert res.status == "NOT_CONNECTED"
     assert res.is_connected is False
-    assert res.metrics["sessions_30d"] == 0
-    assert res.metrics["bounce_rate"] == 0.0
-    assert res.metrics["conversion_rate"] == 0.0
+    assert res.metrics["sessions_30d"] is None
+    assert res.metrics["bounce_rate"] is None
+    assert res.metrics["conversion_rate"] is None
     assert "not connected" in res.unavailability_reason.lower()
 
 
@@ -128,7 +128,8 @@ async def test_ga4_connector_authenticated_with_evidence_ref():
         assert res.status == "CONNECTED"
         assert res.is_connected is True
         assert res.metrics["sessions_30d"] > 0
-        assert res.metrics["conversion_rate"] > 0.0
+        assert res.metrics["conversion_rate"] is None
+        assert res.metrics["key_event_rate_per_session_pct"] == 5.0
         assert res.evidence_ref is not None
         assert res.evidence_ref.source_type == "external"
 

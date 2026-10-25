@@ -1379,8 +1379,9 @@ class GscAttributionData(BaseModel):
 
 class Ga4AttributionData(BaseModel):
     landing_pages: List[Dict[str, Any]] = Field(default_factory=list)
-    engagement_rate: float = 0.0
-    conversion_rate: float = 0.0
+    # None means no measured value was returned; zero is a real observed value.
+    engagement_rate: Optional[float] = None
+    conversion_rate: Optional[float] = None
     funnels: List[Dict[str, Any]] = Field(default_factory=list)
     events: List[Dict[str, Any]] = Field(default_factory=list)
     traffic_sources: List[Dict[str, Any]] = Field(default_factory=list)

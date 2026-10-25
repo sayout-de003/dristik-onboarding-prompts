@@ -95,15 +95,18 @@ def test_passive_cta_and_missing_label_do_not_forecast_lift():
     assert report.findings[0].status == "Needs validation"
 
 
-def test_ga4_key_event_rate_uses_sessions_and_does_not_invent_qualified_leads():
+def test_ga4_key_event_rate_uses_sessions_and_does_not_invent_conversion_rate():
     measured = build_cro_intelligence(
         pages=[{"url": "https://example.com/", "h1": ["Hello"], "body_text": "A short page.", "viewport": "width=device-width"}],
         analytics={"state": "MEASURED", "sessions": 1000, "key_events": 25, "period": "last 28 days", "property": "GA4"},
     )
     conversion = _metric(measured, "Conversion rate")
-    assert conversion.value == 0.025
-    assert conversion.denominator == "sessions"
-    assert "qualified-lead" in conversion.note
+    event_rate = _metric(measured, "Key-event rate per session")
+    assert conversion.value is None
+    assert conversion.status == "DATA_UNAVAILABLE"
+    assert event_rate.value == 0.025
+    assert event_rate.denominator == "sessions"
+    assert "not a unique-user conversion rate" in event_rate.note
     qualified = _metric(measured, "Qualified lead rate")
     assert qualified.value is None
     funnel = next(item for item in measured.dimensions if item.id == "funnel")
@@ -115,13 +118,16 @@ def test_ga4_key_event_rate_uses_sessions_and_does_not_invent_qualified_leads():
         analytics={"state": "MEASURED", "sessions": 1000, "conversions": 9, "period": "last 28 days"},
     )
     assert _metric(missing, "Conversion rate").value is None
+    assert _metric(missing, "Key-event rate per session").value == 0.009
 
     zero = build_cro_intelligence(
         pages=[{"url": "https://example.com/", "body_text": "Hello", "viewport": "width=device-width"}],
         analytics={"state": "MEASURED", "sessions": 40, "key_events": 0, "period": "last 28 days"},
     )
-    assert _metric(zero, "Conversion rate").value == 0
-    assert _metric(zero, "Conversion rate").status == "MEASURED"
+    assert _metric(zero, "Conversion rate").value is None
+    assert _metric(zero, "Conversion rate").status == "DATA_UNAVAILABLE"
+    assert _metric(zero, "Key-event rate per session").value == 0
+    assert _metric(zero, "Key-event rate per session").status == "MEASURED"
 
     disconnected = build_cro_intelligence(
         pages=[{"url": "https://example.com/", "body_text": "Hello", "viewport": "width=device-width"}],
@@ -258,7 +264,8 @@ def test_rebuild_uses_measured_analytics_and_falls_back_to_stored_intelligence()
     rebuilt = build_from_executive_report(sealed)
     assert rebuilt.sample_size == 1
     assert rebuilt.discovered_urls == 8
-    assert _metric(rebuilt, "Conversion rate").value == 0.05
+    assert _metric(rebuilt, "Conversion rate").value is None
+    assert _metric(rebuilt, "Key-event rate per session").value == 0.05
     competitor_text = " ".join(check.summary for check in _checks(rebuilt) if check.key == "competitor")
     assert "other.example" in competitor_text
     assert "example.com" not in competitor_text

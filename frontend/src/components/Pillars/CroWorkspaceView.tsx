@@ -60,13 +60,14 @@ export function CroWorkspaceView({
   const formAudit = report.form_audit || croAudit?.form_friction;
   const honest = report.honest_scores;
 
-  const croScore = croAudit?.overall_cro_score != null
+  const categoryCroScore = report.scores?.category_scores?.['UX_CONVERSION']?.score;
+  // Use only CRO-specific measured scores; never substitute a general site score.
+  const croScore: number | null = croAudit?.overall_cro_score != null
     ? Math.round(croAudit.overall_cro_score)
-    : (honest?.human_score != null
-      ? Math.round(honest.human_score)
-      : (report.scores?.category_scores?.['UX_CONVERSION']?.score ? Math.round(report.scores.category_scores['UX_CONVERSION'].score) : 74));
+    : (categoryCroScore != null ? Math.round(categoryCroScore) : null);
 
-  const croGrade = croAudit?.cro_grade || (croScore >= 85 ? 'A' : (croScore >= 70 ? 'B' : (croScore >= 55 ? 'C' : 'D')));
+  // Grades require an explicit CRO grade from the scoring engine; thresholds are not calibrated here.
+  const croGrade = croAudit?.cro_grade || 'Not calibrated';
 
   // Category UX_CONVERSION findings
   const croFindings = (report.findings || []).filter(
@@ -92,7 +93,7 @@ export function CroWorkspaceView({
 
   // Value Prop Data
   const valueProp = croAudit?.value_prop;
-  const heroHeadline = valueProp?.hero_headline || profile?.value_proposition || 'Empowering Modern Enterprises';
+  const heroHeadline = valueProp?.hero_headline || profile?.value_proposition || 'No observed value proposition';
   const heroSubhead = valueProp?.hero_subhead;
 
   // Filtered Findings
@@ -107,7 +108,7 @@ export function CroWorkspaceView({
       title="Conversion Rate & UX Optimization (CRO)"
       description="CTA ergonomics, above-the-fold value proposition clarity, social proof depth, pricing psychology, and form friction diagnostics."
       scoreLabel="CRO Score"
-      score={croScore}
+      score={croScore == null ? 'Unmeasured' : croScore}
       metaLabel="Form Grade"
       meta={formAudit ? `Grade ${formAudit.cro_friction_grade}` : `Grade ${croGrade}`}
       actions={
@@ -119,11 +120,11 @@ export function CroWorkspaceView({
       }
       tabs={[
         { id: 'overview', label: 'Scorecard & Diagnostics' },
-        { id: 'ctas', label: `CTA Studio (${ctaData?.total_ctas_detected ?? ctasList.length})` },
+        { id: 'ctas', label: `CTA Studio (${ctaData?.total_ctas_detected ?? (ctaData ? ctasList.length : 'Not measured')})` },
         { id: 'valueprop', label: '5-Sec Hook & Value Prop' },
-        { id: 'trust', label: `Trust & Social Proof (${socialProof?.trust_authority_score ?? 60}%)` },
+        { id: 'trust', label: `Trust & Social Proof (${socialProof?.trust_authority_score == null ? 'Not measured' : `${socialProof.trust_authority_score}%`})` },
         { id: 'pricing', label: 'Pricing & Risk Reversal' },
-        { id: 'forms', label: `Form Friction (${formAudit?.total_forms_detected ?? 0})` },
+        { id: 'forms', label: `Form Friction (${formAudit?.total_forms_detected == null ? 'Not measured' : formAudit.total_forms_detected})` },
         { id: 'findings', label: `Findings (${croFindings.length})` },
         { id: 'revenue', label: 'Funnel & Revenue' },
         { id: 'leadgen', label: 'Lead Gen' },
@@ -144,7 +145,7 @@ export function CroWorkspaceView({
                 Overall CRO Score
               </span>
               <div className="flex items-baseline gap-2">
-                <span className="font-sans text-3xl font-bold text-ink">{croScore}</span>
+                <span className="font-sans text-3xl font-bold text-ink">{croScore == null ? 'Unmeasured' : croScore}</span>
                 <span className="font-mono text-xs px-2 py-0.5 rounded bg-paper-200 text-ink-700 font-bold">
                   Grade {croGrade}
                 </span>
@@ -158,11 +159,11 @@ export function CroWorkspaceView({
               </span>
               <div className="flex items-baseline gap-2">
                 <span className="font-sans text-3xl font-bold text-good">
-                  {ctaData ? Math.round(ctaData.action_clarity_score) : 75}%
+                  {ctaData?.action_clarity_score == null ? 'Not measured' : Math.round(ctaData.action_clarity_score)}{ctaData?.action_clarity_score == null ? '' : '%'}
                 </span>
               </div>
               <p className="text-xs text-ink-500">
-                {ctaData ? `${ctaData.high_intent_count} high-intent / ${ctaData.total_ctas_detected} total CTAs` : 'High-intent CTA ratio'}
+                {ctaData ? `${ctaData.high_intent_count} high-intent / ${ctaData.total_ctas_detected} total CTAs` : 'CTA observations unavailable'}
               </p>
             </Card>
 
@@ -172,12 +173,12 @@ export function CroWorkspaceView({
               </span>
               <div className="flex items-baseline gap-2">
                 <span className="font-sans text-3xl font-bold text-ink-700">
-                  {socialProof ? Math.round(socialProof.trust_authority_score) : 60}/100
+                  {socialProof?.trust_authority_score == null ? 'Not measured' : Math.round(socialProof.trust_authority_score)}/100
                 </span>
                 <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded font-bold ${
                   socialProof?.risk_level === 'LOW' ? 'bg-good/10 text-good' : 'bg-warn/10 text-warn'
                 }`}>
-                  {socialProof?.risk_level || 'MED'} RISK
+                  {socialProof?.risk_level ? `${socialProof.risk_level} RISK` : 'Not measured'}
                 </span>
               </div>
               <p className="text-xs text-ink-500">Social proof & compliance</p>
@@ -189,14 +190,14 @@ export function CroWorkspaceView({
               </span>
               <div className="flex items-baseline gap-2">
                 <span className="font-sans text-3xl font-bold text-ink">
-                  {formAudit ? formAudit.cro_friction_grade : 'A-'}
+                  {formAudit ? formAudit.cro_friction_grade : 'Unmeasured'}
                 </span>
                 <span className="text-xs text-ink-500">
-                  ({formAudit?.total_forms_detected ?? 0} forms)
+                  ({formAudit?.total_forms_detected == null ? 'Not measured' : formAudit.total_forms_detected} forms)
                 </span>
               </div>
               <p className="text-xs text-ink-500">
-                {(formAudit?.forms_with_missing_labels ?? 0) === 0 ? 'Fully labeled inputs' : `${formAudit?.forms_with_missing_labels} unlabeled`}
+                {formAudit?.forms_with_missing_labels == null ? 'Label status not measured' : (formAudit.forms_with_missing_labels === 0 ? 'No unlabeled inputs detected in sample' : `${formAudit.forms_with_missing_labels} unlabeled`)}
               </p>
             </Card>
 
@@ -206,20 +207,20 @@ export function CroWorkspaceView({
               </span>
               <div className="flex items-baseline gap-2">
                 <span className="font-sans text-3xl font-bold text-ink">
-                  {valueProp?.clarity_grade || 'B+'}
+                  {valueProp?.clarity_grade || 'Unmeasured'}
                 </span>
                 <span className="text-xs text-ink-500">
-                  {valueProp?.headline_word_count ?? 8} words
+                  {valueProp?.headline_word_count == null ? 'Not measured' : valueProp.headline_word_count} words
                 </span>
               </div>
               <p className="text-xs text-ink-500">
-                {valueProp?.has_adjacent_cta ? 'Hero CTA paired' : 'Missing hero CTA'}
+                {valueProp?.has_adjacent_cta == null ? 'Hero CTA status not measured' : valueProp.has_adjacent_cta ? 'Hero CTA paired' : 'No adjacent hero CTA observed'}
               </p>
             </Card>
           </div>
 
           {/* High Priority Friction Alert Banner */}
-          {(ctaData?.passive_generic_count ?? 0) > 0 && (
+          {ctaData && (ctaData.passive_generic_count ?? 0) > 0 && (
             <div className="p-4 rounded-lg bg-warn/5 border border-warn/30 flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-warn shrink-0 mt-0.5" />
               <div className="space-y-1">
@@ -253,10 +254,10 @@ export function CroWorkspaceView({
                 Audits all interactive conversion triggers across the crawl. Identifies primary above-the-fold placement and flags ambiguous button copy.
               </p>
               <div className="flex items-center gap-2 pt-2 border-t border-line font-mono text-[11px] text-ink-500">
-                <span>{ctaData?.high_intent_count ?? 0} High-Intent</span>
+                <span>{ctaData?.high_intent_count ?? 'Not measured'} High-Intent</span>
                 <span>·</span>
-                <span className={(ctaData?.passive_generic_count ?? 0) > 0 ? 'text-warn font-bold' : ''}>
-                  {ctaData?.passive_generic_count ?? 0} Passive
+                <span className={ctaData && (ctaData.passive_generic_count ?? 0) > 0 ? 'text-warn font-bold' : ''}>
+                  {ctaData?.passive_generic_count ?? 'Not measured'} Passive
                 </span>
               </div>
             </Card>
@@ -273,9 +274,9 @@ export function CroWorkspaceView({
                 Evaluates whether arriving visitors grasp what you do, who it is for, and why to care within 5 seconds without reading paragraph blocks.
               </p>
               <div className="flex items-center gap-2 pt-2 border-t border-line font-mono text-[11px] text-ink-500">
-                <span>Headline: {valueProp?.headline_word_count ?? 8} words</span>
+                <span>Headline: {valueProp?.headline_word_count == null ? 'Not measured' : valueProp.headline_word_count} words</span>
                 <span>·</span>
-                <span>Centricity: {valueProp?.customer_centricity_ratio ?? 1.2}x</span>
+                <span>Centricity: {valueProp?.customer_centricity_ratio == null ? 'Not measured' : valueProp.customer_centricity_ratio}x</span>
               </div>
             </Card>
 
@@ -291,11 +292,11 @@ export function CroWorkspaceView({
                 Audits evidence of market validation: client logos, customer testimonials, quantified ROI metrics, and security credentials.
               </p>
               <div className="flex items-center gap-2 pt-2 border-t border-line font-mono text-[11px] text-ink-500">
-                <span>{socialProof?.client_logos_detected ?? 0} Logos</span>
+                <span>{socialProof?.client_logos_detected ?? 'Not measured'} Logos</span>
                 <span>·</span>
-                <span>{socialProof?.total_testimonials ?? 0} Testimonials</span>
+                <span>{socialProof?.total_testimonials ?? 'Not measured'} Testimonials</span>
                 <span>·</span>
-                <span>{socialProof?.quantified_proof_claims.length ?? 0} ROI Claims</span>
+                <span>{socialProof?.quantified_proof_claims?.length ?? 'Not measured'} ROI Claims</span>
               </div>
             </Card>
 
@@ -329,7 +330,7 @@ export function CroWorkspaceView({
                 Analyzes input counts, missing label associations, spam defense traps, and conversion friction across lead generation forms.
               </p>
               <div className="flex items-center gap-2 pt-2 border-t border-line font-mono text-[11px] text-ink-500">
-                <span>{formAudit?.total_forms_detected ?? 0} Forms</span>
+                <span>{formAudit?.total_forms_detected ?? 'Not measured'} Forms</span>
                 <span>·</span>
                 <span>Grade {formAudit?.cro_friction_grade ?? 'A'}</span>
               </div>
@@ -377,7 +378,7 @@ export function CroWorkspaceView({
             <div>
               <h3 className="font-sans text-lg font-bold text-ink">Call-to-Action (CTA) Architecture Studio</h3>
               <p className="text-xs text-ink-500">
-                Audited {ctaData?.total_ctas_detected ?? ctasList.length} interactive conversion triggers across the crawl.
+                Audited {ctaData?.total_ctas_detected ?? (ctaData ? ctasList.length : 'Not measured')} interactive conversion triggers across the crawl.
               </p>
             </div>
 
@@ -413,7 +414,7 @@ export function CroWorkspaceView({
           </div>
 
           {/* Passive CTA Warning Notice with Suggestions */}
-          {(ctaData?.passive_generic_count ?? 0) > 0 && (
+          {ctaData && (ctaData.passive_generic_count ?? 0) > 0 && (
             <Card className="p-4 bg-warn/5 border-warn/30 space-y-2">
               <span className="text-[10px] font-mono uppercase tracking-[0.04em] text-warn font-bold block">
                 High Priority: Replace Passive Microcopy
@@ -505,7 +506,7 @@ export function CroWorkspaceView({
                 5-Second Value Proposition Clarity Test
               </span>
               <span className="font-mono text-xs px-2.5 py-1 rounded bg-paper-200 text-ink font-bold">
-                Clarity Grade: {valueProp?.clarity_grade || 'B+'}
+                Clarity Grade: {valueProp?.clarity_grade || 'Unmeasured'}
               </span>
             </div>
 
@@ -523,7 +524,7 @@ export function CroWorkspaceView({
               <div className="p-3.5 rounded bg-paper-50 border border-line space-y-1">
                 <span className="text-[10px] font-mono uppercase text-ink-500 block">Headline Word Count</span>
                 <p className="font-sans font-bold text-ink text-lg">
-                  {valueProp?.headline_word_count ?? 8} words
+                  {valueProp?.headline_word_count == null ? 'Not measured' : valueProp.headline_word_count} words
                 </p>
                 <p className="text-[11px] text-ink-500">Ideal range: 6–10 punchy words</p>
               </div>
@@ -531,7 +532,7 @@ export function CroWorkspaceView({
               <div className="p-3.5 rounded bg-paper-50 border border-line space-y-1">
                 <span className="text-[10px] font-mono uppercase text-ink-500 block">Customer Centricity Ratio</span>
                 <p className="font-sans font-bold text-good text-lg">
-                  {valueProp?.customer_centricity_ratio ?? 1.2}x
+                  {valueProp?.customer_centricity_ratio == null ? 'Not measured' : valueProp.customer_centricity_ratio}x
                 </p>
                 <p className="text-[11px] text-ink-500">Ratio of &quot;you/your&quot; vs &quot;we/our&quot;</p>
               </div>
@@ -590,7 +591,7 @@ export function CroWorkspaceView({
                 Trust Index
               </span>
               <p className="font-sans text-3xl font-bold text-ink">
-                {socialProof ? Math.round(socialProof.trust_authority_score) : 60}/100
+                {socialProof?.trust_authority_score == null ? 'Not measured' : Math.round(socialProof.trust_authority_score)}/100
               </p>
               <p className="text-xs text-ink-500">Third-party validation score</p>
             </Card>
@@ -600,7 +601,7 @@ export function CroWorkspaceView({
                 Client Logos Detected
               </span>
               <p className="font-sans text-3xl font-bold text-good">
-                {socialProof?.client_logos_detected ?? 0}
+                {socialProof?.client_logos_detected ?? 'Not measured'}
               </p>
               <p className="text-xs text-ink-500">Recognizable customer logo badges</p>
             </Card>
@@ -610,7 +611,7 @@ export function CroWorkspaceView({
                 Customer Testimonials
               </span>
               <p className="font-sans text-3xl font-bold text-ink-700">
-                {socialProof?.total_testimonials ?? 0}
+                {socialProof?.total_testimonials ?? 'Not measured'}
               </p>
               <p className="text-xs text-ink-500">Quotes &amp; review blocks extracted</p>
             </Card>
@@ -620,7 +621,7 @@ export function CroWorkspaceView({
                 Quantified ROI Metrics
               </span>
               <p className="font-sans text-3xl font-bold text-ink">
-                {socialProof?.quantified_proof_claims.length ?? 0}
+                {socialProof?.quantified_proof_claims?.length ?? 'Not measured'}
               </p>
               <p className="text-xs text-ink-500">Specific percentage &amp; dollar outcomes</p>
             </Card>
@@ -712,7 +713,7 @@ export function CroWorkspaceView({
                 Tiers Detected
               </span>
               <p className="font-sans text-3xl font-bold text-ink">
-                {pricingData?.detected_tiers_count ?? 0}
+                {pricingData?.detected_tiers_count ?? 'Not measured'}
               </p>
               <p className="text-xs text-ink-500">Plan packaging structures</p>
             </Card>
@@ -769,7 +770,7 @@ export function CroWorkspaceView({
                 Total Forms Detected
               </span>
               <p className="font-sans text-3xl font-bold text-ink">
-                {formAudit?.total_forms_detected ?? 0}
+                {formAudit?.total_forms_detected ?? 'Not measured'}
               </p>
               <p className="text-xs text-ink-500">Lead capture, demo, contact, or checkout</p>
             </Card>
@@ -788,8 +789,8 @@ export function CroWorkspaceView({
               <span className="text-[10px] font-mono uppercase tracking-[0.04em] text-ink-500 font-semibold block">
                 Missing Input Labels
               </span>
-              <p className={`font-sans text-3xl font-bold ${(formAudit?.forms_with_missing_labels || 0) > 0 ? 'text-warn' : 'text-good'}`}>
-                {formAudit?.forms_with_missing_labels ?? 0}
+              <p className={`font-sans text-3xl font-bold ${formAudit?.forms_with_missing_labels == null ? 'text-ink' : formAudit.forms_with_missing_labels > 0 ? 'text-warn' : 'text-good'}`}>
+                {formAudit?.forms_with_missing_labels ?? 'Not measured'}
               </p>
               <p className="text-xs text-ink-500">WCAG label compliance</p>
             </Card>
@@ -799,13 +800,15 @@ export function CroWorkspaceView({
                 Spam Defense &amp; Bot Filter
               </span>
               <div className="flex items-center gap-1.5 pt-1">
-                {(formAudit?.forms_without_captcha || 0) === 0 ? (
+                {formAudit?.forms_without_captcha == null ? (
+                  <span className="font-mono text-sm text-ink-500">Not measured</span>
+                ) : formAudit.forms_without_captcha === 0 ? (
                   <span className="font-mono text-sm text-good font-bold flex items-center gap-1">
-                    <CheckCircle2 className="w-4 h-4" /> Protected
+                    <CheckCircle2 className="w-4 h-4" /> Defense detected
                   </span>
                 ) : (
                   <span className="font-mono text-sm text-warn font-bold flex items-center gap-1">
-                    <AlertTriangle className="w-4 h-4" /> Unprotected
+                    <AlertTriangle className="w-4 h-4" /> Defense not detected
                   </span>
                 )}
               </div>
@@ -913,7 +916,7 @@ export function CroWorkspaceView({
                     {f.impact != null && (
                       <div className="text-right shrink-0">
                         <span className="font-mono text-xs text-ink-500 block">Impact / Effort</span>
-                        <span className="font-mono font-bold text-sm text-ink">{f.impact} / {f.effort ?? 1}</span>
+                        <span className="font-mono font-bold text-sm text-ink">{f.impact ?? 'Not measured'} / {f.effort ?? 'Not rated'}</span>
                       </div>
                     )}
                   </div>

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -61,7 +62,9 @@ def _num(value: Any) -> Optional[float]:
         return None
     try:
         number = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(number) or number < 0:
         return None
     return number
 
@@ -170,8 +173,8 @@ def _analytics_from_payload(property_id: str, payload: Dict[str, Any], period: s
                 continue
             landing_pages.append({
                 "page": page,
-                "sessions": int(metrics.get("sessions") or 0),
-                "key_events": int(metrics["conversions"]) if "conversions" in metrics else None,
+                "sessions": int(metrics["sessions"]) if metrics.get("sessions") is not None else None,
+                "key_events": int(metrics["conversions"]) if metrics.get("conversions") is not None else None,
             })
     if "sessions" not in parsed:
         return _channel(ANALYTICS, "NO_DATA", property=property_id, period=period)
@@ -186,7 +189,7 @@ def _analytics_from_payload(property_id: str, payload: Dict[str, Any], period: s
         engagement_rate_pct=_percent_points(parsed.get("engagementRate")),
         bounce_rate_pct=_percent_points(parsed.get("bounceRate")),
         average_session_duration_sec=_num(parsed.get("averageSessionDuration")),
-        conversions=key_events if key_events is not None else 0,
+        conversions=key_events,
         key_events=key_events,
         landing_pages=landing_pages or None,
     )
@@ -224,7 +227,11 @@ def map_analytics(summary: Any) -> Dict[str, Any]:
             engagement_rate_pct=_percent_points(_get(summary, "engagement_rate_pct") if _get(summary, "engagement_rate_pct") is not None else _get(summary, "engagement_rate")),
             bounce_rate_pct=_percent_points(_get(summary, "bounce_rate_pct") if _get(summary, "bounce_rate_pct") is not None else _get(summary, "bounce_rate")),
             average_session_duration_sec=_num(_get(summary, "avg_session_duration_sec") if _get(summary, "avg_session_duration_sec") is not None else _get(summary, "average_session_duration_sec")),
-            conversions=int(_num(_get(summary, "conversions") if _get(summary, "conversions") is not None else _get(summary, "conversions_count")) or 0),
+            conversions=(
+                int(_num(_get(summary, "conversions") if _get(summary, "conversions") is not None else _get(summary, "conversions_count")))
+                if _num(_get(summary, "conversions") if _get(summary, "conversions") is not None else _get(summary, "conversions_count")) is not None
+                else None
+            ),
             key_events=(
                 int(_num(_get(summary, "key_events")))
                 if _get(summary, "key_events") is not None

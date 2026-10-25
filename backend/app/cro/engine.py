@@ -175,6 +175,8 @@ class CroIntelligenceReport(BaseModel):
     model_basis: str
     sample_size: int
     discovered_urls: Optional[int] = None
+    coverage: Dict[str, Any] = Field(default_factory=dict)
+    scoring_calibration: Dict[str, Any] = Field(default_factory=dict)
     evidence_states: List[str] = Field(default_factory=lambda: list(EVIDENCE_STATES))
     dimensions: List[CroDimensionScore] = Field(default_factory=list)
     metrics: List[CroMetricResult] = Field(default_factory=list)
@@ -275,6 +277,7 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
         "key_events_present": False,
         "unique_converters": None,
         "eligible_users": None,
+        "eligible_visitors": None,
         "engagement_rate_pct": None,
         "landing_pages": None,
         "revenue": None,
@@ -298,7 +301,7 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
         # A malformed provider payload invalidates the measurement snapshot as a whole.
         # Do not let downstream CRO checks consume partially parsed values.
         for field in (
-            "sessions", "key_events", "unique_converters", "eligible_users",
+            "sessions", "key_events", "unique_converters", "eligible_users", "eligible_visitors",
             "engagement_rate_pct", "landing_pages", "revenue", "orders",
         ):
             result[field] = None
@@ -324,8 +327,11 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
 
     sessions = count_value("sessions")
     key_events = count_value("key_events", "keyEvents", "conversions")
-    unique_converters = count_value("unique_converters", "converters")
-    eligible_users = count_value("eligible_users", "total_users", "users")
+    # Accept only explicit semantic fields. Generic GA4 "conversions" and "users"
+    # are not silently relabelled as unique converters or eligible users.
+    unique_converters = count_value("unique_converters")
+    eligible_users = count_value("eligible_users")
+    eligible_visitors = count_value("eligible_visitors")
     if result["state"] == "INVALID_DATA":
         return result
     result["sessions"] = sessions
@@ -333,6 +339,7 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
     result["key_events_present"] = key_events is not None
     result["unique_converters"] = unique_converters
     result["eligible_users"] = eligible_users
+    result["eligible_visitors"] = eligible_visitors
 
     engagement = channel.get("engagement_rate_pct")
     if engagement is not None:
@@ -369,12 +376,27 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
     return result
 
 def _read_search(channel: Any) -> Dict[str, Any]:
-    if not isinstance(channel, dict) or channel.get("state") != "MEASURED":
-        return {"clicks": None, "period": None, "property": None}
+    """Normalize Search Console totals; malformed values remain unavailable."""
+    if not isinstance(channel, dict) or str(channel.get("state") or "").upper() != "MEASURED":
+        return {"state": "NOT_MEASURED", "clicks": None, "period": None, "property": None}
+    base = {
+        "state": "MEASURED",
+        "clicks": None,
+        "period": channel.get("period"),
+        "property": channel.get("property"),
+    }
     clicks = channel.get("clicks")
-    if not isinstance(clicks, (int, float)) or isinstance(clicks, bool):
-        return {"clicks": None, "period": channel.get("period"), "property": channel.get("property")}
-    return {"clicks": int(clicks), "period": channel.get("period"), "property": channel.get("property")}
+    if (
+        isinstance(clicks, bool)
+        or not isinstance(clicks, (int, float))
+        or not math.isfinite(float(clicks))
+        or clicks < 0
+        or not float(clicks).is_integer()
+    ):
+        base["state"] = "INVALID_DATA"
+        return base
+    base["clicks"] = int(clicks)
+    return base
 
 
 def _read_wcag(wcag: Any) -> Optional[Dict[str, Any]]:
@@ -435,9 +457,15 @@ def _parse_page(page: Any, raw_html_map: Optional[Dict[str, str]]) -> Dict[str, 
     if raw_html_map and url in raw_html_map:
         html = raw_html_map.get(url) or ""
     if not html:
-        html = _get(page, "raw_html", "") or ""
+        html = _get(page, "rendered_dom", "") or _get(page, "html", "") or _get(page, "raw_html", "") or ""
     schema_types = [str(item) for item in (_get(page, "schema_types", []) or [])]
-    status = int(_get(page, "status_code", 200) or 200)
+    status_raw = _get(page, "status_code", None)
+    status = (
+        int(status_raw)
+        if isinstance(status_raw, (int, float)) and not isinstance(status_raw, bool)
+        and math.isfinite(float(status_raw)) and float(status_raw).is_integer()
+        else None
+    )
     title = str(_get(page, "title", "") or "")
     h1_values = [str(item) for item in (_get(page, "h1", []) or []) if str(item).strip()]
     h2_values = [str(item) for item in (_get(page, "h2", []) or []) if str(item).strip()]
@@ -796,7 +824,7 @@ def _observe(
         if page["h1"] and not obs.h1:
             obs.h1 = page["h1"]
             obs.subhead = page["h2"]
-        if page["status"] >= 400:
+        if page["status"] is not None and page["status"] >= 400:
             obs.status_errors.append(f"{page['url']} returned HTTP {page['status']}")
         if not page["viewport"]:
             obs.viewport_missing.append(page["url"])
@@ -2538,7 +2566,7 @@ class _Rules:
         return self.technical_failures(check)
 
     def broken_checkout(self, check: Dict[str, Any]) -> Dict[str, Any]:
-        errors = [page["url"] for page in self.obs.pages if page["kind"] == "checkout" and page["status"] >= 400]
+        errors = [page["url"] for page in self.obs.pages if page["kind"] == "checkout" and page["status"] is not None and page["status"] >= 400]
         if errors:
             return self.fail(check, "Checkout URLs with an error status: " + _join(errors) + ".", priority="High", effort="High", action="Restore the checkout response before changing the offer.", stage="Checkout")
         return self.observed(check, "No broken checkout response was in the sample. The flow was not purchased.")
@@ -2966,7 +2994,7 @@ def _metrics(obs: _Obs) -> List[CroMetricResult]:
     window = analytics.get("period")
     conversion = rate(analytics.get("unique_converters"), analytics.get("eligible_users"))
     key_event_rate = rate(analytics.get("key_events"), analytics.get("sessions")) if analytics.get("key_events_present") else None
-    rpv = rate(analytics.get("revenue"), analytics.get("sessions"))
+    revenue_per_visitor = rate(analytics.get("revenue"), analytics.get("eligible_visitors"))
     aov = rate(analytics.get("revenue"), analytics.get("orders"))
     values = {
         "Conversion rate": (
@@ -2981,8 +3009,13 @@ def _metrics(obs: _Obs) -> List[CroMetricResult]:
             "sessions",
             "This is an event-count-per-session ratio, not a unique-user conversion rate; it can exceed 100%.",
         ),
-        "Revenue per visitor": (rpv, "attributed revenue", "sessions", "Shown only when both revenue and sessions were present."),
-        "Average order value": (aov, "net sales", "orders", "Shown only when both net sales and orders were present."),
+        "Revenue per visitor": (
+            revenue_per_visitor,
+            "attributed revenue",
+            "eligible visitors",
+            "Shown only when attributed revenue and eligible visitors are both present; users and sessions are not substituted for visitors.",
+        ),
+        "Average order value": (aov, "net sales", "orders", "Shown only when both net sales and completed orders were present."),
     }
     results = []
     for spec in METRIC_CATALOG:
@@ -3102,7 +3135,11 @@ def _findings(failed: List[Dict[str, Any]], obs: _Obs) -> List[CroFindingRecord]
             finding_id=f"CRO-{index:03d}",
             priority=item.get("priority", "Medium"),
             finding=item["summary"],
-            evidence=item["summary"] + ((" Evidence URL: " + item["page_url"]) if item.get("page_url") else ""),
+            evidence="; ".join(
+                [str(value) for value in (item.get("evidence") or []) if value]
+                + ([item["summary"]] if item.get("summary") else [])
+                + (["Evidence URL: " + item["page_url"]] if item.get("page_url") else [])
+            ),
             observed_scope=scope,
             hypothesis=item.get("action", "Change the observed defect.") + " This is a hypothesis. The inspected sample does not show that the change will raise conversions.",
             recommended_action=item.get("action", "Change the observed defect and keep the current experience as the control."),
@@ -3204,8 +3241,22 @@ def build_cro_intelligence(
     discovered_urls: Optional[int] = None,
 ) -> CroIntelligenceReport:
     """Build the CRO audit from a page sample and optional measured analytics."""
+    source_pages = list(pages or [])
+    rendered_page_count = sum(
+        1
+        for page in source_pages
+        if _get(page, "rendered") is True
+        and bool(_get(page, "rendered_dom") or _get(page, "html"))
+    )
+    rendered_dom_status = (
+        "RENDERED_DOM_VERIFIED_FOR_SAMPLE"
+        if source_pages and rendered_page_count == len(source_pages)
+        else "PARTIAL_RENDERED_DOM_SAMPLE"
+        if rendered_page_count > 0
+        else "NOT_VERIFIED_BY_CRO_ENGINE"
+    )
     obs = _observe(
-        pages or [],
+        source_pages,
         raw_html_map,
         business_profile,
         analytics,
@@ -3247,6 +3298,38 @@ def build_cro_intelligence(
         model_basis=obs.model_basis,
         sample_size=obs.sample_size,
         discovered_urls=obs.discovered,
+        scoring_calibration={
+            "status": "NOT_BENCHMARK_CALIBRATED",
+            "basis": "Experience quality is a transparent pass/fail ratio over checks observed on this sample, not a predicted conversion rate or industry percentile.",
+            "priority_calibration": "RULE_BASED_NOT_OUTCOME_CALIBRATED",
+            "experiment_outcomes_used": False,
+            "note": "No validated benchmark corpus, historical remediation outcomes, or randomized experiment outcomes were supplied to calibrate score-to-business-impact predictions.",
+        },
+        coverage={
+            "status": (
+                "NO_PAGES" if obs.sample_size == 0
+                else "DISCOVERY_COUNT_UNAVAILABLE" if obs.discovered is None or obs.discovered <= 0
+                else "INCONSISTENT_COUNTS" if obs.sample_size > obs.discovered
+                else "PARTIAL_SAMPLE" if obs.sample_size < obs.discovered
+                else "DISCOVERED_SET_INSPECTED"
+            ),
+            "inspected_pages": obs.sample_size,
+            "discovered_urls": obs.discovered,
+            "sample_coverage_pct": (
+                round(100 * obs.sample_size / obs.discovered, 1)
+                if isinstance(obs.discovered, int) and not isinstance(obs.discovered, bool)
+                and obs.discovered > 0 and obs.sample_size <= obs.discovered
+                else None
+            ),
+            "rendered_dom_status": rendered_dom_status,
+            "rendered_pages": rendered_page_count,
+            "journey_execution_status": "NOT_EXECUTED",
+            "note": (
+                "The percentage compares inspected pages with the supplied discovery total only. "
+                "It does not prove every URL was discovered, that JavaScript-rendered DOM was inspected, "
+                "or that forms, checkout, and multi-step journeys were executed."
+            ),
+        },
         dimensions=_dimensions(resolved, obs),
         metrics=_metrics(obs),
         sections=sections,
