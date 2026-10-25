@@ -111,7 +111,16 @@ class BrowserRenderService:
                 if settings.SSRF_PROTECTION_ENABLED:
                     # Validate every request that will actually be sent, including
                     # top-level navigations, redirects, scripts, and XHR/fetch calls.
-                    safe, reason = await asyncio.to_thread(is_safe_url, req.url)
+                    try:
+                        safe, reason = await asyncio.wait_for(
+                            asyncio.to_thread(is_safe_url, req.url),
+                            timeout=3.0,
+                        )
+                    except asyncio.TimeoutError:
+                        blocked_unsafe_request = True
+                        logger.warning("Blocked browser request after SSRF validation timeout: %s", req.url)
+                        await route.abort("blockedbyclient")
+                        return
                     if not safe:
                         blocked_unsafe_request = True
                         logger.warning("Blocked unsafe browser request %s: %s", req.url, reason)
