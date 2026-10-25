@@ -340,6 +340,9 @@ class Settings(BaseSettings):
     INSTAGRAM_CLIENT_SECRET: Optional[str] = None
     WHATSAPP_BUSINESS_CLIENT_ID: Optional[str] = None
     WHATSAPP_BUSINESS_CLIENT_SECRET: Optional[str] = None
+    SLACK_SIGNING_SECRET: Optional[str] = None
+    META_APP_SECRET: Optional[str] = None
+    META_WEBHOOK_VERIFY_TOKEN: Optional[str] = None
     WORDPRESS_CLIENT_ID: Optional[str] = None
     WORDPRESS_CLIENT_SECRET: Optional[str] = None
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
