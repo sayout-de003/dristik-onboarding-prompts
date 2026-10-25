@@ -651,12 +651,12 @@ def _build_ch_conversion(report: Any, manifest: Dict[str, Any]) -> str:
         <div class="card">
             <div class="card-kicker">VALUE PROPOSITION AUDIT</div>
             <div class="card-title">Above-the-Fold Delivery</div>
-            <p style="font-size: 8pt; color: #475569;">Core commercial capability communicated within primary 600px desktop viewport.</p>
+            <p style="font-size: 8pt; color: #475569;">This run does not record a structured above-the-fold measurement. Review linked page evidence before drawing a conclusion.</p>
         </div>
         <div class="card">
             <div class="card-kicker">CALL-TO-ACTION (CTA) ERGONOMICS</div>
             <div class="card-title">Button Visibility</div>
-            <p style="font-size: 8pt; color: #475569;">Primary commercial conversion links present across all sampled routes.</p>
+            <p style="font-size: 8pt; color: #475569;">CTA presence and visibility are not established unless supported by a recorded page observation.</p>
         </div>
     </div>
 
@@ -671,19 +671,24 @@ def _build_ch_page_by_page(report: Any, manifest: Dict[str, Any]) -> str:
 
     rows = []
     for p in pages[:15]:
-        url = getattr(p, "url", "https://example.com")
-        status = getattr(p, "status_code", 200)
-        wc = getattr(p, "word_count", 0)
-        ttfb = getattr(p, "ttfb_ms", 0.0)
+        url = getattr(p, "url", None)
+        status = getattr(p, "status_code", None)
+        wc = getattr(p, "word_count", None)
+        ttfb = getattr(p, "ttfb_ms", None)
         h1s = getattr(p, "h1_tags", []) or []
-        h1_text = _esc(h1s[0]) if h1s else "—"
+        h1_text = _esc(h1s[0]) if h1s else "Not recorded"
+        status_display = str(status) if isinstance(status, int) and not isinstance(status, bool) else "Not recorded"
+        status_color = "#64748b" if status_display == "Not recorded" else ("#0f766e" if status == 200 else "#b45309")
+        word_count_display = f"{wc} words" if isinstance(wc, int) and not isinstance(wc, bool) and wc >= 0 else "Not recorded"
+        ttfb_display = f"{ttfb:.1f}ms" if isinstance(ttfb, (int, float)) and not isinstance(ttfb, bool) and ttfb >= 0 else "Not recorded"
+        url_display = _esc(url) if url else "URL not recorded"
 
         rows.append(f"""
         <tr>
-            <td style="font-family:ui-monospace; font-size:7pt; word-break:break-all;">{_esc(url)}</td>
-            <td><span style="font-weight:700; color:{'#059669' if status == 200 else '#dc2626'}">{status}</span></td>
-            <td>{wc} words</td>
-            <td>{ttfb:.1f}ms</td>
+            <td style="font-family:ui-monospace; font-size:7pt; word-break:break-all;">{url_display}</td>
+            <td><span style="font-weight:700; color:{status_color}">{status_display}</span></td>
+            <td>{word_count_display}</td>
+            <td>{ttfb_display}</td>
             <td style="font-size:7.5pt;">{h1_text}</td>
         </tr>
         """)
@@ -707,7 +712,7 @@ def _build_ch_page_by_page(report: Any, manifest: Dict[str, Any]) -> str:
                 </tbody>
             </table>
         </div>
-        <div class="chart-explanation-note">URL Telemetry Ledger: Direct server response codes, content length, and H1 heading tags measured across crawled sample routes. Uninspected routes are not represented in this table.</div>
+        <div class="chart-explanation-note">URL Telemetry Ledger: only fields recorded for each sampled route are shown. “Not recorded” means the source did not provide that field; it is not a zero or a successful check. Uninspected routes are not represented in this table.</div>
     </div>
     """
 
