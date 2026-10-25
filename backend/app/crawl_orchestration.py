@@ -180,11 +180,12 @@ class DeepCrawlStore:
             counts = {row["status"]: row["count"] for row in rows}
             discovered = sum(counts.values())
             crawled = counts.get("CRAWLED", 0)
-            eligible = counts.get("DISCOVERED", 0) + counts.get("IN_PROGRESS", 0) + crawled + counts.get("FAILED", 0)
-            terminal = crawled + counts.get("FAILED", 0) + counts.get("EXCLUDED", 0)
-            remaining = max(0, eligible - terminal)
+            remaining = counts.get("DISCOVERED", 0) + counts.get("IN_PROGRESS", 0)
+            eligible = remaining + crawled + counts.get("FAILED", 0)
+            terminal = crawled + counts.get("FAILED", 0)
             return {
                 "job_id": job["job_id"], "status": job["status"], "origin_url": job["origin_url"],
+                "max_pages": job["max_pages"], "max_depth": job["max_depth"],
                 "discovered": discovered, "eligible": eligible, "crawled": crawled,
                 "failed": counts.get("FAILED", 0), "excluded": counts.get("EXCLUDED", 0),
                 "remaining": remaining, "in_progress": counts.get("IN_PROGRESS", 0),
