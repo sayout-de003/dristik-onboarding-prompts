@@ -959,3 +959,233 @@ See [LICENSE](LICENSE). This notice is a practical repository license statement,
 ---
 
 **Dristik AI — measure what can be measured, label what cannot, and connect every recommendation to evidence and action.**
+
+---
+
+## 21. Specialist audit agent flows (SEO, GEO, AEO, CRO and competitor analysis)
+
+This section documents the **five specialist audit pipelines** and how their outputs join into the final Dristik audit. The diagrams describe the intended analytical workflow and evidence contracts; the exact agents and execution order active in a given release must be confirmed against the runtime registry and implementation. A diagram is not, by itself, proof that every node is currently implemented or enabled.
+
+### Shared orchestration and evidence contract
+
+All five tracks should use the same crawl snapshot and run context wherever possible. Each finding should identify its scope, evidence, confidence/limitations, impact, and recommended action. Missing integrations or failed collection must be reported as unavailable—not silently replaced with invented values. Proposed fixes are not marked verified until a post-change check confirms the result.
+
+```mermaid
+flowchart TD
+    A[Audit request and site configuration] --> B[Run orchestrator]
+    B --> C[URL discovery and crawl policy]
+    C --> D[Fetch, render and normalize pages]
+    D --> E[Shared page snapshots and evidence store]
+    E --> F1[SEO specialist pipeline]
+    E --> F2[GEO specialist pipeline]
+    E --> F3[AEO specialist pipeline]
+    E --> F4[CRO specialist pipeline]
+    E --> F5[Competitor analysis pipeline]
+    F1 --> G[Finding normalization and deduplication]
+    F2 --> G
+    F3 --> G
+    F4 --> G
+    F5 --> G
+    G --> H[Evidence and confidence gate]
+    H --> I[Severity, effort, impact and dependency prioritization]
+    I --> J[Audit report, index and remediation backlog]
+    J --> K[Human-approved changes]
+    K --> L[Re-crawl and post-change verification]
+    L --> M[Verified, regressed, unresolved or unavailable]
+    M --> N[Updated report and audit trail]
+```
+
+### 1. SEO specialist agents flow
+
+**Purpose:** assess conventional search discoverability, technical health, content relevance, internal architecture and measurable search performance. SEO is its own track; GEO and AEO findings remain separately classified.
+
+```mermaid
+flowchart TD
+    A[Shared crawl and URL inventory] --> B[Technical access and status agent]
+    A --> C[Rendering and indexability agent]
+    A --> D[URL, canonical and duplicate agent]
+    A --> E[On-page metadata and heading agent]
+    A --> F[Content quality and search-intent agent]
+    A --> G[Internal links and site architecture agent]
+    A --> H[Structured data validation agent]
+    A --> I[Performance and Core Web Vitals agent]
+    A --> J[Image, media and accessibility signals agent]
+    B --> K[SEO evidence normalizer]
+    C --> K
+    D --> K
+    E --> K
+    F --> K
+    G --> K
+    H --> K
+    I --> K
+    J --> K
+    K --> L{External data configured?}
+    L -- Yes --> M[Search Console, analytics, SERP and backlink adapters]
+    L -- No --> N[Mark external metrics unavailable]
+    M --> O[Correlate page and query evidence]
+    N --> P[SEO finding and confidence gate]
+    O --> P
+    P --> Q[Severity, affected URLs, fix and verification criteria]
+    Q --> R[SEO report chapter and remediation queue]
+```
+
+SEO output should distinguish crawl-observed facts from Search Console/analytics metrics, third-party estimates and inferred risks. Local and international SEO can be represented as SEO subdomains (for example, business-profile/local signals, hreflang, language/region targeting and international URL structure) rather than mixing their findings into GEO/AEO.
+
+### 2. GEO (Generative Engine Optimization) specialist agents flow
+
+**Purpose:** assess whether a brand and its useful content are discoverable, understandable and supportable as sources in generative search experiences. A site-side readiness check is not the same as a measured live AI mention or citation.
+
+```mermaid
+flowchart TD
+    A[Site snapshots and brand context] --> B[Entity and brand consistency agent]
+    A --> C[Passage clarity and extractability agent]
+    A --> D[Topical depth and coverage agent]
+    A --> E[Authority and corroboration signal agent]
+    A --> F[Freshness and factual consistency agent]
+    A --> G[Structured data and entity-linking agent]
+    A --> H[AI crawler access and fetchability agent]
+    B --> I[GEO evidence synthesis]
+    C --> I
+    D --> I
+    E --> I
+    F --> I
+    G --> I
+    H --> I
+    I --> J{Live engine measurement configured?}
+    J -- Yes --> K[Run recorded prompts against supported AI engines]
+    K --> L[Store prompt, engine, timestamp, response and citation evidence]
+    J -- No --> M[Label visibility as unavailable or not measured]
+    L --> N[Compare observed mentions, citations and competitors]
+    M --> O[Readiness-only assessment; no visibility claim]
+    N --> P[GEO gap and recommendation gate]
+    O --> P
+    P --> Q[Prioritized GEO actions and report chapter]
+```
+
+GEO results should name the engine, query/prompt, collection time and citation evidence when live measurement exists. Simulated answers, generic model opinions and technical readiness checks must never be presented as verified live visibility.
+
+### 3. AEO (Answer Engine Optimization) specialist agents flow
+
+**Purpose:** determine whether pages answer likely questions directly and whether answers can be extracted accurately by answer engines, featured-answer surfaces and conversational search systems.
+
+```mermaid
+flowchart TD
+    A[Keyword, query and audience intent inputs] --> B[Question and intent clustering agent]
+    B --> C[Answer coverage and completeness agent]
+    D[Site snapshots] --> E[Direct-answer and passage structure agent]
+    D --> F[FAQ and question-heading agent]
+    D --> G[Definition, steps, tables and concise-summary agent]
+    D --> H[Schema and structured-answer validation agent]
+    D --> I[Source, claim and citation quality agent]
+    C --> J[AEO question-to-page map]
+    E --> K[Answer extractability assessment]
+    F --> K
+    G --> K
+    H --> K
+    I --> K
+    J --> L[Question coverage and page mapping]
+    K --> L
+    L --> M{Answer-engine test data available?}
+    M -- Yes --> N[Measure recorded answer inclusion and source citations]
+    M -- No --> O[Report on-page readiness only]
+    N --> P[Find missing, weak or unsupported answers]
+    O --> P
+    P --> Q[Draft answer improvements with source checks]
+    Q --> R[Human review and factual validation]
+    R --> S[AEO report chapter and verification plan]
+```
+
+AEO recommendations should map a specific question or intent to a relevant URL and explain what answer is missing, unclear, unsupported or difficult to extract. Do not claim an answer engine displayed the page unless that behavior was actually measured.
+
+### 4. CRO (Conversion Rate Optimization) specialist agents flow
+
+**Purpose:** identify friction between landing-page intent and a meaningful user action. Recommendations should be based on observed page/interface evidence and connected analytics where available—not unsupported claims about conversion uplift.
+
+```mermaid
+flowchart TD
+    A[Landing pages and key user journeys] --> B[Page purpose and intent alignment agent]
+    A --> C[Value proposition and message clarity agent]
+    A --> D[CTA visibility and action clarity agent]
+    A --> E[Form and field-friction agent]
+    A --> F[Navigation and journey-friction agent]
+    A --> G[Trust, proof and objection-handling agent]
+    A --> H[Mobile usability and accessibility agent]
+    I[Analytics and experiment data, if connected] --> J[Conversion evidence adapter]
+    B --> K[UX evidence and issue normalization]
+    C --> K
+    D --> K
+    E --> K
+    F --> K
+    G --> K
+    H --> K
+    J --> L{Valid conversion data available?}
+    K --> M[Page-level friction and hypothesis map]
+    L -- Yes --> N[Correlate funnel and event evidence]
+    L -- No --> O[Label behavioral impact unmeasured]
+    N --> P[Prioritize by evidence, reach, effort and risk]
+    O --> P
+    M --> P
+    P --> Q[Experiment or remediation proposal]
+    Q --> R[Baseline, success metric and guardrails]
+    R --> S[Human approval and implementation]
+    S --> T[Post-change measurement]
+    T --> U[Verified outcome, inconclusive result or regression]
+```
+
+CRO findings should separate directly observed usability defects from hypotheses that require analytics, user research or controlled experiments. Do not fabricate conversion rates, revenue impact, statistical significance or predicted uplift. A fix is not a proven conversion improvement until the relevant outcome is measured.
+
+### 5. Competitor analysis specialist agents flow
+
+**Purpose:** compare the target site with a defined set of competitors using public, timestamped and comparable evidence, then identify actionable gaps without implying access to competitors' private analytics.
+
+```mermaid
+flowchart TD
+    A[Target business, market and audience] --> B[Competitor discovery agent]
+    B --> C[Validate and deduplicate competitor set]
+    C --> D[Select comparable competitors and page types]
+    D --> E[Collect public competitor pages]
+    D --> F[Collect authorized third-party search and backlink data]
+    D --> G[Collect recorded AI-answer observations, if enabled]
+    E --> H[Normalize evidence by source and timestamp]
+    F --> H
+    G --> H
+    H --> I[Technical and indexability comparison]
+    H --> J[Content, topic and intent gap comparison]
+    H --> K[Authority, entity and citation comparison]
+    H --> L[Offer, UX and conversion-path comparison]
+    I --> M[Comparable gap matrix]
+    J --> M
+    K --> M
+    L --> M
+    M --> N[Evidence, freshness and comparability gate]
+    N --> O[Separate observed facts from estimates and inferences]
+    O --> P[Opportunity sizing with uncertainty labels]
+    P --> Q[Rank target-site actions by impact, effort and confidence]
+    Q --> R[Competitor report chapter and action backlog]
+```
+
+Competitor analysis may use public pages and licensed/authorized provider data. It must not imply access to private traffic, conversion rates, customer lists, internal rankings or revenue. Comparisons should disclose missing data, mismatched page types, geography, query set and data freshness.
+
+### Cross-track handoff and final report
+
+The specialist tracks can identify related issues on the same URL, but they should not create five copies of one underlying defect. Keep the canonical evidence record and link each track's interpretation to it. For example, missing structured data can have an SEO interpretation and an AEO/GEO implication; consolidate the shared technical fact while retaining distinct, justified recommendations for each outcome.
+
+```mermaid
+flowchart LR
+    A[SEO findings] --> E[Canonical finding registry]
+    B[GEO findings] --> E
+    C[AEO findings] --> E
+    D[CRO findings] --> E
+    F[Competitor gaps] --> E
+    E --> G[Duplicate and overlap resolution]
+    G --> H[Evidence completeness and source-scope checks]
+    H --> I[Priority and dependency graph]
+    I --> J[Sectioned audit book and true index]
+    I --> K[Implementation backlog]
+    K --> L[Re-test against original baseline]
+    L --> M[Verified / failed / partial / unavailable]
+    M --> J
+```
+
+**Minimum finding record:** finding ID; track and subcategory; affected URL(s); observation; evidence reference(s) and timestamp; evidence scope (page-verified, sample-verified, site-inferred or external-verified); impact and rationale; severity and confidence; recommended fix; dependencies; verification test; and status. When required evidence is absent, mark the metric or conclusion as unavailable rather than filling the gap with a default score.
+
