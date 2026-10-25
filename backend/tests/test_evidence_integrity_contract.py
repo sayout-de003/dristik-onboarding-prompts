@@ -97,3 +97,13 @@ def test_estimated_claim_requires_limitations():
 ])
 def test_score_validation_never_fabricates_or_accepts_invalid_values(value, expected):
     assert validate_score(value) == expected
+
+
+def test_finding_evidence_does_not_assume_http_success_or_crawl_source():
+    from app.domain.models import FindingEvidence
+
+    evidence = FindingEvidence()
+    assert evidence.response_status is None
+    assert evidence.source is None
+    assert evidence.test_method is None
+    assert evidence.evidence_subtype is None
