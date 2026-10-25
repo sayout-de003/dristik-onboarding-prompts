@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from app.aeo.scoring import EvidenceState
+from app.aeo.source_attribution import SourceAttributionEvaluator
 
 
 @dataclass
@@ -394,16 +395,61 @@ class SourceAttributionSpecialist(BaseAeoSpecialist):
     responsibility = "Trace asserted claims to primary documentation, original data, or credible third-party references"
 
     def evaluate(self, report: Any) -> SpecialistResult:
-        # This module does not yet resolve claims to source passages. Do not label
-        # the capability verified until claim-to-source links are actually assessed.
+        # Consume only an explicit claim inventory; never infer claims from headings.
+        claims = getattr(report, "assessed_claims", None)
+        if claims is None:
+            claims = getattr(report, "claim_source_map", None)
+        if claims is None:
+            grounding = getattr(report, "claim_grounding_evaluation", None)
+            claims = getattr(grounding, "claims", None) if grounding else None
+
+        result = SourceAttributionEvaluator.evaluate(claims)
+        if result.status == "NOT_TESTED":
+            return SpecialistResult(
+                specialist_id=self.specialist_id,
+                specialist_name=self.specialist_name,
+                responsibility=self.responsibility,
+                status=EvidenceState.NOT_TESTED,
+                summary="Claim-to-source attribution was not tested because no explicit claim inventory was supplied.",
+                findings=[],
+                metadata=result.model_dump(),
+            )
+
+        findings = []
+        for item in result.claims:
+            if item.status in {"ATTRIBUTED", "UNASSESSABLE"}:
+                continue
+            findings.append(AeoFindingRecord(
+                finding_id=f"AEO-SOURCE-{item.claim_id}",
+                priority="P1" if item.status in {"MISSING_SOURCE", "INVALID_SOURCE_URL"} else "P2",
+                evidence_state=EvidenceState.SAMPLE_VERIFIED,
+                question="Can this claim be traced to an inspectable source passage?",
+                observed_issue=f"Claim attribution status: {item.status}. {item.reason or ''}".strip(),
+                evidence_url=item.source_url or getattr(report, "website_url", ""),
+                evidence_excerpt=item.claim_text or "Claim text unavailable.",
+                collection_timestamp=datetime.now(timezone.utc).isoformat(),
+                scope="Explicit assessed-claim inventory only; not a site-wide claim census.",
+                why_it_matters="Claims without traceable source passages are harder to validate and may be misrepresented by answer systems.",
+                recommended_fix="Attach the authoritative source URL and exact supporting excerpt; separately verify that the source actually entails the claim.",
+                validation="A reviewer can open the source URL and locate the recorded excerpt; semantic support is reviewed separately.",
+                success_metrics="All assessable claims have traceable source URLs and excerpts.",
+                limitations="This check measures provenance completeness only, not source credibility, freshness, entailment, or factual correctness.",
+            ))
+
         return SpecialistResult(
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.NOT_TESTED,
-            summary="Claim-to-source attribution was not tested; no source-to-claim evidence map was produced.",
-            findings=[],
-            metadata={"measurement_status": "NOT_TESTED"},
+            status=EvidenceState.SAMPLE_VERIFIED,
+            summary=(
+                f"Checked source traceability for {result.total_claims} claims: "
+                f"{result.attributable_claims} attributed "
+                f"({result.attribution_coverage_pct if result.attribution_coverage_pct is not None else 'N/A'}% coverage). "
+                "Traceability does not establish semantic support."
+            ),
+            findings=findings,
+            evidence_items=[item.model_dump() for item in result.claims],
+            metadata=result.model_dump(exclude={"claims"}),
         )
 
 
