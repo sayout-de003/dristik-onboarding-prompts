@@ -235,6 +235,13 @@ class CrawlerService:
         markdown is Playwright innerText when the local browser rendered the page —
         that is the closest analogue to what a human actually sees.
         """
+        # Browser and remote-render paths must validate the initial target too.
+        # The browser additionally validates each redirect/subresource in its route hook.
+        if settings.SSRF_PROTECTION_ENABLED:
+            safe, reason = is_safe_url(url)
+            if not safe:
+                return None, None, 0, (time.time() - start_time) * 1000, {}, 0, f"SSRF blocked render target: {reason}", None
+
         # Tier 1: Local High-Speed Playwright ($0 API cost, fast asset-blocked execution)
         if BrowserRenderService.is_available():
             try:
