@@ -122,6 +122,8 @@ async def connect_platform(
 ):
     """Register and verify a new platform connector for the caller's organization."""
     req.org_id = user.org_id
+    # Workspace identifiers supplied by clients are not trusted for authorization.
+    req.workspace_id = str(getattr(user, "workspace_id", None) or "ws_default")
     api_key = req.api_key
     if req.provider == ConnectorType.CRUX and not (api_key and str(api_key).strip()):
         api_key = (
