@@ -11,6 +11,7 @@ import asyncio
 import logging
 from typing import Optional, Tuple, Dict, Any
 from app.core.config import settings
+from app.core.security.ssrf import is_safe_url
 
 logger = logging.getLogger("dristik.browser")
 
@@ -97,6 +98,14 @@ class BrowserRenderService:
             async def filter_route(route):
                 req = route.request
                 rtype = req.resource_type
+                if settings.SSRF_PROTECTION_ENABLED:
+                    # Validate every navigation, redirect, and subresource request;
+                    # validating only the starting URL is insufficient for a browser.
+                    safe, reason = await asyncio.to_thread(is_safe_url, req.url)
+                    if not safe:
+                        logger.warning("Blocked unsafe browser request %s: %s", req.url, reason)
+                        await route.abort("blockedbyclient")
+                        return
                 if rtype in ["image", "media", "font"]:
                     await route.abort()
                 elif any(t in req.url.lower() for t in ["google-analytics", "googletagmanager", "hotjar", "facebook.net", "clarity.ms"]):
