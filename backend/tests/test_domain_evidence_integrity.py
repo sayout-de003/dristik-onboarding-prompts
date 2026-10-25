@@ -48,3 +48,27 @@ def test_claim_ledger_certification_requires_explicit_supported_entries():
     )
     ledger = ClaimLedger(ledger_id="l3", run_id="r3", entries=[entry])
     assert ledger.certified_zero_fake is True
+
+
+def test_publication_cover_does_not_claim_missing_scores_or_certification():
+    from app.reports.publishing_engine import (
+        CoverGenerator,
+        PublicationDocument,
+        PublicationMetadata,
+    )
+
+    metadata = PublicationMetadata(
+        family="SEO",
+        title="SEO audit",
+        subtitle="Scope and findings",
+        domain="example.test",
+        brand_name="Example",
+        audit_date="Timestamp unavailable",
+    )
+    rendered = CoverGenerator.render_cover_html(PublicationDocument(metadata=metadata))
+    assert "NOT MEASURED" in rendered
+    assert "NOT GRADED" in rendered
+    assert "Crawl coverage not recorded" in rendered
+    assert "Finding count not recorded" in rendered
+    assert "ZERO-FAKE AST CERTIFIED" not in rendered
+    assert "SUBJECT ENTITY UNDER ASSURANCE" not in rendered
