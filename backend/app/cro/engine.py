@@ -292,6 +292,19 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
         # Never accept numeric payload fields from a failed/disconnected provider.
         return result
 
+    def invalidate(notice: str) -> Dict[str, Any]:
+        result["state"] = "INVALID_DATA"
+        result["notice"] = notice
+        # A malformed provider payload invalidates the measurement snapshot as a whole.
+        # Do not let downstream CRO checks consume partially parsed values.
+        for field in (
+            "sessions", "key_events", "unique_converters", "eligible_users",
+            "engagement_rate_pct", "landing_pages", "revenue", "orders",
+        ):
+            result[field] = None
+        result["key_events_present"] = False
+        return result
+
     def count_value(*keys: str) -> Optional[int]:
         for key in keys:
             value = channel.get(key)
@@ -304,8 +317,7 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
                 or value < 0
                 or not float(value).is_integer()
             ):
-                result["state"] = "INVALID_DATA"
-                result["notice"] = f"GA4 returned an invalid non-negative integer for {key}; affected metrics were withheld."
+                invalidate(f"GA4 returned an invalid non-negative integer for {key}; affected metrics were withheld.")
                 return None
             return int(value)
         return None
@@ -330,9 +342,7 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
             or not math.isfinite(float(engagement))
             or not 0 <= float(engagement) <= 100
         ):
-            result["state"] = "INVALID_DATA"
-            result["notice"] = "GA4 returned an invalid engagement percentage; affected metrics were withheld."
-            return result
+            return invalidate("GA4 returned an invalid engagement percentage; affected metrics were withheld.")
         result["engagement_rate_pct"] = float(engagement)
 
     if isinstance(channel.get("landing_pages"), list):
@@ -348,9 +358,7 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
             or not math.isfinite(float(value))
             or value < 0
         ):
-            result["state"] = "INVALID_DATA"
-            result["notice"] = f"GA4 returned an invalid non-negative amount for {key}; revenue metrics were withheld."
-            return result
+            return invalidate(f"GA4 returned an invalid non-negative amount for {key}; revenue metrics were withheld.")
         result["revenue"] = float(value)
         break
 
