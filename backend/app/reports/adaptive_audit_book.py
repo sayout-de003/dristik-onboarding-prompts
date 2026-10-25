@@ -64,7 +64,7 @@ def detect_report_family(report: Any, requested_type: Optional[str] = None) -> s
     has_competitor = False
 
     # Check findings
-    findings = list(getattr(report, "findings", []) or [])
+    findings = _report_findings(report)
     categories = set()
     for f in findings:
         raw_cat = getattr(f, "category", "")
@@ -357,14 +357,67 @@ from app.reports.plain_english_engine import (
 # CHAPTER BODY BUILDERS (EMPIRICAL, GROUNDED DATA)
 # ==============================================================================
 
-def _format_finding_cards(findings: List[Any], limit: int = 8) -> str:
-    """Formats findings into consistent 11-point enterprise publication cards."""
-    cards = []
-    for idx, f in enumerate(findings[:limit]):
-        enriched = PlainEnglishEngine.enrich_finding(f, idx + 1)
-        cards.append(render_plain_english_finding_card(enriched))
+def _finding_value(finding: Any, key: str, default: Any = None) -> Any:
+    """Read a field from either a Pydantic/object finding or a dictionary."""
+    if isinstance(finding, dict):
+        return finding.get(key, default)
+    return getattr(finding, key, default)
 
-    return "".join(cards) if cards else '<p style="color:#64748b; font-size: 9pt; font-style: italic;">No findings were recorded for this discipline; this does not prove that no defects exist.</p>'
+
+def _report_findings(report: Any) -> List[Any]:
+    """Return one canonical record per repeated finding identity for report assembly."""
+    raw = list(getattr(report, "findings", []) or [])
+    canonical: List[Any] = []
+    seen: set[tuple[str, tuple[str, ...]]] = set()
+    for finding in raw:
+        title = re.sub(r"\\s+", " ", str(_finding_value(finding, "title", _finding_value(finding, "name", "")) or "")).strip().casefold()
+        urls = _finding_value(finding, "affected_urls", None) or _finding_value(finding, "urls", None) or []
+        if isinstance(urls, str):
+            urls = [urls]
+        if not urls:
+            url = _finding_value(finding, "url", None) or _finding_value(finding, "affected_url", None)
+            urls = [url] if url else []
+        normalized_urls = tuple(sorted({str(url).rstrip("/").casefold() for url in urls if url}))
+        # Do not merge similarly worded findings on different pages. If URLs are missing,
+        # retain the record using its ID so unrelated records are not collapsed.
+        identity = (title, normalized_urls) if title and normalized_urls else (
+            str(_finding_value(finding, "finding_id", _finding_value(finding, "id", id(finding)))),
+            normalized_urls,
+        )
+        if identity in seen:
+            continue
+        seen.add(identity)
+        canonical.append(finding)
+    return canonical
+
+
+def _format_finding_cards(findings: List[Any], limit: int = 8, detailed: bool = False) -> str:
+    """Use short chapter references; reserve full plain-English narratives for the findings register."""
+    cards = []
+    for idx, finding in enumerate(findings[:limit]):
+        if detailed:
+            enriched = PlainEnglishEngine.enrich_finding(finding, idx + 1)
+            cards.append(render_plain_english_finding_card(enriched))
+            continue
+        title = _esc(_finding_value(finding, "title", _finding_value(finding, "name", "Finding title unavailable")))
+        severity = _esc(str(_finding_value(finding, "severity", "Unclassified")).replace("_", " ").title())
+        finding_id = _esc(_finding_value(finding, "finding_id", _finding_value(finding, "id", f"finding-{idx + 1}")))
+        urls = _finding_value(finding, "affected_urls", None) or _finding_value(finding, "urls", None) or []
+        if isinstance(urls, str):
+            urls = [urls]
+        if not urls:
+            url = _finding_value(finding, "url", None) or _finding_value(finding, "affected_url", None)
+            urls = [url] if url else []
+        url_summary = ", ".join(str(url) for url in urls[:3] if url) or "Affected URL not recorded"
+        if len(urls) > 3:
+            url_summary += f" and {len(urls) - 3} more"
+        cards.append(
+            '<div class="card finding-reference" style="margin:6px 0;padding:9px 12px;break-inside:avoid;">'
+            f'<div style="font-size:9pt;font-weight:700;color:#0f172a;">{title}</div>'
+            f'<div style="font-size:7.5pt;color:#64748b;margin-top:3px;">{finding_id} · {severity} · {_esc(url_summary)}</div>'
+            '</div>'
+        )
+    return "".join(cards) if cards else '<p style="color:#64748b;font-size:9pt;font-style:italic;">No findings were recorded for this area. This does not prove that no defects exist.</p>'
 
 
 def _build_ch_brief(report: Any, manifest: Dict[str, Any]) -> str:
@@ -499,19 +552,19 @@ def _build_ch_seo(report: Any, manifest: Dict[str, Any]) -> str:
 
     <div class="grid-3" style="margin-bottom: 16px;">
         <div class="card">
-            <div class="card-kicker">CRAWL TOPOLOGY</div>
-            <div class="card-title">{pages_count} URLs Analyzed</div>
-            <p style="font-size: 8pt; color: #475569;">Total discovered endpoints: {disc}. Canonical host consistency verified.</p>
+            <div class="card-kicker">CRAWL COVERAGE</div>
+            <div class="card-title">{pages_count} URLs Crawled</div>
+            <p style="font-size: 8pt; color: #475569;">Discovered URLs: {disc}. These counts describe this crawl only, not the entire website.</p>
         </div>
         <div class="card">
-            <div class="card-kicker">HTTP RESPONSE LEDGER</div>
-            <div class="card-title">100% 200 OK Sample</div>
-            <p style="font-size: 8pt; color: #475569;">Zero redirect loops or catastrophic 5xx server drops observed in crawl.</p>
+            <div class="card-kicker">HTTP STATUS</div>
+            <div class="card-title">See recorded observations</div>
+            <p style="font-size: 8pt; color: #475569;">No all-pages status claim is made here. Review the linked page evidence for observed response codes.</p>
         </div>
         <div class="card">
             <div class="card-kicker">ROBOTS &amp; SITEMAP</div>
-            <div class="card-title">Directives Valid</div>
-            <p style="font-size: 8pt; color: #475569;">User-agent crawler directives open for commercial routes.</p>
+            <div class="card-title">Evidence-dependent</div>
+            <p style="font-size: 8pt; color: #475569;">These checks are reported only when their actual observations are present in the audit data.</p>
         </div>
     </div>
 
@@ -523,7 +576,7 @@ def _build_ch_seo(report: Any, manifest: Dict[str, Any]) -> str:
 def _build_ch_geo(report: Any, manifest: Dict[str, Any]) -> str:
     geo = getattr(report, "geo_readiness", None)
     score_ext = getattr(geo, "extractability_score", None)
-    score_disp = f"{float(score_ext):.1f}" if score_ext is not None else "76.4"
+    score_disp = f"{float(score_ext):.1f}" if score_ext is not None else "NOT MEASURED"
 
     findings = [f for f in getattr(report, "findings", []) if "GEO" in str(getattr(f, "category", "")).upper()]
     callout = render_section_business_callout(
@@ -536,8 +589,8 @@ def _build_ch_geo(report: Any, manifest: Dict[str, Any]) -> str:
     <div class="grid-2" style="margin-bottom: 16px;">
         <div class="card">
             <div class="card-kicker">FIRST-PARTY EXTRACTABILITY INDEX</div>
-            <div style="font-size: 26pt; font-weight: 800; color: #7c3aed; margin: 4px 0;">{score_disp}<span style="font-size: 12pt; color: #64748b;">/100</span></div>
-            <p style="font-size: 8pt; color: #475569;">Reflects deterministic parsing efficiency and factual density of primary routes.</p>
+            <div style="font-size: 22pt; font-weight: 800; color: #475569; margin: 4px 0;">{score_disp}{'<span style="font-size: 12pt; color: #64748b;">/100</span>' if score_ext is not None else ''}</div>
+            <p style="font-size: 8pt; color: #475569;">A score is shown only when this audit recorded one. Unmeasured does not mean zero.</p>
         </div>
         <div class="card">
             <div class="card-kicker">/llms.txt AI PERMISSIONS DIRECTIVE</div>
@@ -787,9 +840,9 @@ def _build_ch_methodology(report: Any, manifest: Dict[str, Any]) -> str:
 
 
 def _build_ch_appendix(report: Any, manifest: Dict[str, Any]) -> str:
-    findings = list(getattr(report, "findings", []) or [])
+    findings = _report_findings(report)
     callout = render_section_business_callout(
-        generate_section_explanation("ch_appendix", "Institutional Findings Register & Evidence Ledger", report, findings)
+        generate_section_explanation("ch_appendix", "Findings Register & Evidence", report, findings)
     )
 
     return f"""
@@ -800,7 +853,7 @@ def _build_ch_appendix(report: Any, manifest: Dict[str, Any]) -> str:
         <p style="font-size: 8pt; color: #475569; margin: 4px 0 10px 0;">
             Finding status and evidence coverage depend on the recorded source data; not every finding is necessarily independently verified.
         </p>
-        {_format_finding_cards(findings, limit=20)}
+        {_format_finding_cards(findings, limit=100, detailed=True)}
     </div>
     """
 
@@ -853,7 +906,7 @@ def build_adaptive_publication_document(
         grade=grade_val,
         overall_score=score_val,
         pages_crawled=pages_count,
-        findings_count=len(findings),
+        findings_count=len(_report_findings(report)),
         story_summary=str(getattr(report, "story_summary", None) or ""),
         primary_opportunity=str(getattr(report, "primary_strategic_opportunity", None) or ""),
         consultant_advice_what_to_ignore=str(getattr(report, "consultant_advice_what_to_ignore", None) or ""),
