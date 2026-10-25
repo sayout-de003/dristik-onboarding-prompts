@@ -26,9 +26,12 @@ from app.connectors.webhook_security import body_sha256, verify_meta_signature, 
 router = APIRouter(prefix="/connectors", tags=["Platform Connectors"])
 router.include_router(oauth_router)
 
-@router.get("/webhooks/whatsapp")
-async def verify_whatsapp_webhook(request: Request):
-    """Meta webhook challenge verification; configured verify token is required."""
+@router.get("/webhooks/whatsapp/{integration_id}")
+async def verify_whatsapp_webhook(integration_id: str, request: Request):
+    """Meta webhook challenge verification for a specific tenant connection."""
+    integration = connector_store.get_integration(integration_id)
+    if not integration or integration.provider != ConnectorType.WHATSAPP_BUSINESS:
+        raise HTTPException(status_code=404, detail="WhatsApp Business integration not found.")
     verify_token = settings.META_WEBHOOK_VERIFY_TOKEN or ""
     if not verify_token:
         raise HTTPException(status_code=503, detail="META_WEBHOOK_VERIFY_TOKEN is not configured.")
