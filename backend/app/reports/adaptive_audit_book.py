@@ -370,7 +370,7 @@ def _report_findings(report: Any) -> List[Any]:
     canonical: List[Any] = []
     seen: set[tuple[str, tuple[str, ...]]] = set()
     for finding in raw:
-        title = re.sub(r"\\s+", " ", str(_finding_value(finding, "title", _finding_value(finding, "name", "")) or "")).strip().casefold()
+        title = re.sub(r"\s+", " ", str(_finding_value(finding, "title", _finding_value(finding, "name", "")) or "")).strip().casefold()
         urls = _finding_value(finding, "affected_urls", None) or _finding_value(finding, "urls", None) or []
         if isinstance(urls, str):
             urls = [urls]
@@ -600,22 +600,10 @@ def _build_ch_geo(report: Any, manifest: Dict[str, Any]) -> str:
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-        <div class="card-kicker">8-DIMENSION GENERATIVE ENGINE BREAKDOWN</div>
-        <div class="data-table-wrapper" style="margin-top:8px;">
-            <table class="print-table">
-                <thead>
-                    <tr><th>Dimension</th><th>Evaluation Criteria</th><th>Assessment</th><th>Impact</th></tr>
-                </thead>
-                <tbody>
-                    <tr><td><strong>Entity Clarity</strong></td><td>Disambiguation of core company &amp; products</td><td>Verified</td><td>High</td></tr>
-                    <tr><td><strong>Content Extractability</strong></td><td>Self-contained definition passages</td><td>Improvement Area</td><td>Critical</td></tr>
-                    <tr><td><strong>Source Credibility</strong></td><td>Author attribution, references &amp; citations</td><td>Verified</td><td>Medium</td></tr>
-                    <tr><td><strong>Topical Coverage</strong></td><td>Depth of commercial domain terminology</td><td>Substantial</td><td>High</td></tr>
-                    <tr><td><strong>Schema Graph</strong></td><td>Machine-readable JSON-LD entity nodes</td><td>Patch Pending</td><td>Critical</td></tr>
-                </tbody>
-            </table>
-        </div>
-        <div class="chart-explanation-note">8-Dimension GEO Matrix: Evaluates on-page extractability, schema graph presence, entity attribution, and LLM bot permissions. Improvement areas directly limit how generative AI tools describe your offerings.</div>
+        <div class="card-kicker">ASSESSMENT COVERAGE</div>
+        <p style="font-size: 8pt; color: #475569; margin: 4px 0 0 0;">
+            This section reports observations captured during this audit. A dimension without a recorded check is unmeasured, not passed. Full explanations and evidence are provided once in the findings register.
+        </p>
     </div>
 
     <h3 style="font-size: 12pt; margin: 16px 0 8px 0; color: #0f172a;">Generative Engine Optimization Findings</h3>
