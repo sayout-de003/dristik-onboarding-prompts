@@ -275,6 +275,7 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
         "key_events_present": False,
         "unique_converters": None,
         "eligible_users": None,
+        "eligible_visitors": None,
         "engagement_rate_pct": None,
         "landing_pages": None,
         "revenue": None,
@@ -298,7 +299,7 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
         # A malformed provider payload invalidates the measurement snapshot as a whole.
         # Do not let downstream CRO checks consume partially parsed values.
         for field in (
-            "sessions", "key_events", "unique_converters", "eligible_users",
+            "sessions", "key_events", "unique_converters", "eligible_users", "eligible_visitors",
             "engagement_rate_pct", "landing_pages", "revenue", "orders",
         ):
             result[field] = None
@@ -326,6 +327,7 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
     key_events = count_value("key_events", "keyEvents", "conversions")
     unique_converters = count_value("unique_converters", "converters")
     eligible_users = count_value("eligible_users", "total_users", "users")
+    eligible_visitors = count_value("eligible_visitors")
     if result["state"] == "INVALID_DATA":
         return result
     result["sessions"] = sessions
@@ -333,6 +335,7 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
     result["key_events_present"] = key_events is not None
     result["unique_converters"] = unique_converters
     result["eligible_users"] = eligible_users
+    result["eligible_visitors"] = eligible_visitors if eligible_visitors is not None else eligible_users
 
     engagement = channel.get("engagement_rate_pct")
     if engagement is not None:
