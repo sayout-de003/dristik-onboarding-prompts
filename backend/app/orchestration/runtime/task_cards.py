@@ -4582,5 +4582,5 @@ Prioritize only changes that improve a supported search intent, answerability, f
 def task_card_for(agent_id: str) -> str:
     card = ALL_TASK_CARDS.get(agent_id, TASK_CARDS.get(agent_id, "Audit only what the evidence pack contains. Cite verified evidence IDs from the pack. Never output literal [ev_xxx] placeholders. Invent nothing."))
     if agent_id in COPYWRITING_TASK_CARDS:
-        return card + "\\n\\n" + COPYWRITING_SHARED_POLICY
+        return card + "\n\n" + COPYWRITING_SHARED_POLICY
     return card
