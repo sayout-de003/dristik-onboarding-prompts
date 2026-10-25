@@ -241,3 +241,17 @@ def test_report_does_not_claim_experiment_winner_or_uplift_without_experiment():
     assert "No winner is declared" in html
     assert "No implemented change or experiment outcome was supplied" in html
 
+def test_rendered_dom_status_requires_explicit_browser_render_metadata():
+    report = build_cro_intelligence(
+        pages=[{
+            "url": "https://example.com/",
+            "state": "RENDERED",
+            "rendered": True,
+            "rendered_dom": "<html><body><h1>Client-rendered content</h1></body></html>",
+        }],
+        discovered_urls=1,
+    )
+    assert report.coverage["rendered_dom_status"] == "RENDERED_DOM_VERIFIED_FOR_SAMPLE"
+    assert report.coverage["rendered_pages"] == 1
+    assert report.coverage["journey_execution_status"] == "NOT_EXECUTED"
+
