@@ -290,11 +290,11 @@ class ClaimLedgerEntry(BaseModel):
     claim: str
     source_type: ClaimSourceType = ClaimSourceType.OBSERVED
     evidence_ids: List[str] = Field(default_factory=list)
-    confidence: float = 1.0
-    scope: str = "site_wide"
+    confidence: float = 0.0
+    scope: str = "unspecified"
     created_by: str = "system"
     timestamp: str = ""
-    is_valid_fact: bool = True
+    is_valid_fact: bool = False
     rejection_reason: Optional[str] = None
 
 
@@ -305,7 +305,7 @@ class ClaimLedger(BaseModel):
     ledger_id: str
     run_id: str
     entries: List[ClaimLedgerEntry] = Field(default_factory=list)
-    certified_zero_fake: bool = True
+    certified_zero_fake: bool = False
     rejected_unsupported_count: int = 0
 
 
@@ -2640,7 +2640,7 @@ class ExecutiveReport(BaseModel):
     visual_intelligence: Optional[VisualIntelligencePayload] = None
     evidence_ledger: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     integrity_repairs_log: List[Dict[str, Any]] = Field(default_factory=list)
-    certification_status: str = "CERTIFIED"  # "CERTIFIED" | "DEGRADED_SECTIONS_WITHHELD"
+    certification_status: str = "NOT_ASSESSED"  # Set to CERTIFIED only after the configured integrity gate passes.
     withheld_sections: List[Dict[str, str]] = Field(default_factory=list)
     meta_rollup: Optional[MetaBucketRollup] = None
     heading_hierarchy: Optional[HeadingHierarchyRollup] = None
