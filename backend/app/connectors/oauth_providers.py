@@ -42,14 +42,16 @@ def _setting(name: str) -> str:
 def _callback(request: Optional[Request] = None) -> str:
     configured = _setting("OAUTH_REDIRECT_URI")
     if configured:
-        # If configured with localhost, but incoming request came from a remote host/domain,
-        # prefer the real request host to avoid dead localhost redirects on hosted servers.
-        if "localhost" in configured and request:
+        if "localhost" in configured and settings.ENVIRONMENT.lower() == "production":
+            raise HTTPException(status_code=503, detail="Set OAUTH_REDIRECT_URI to the canonical HTTPS production callback URL.")
+        if "localhost" in configured and request and settings.ENVIRONMENT.lower() != "production":
             host = request.headers.get("x-forwarded-host") or request.headers.get("host")
             if host and not host.startswith("localhost") and not host.startswith("127.0.0.1"):
                 scheme = request.headers.get("x-forwarded-proto") or request.url.scheme or "http"
                 return f"{scheme}://{host}/api/v1/connectors/oauth/callback"
         return configured
+    if settings.ENVIRONMENT.lower() == "production":
+        raise HTTPException(status_code=503, detail="OAUTH_REDIRECT_URI must be configured in production.")
     if request:
         host = request.headers.get("x-forwarded-host") or request.headers.get("host")
         if host:
@@ -660,6 +662,7 @@ async def oauth_callback(
         refresh_token=token_data.get("refresh_token"),
         github_token=token_data.get("access_token") if provider == "github" else None,
         repository=saved.get("repository") or None,
+        scopes=(token_data.get("scope", "").replace(",", " ").split() if isinstance(token_data.get("scope", ""), str) else []),
     )
     integration = connector_store.add_integration(
         provider=spec["connector"],
@@ -764,7 +767,7 @@ async def oauth_callback(
     return _page(
         "Connected",
         f"The {html.escape(spec['label'])} authorization for <strong>{safe_target}</strong> is verified and saved. "
-        "Search, session, and revenue telemetry will stream automatically upon query.",
+        "Use the supported resource-read operations to retrieve live data. Other operations remain unavailable until their capability checks pass.",
         script,
         success=True,
     )
