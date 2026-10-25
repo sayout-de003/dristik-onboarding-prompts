@@ -26,7 +26,7 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install test dependencies
-        run: python -m pip install --upgrade pip pytest "pydantic>=2.6,<3" httpx
+        run: python -m pip install --upgrade pip pytest "pydantic>=2.6,<3" httpx pydantic-settings python-dotenv
       - name: Compile backend modules
         run: python -m compileall -q app
       - name: Run evidence integrity tests
