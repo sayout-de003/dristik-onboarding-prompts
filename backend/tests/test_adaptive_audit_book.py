@@ -337,6 +337,9 @@ class TestSectionPdfEndpoint:
             async def fake_none(html, timeout_ms=60000):
                 return None
             monkeypatch.setattr(BrowserRenderService, "render_pdf", fake_none)
+            # Isolate the failure path from the successful PDF cached above.
+            from app.reports.pdf_generator import _SECTION_PDF_CACHE
+            _SECTION_PDF_CACHE.clear()
             assert client.get(url).status_code == 503
         finally:
             app.dependency_overrides.clear()
