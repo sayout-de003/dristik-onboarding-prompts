@@ -255,3 +255,46 @@ def test_rendered_dom_status_requires_explicit_browser_render_metadata():
     assert report.coverage["rendered_pages"] == 1
     assert report.coverage["journey_execution_status"] == "NOT_EXECUTED"
 
+def test_cro_parser_consumes_rendered_dom_from_playwright_result():
+    page = _parse_page(
+        {
+            "url": "https://example.com/checkout",
+            "state": "RENDERED",
+            "rendered": True,
+            "status_code": 200,
+            "rendered_dom": "<html><head><title>Checkout</title><meta name='viewport' content='width=device-width'></head><body><h1>Checkout</h1><button>Complete purchase</button></body></html>",
+        },
+        None,
+    )
+    assert page["title"] == "Checkout"
+    assert page["h1"] == "Checkout"
+    assert any(cta["text"] == "Complete purchase" for cta in page["ctas"])
+    assert page["status"] == 200
+
+
+def test_missing_http_status_is_not_rewritten_to_success():
+    page = _parse_page(
+        {
+            "url": "https://example.com/checkout",
+            "state": "UNAVAILABLE",
+            "rendered": False,
+            "status_code": None,
+            "rendered_dom": None,
+            "error": "Chromium unavailable",
+        },
+        None,
+    )
+    assert page["status"] is None
+    report = build_cro_intelligence(
+        pages=[{
+            "url": "https://example.com/checkout",
+            "state": "UNAVAILABLE",
+            "rendered": False,
+            "status_code": None,
+            "rendered_dom": None,
+            "error": "Chromium unavailable",
+        }],
+        discovered_urls=1,
+    )
+    assert not any("returned HTTP 200" in item.evidence for item in report.findings)
+
