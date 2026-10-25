@@ -64,7 +64,7 @@ def detect_report_family(report: Any, requested_type: Optional[str] = None) -> s
     has_competitor = False
 
     # Check findings
-    findings = list(getattr(report, "findings", []) or [])
+    findings = _report_findings(report)
     categories = set()
     for f in findings:
         raw_cat = getattr(f, "category", "")
@@ -357,14 +357,39 @@ from app.reports.plain_english_engine import (
 # CHAPTER BODY BUILDERS (EMPIRICAL, GROUNDED DATA)
 # ==============================================================================
 
-def _format_finding_cards(findings: List[Any], limit: int = 8) -> str:
-    """Formats findings into consistent 11-point enterprise publication cards."""
-    cards = []
-    for idx, f in enumerate(findings[:limit]):
-        enriched = PlainEnglishEngine.enrich_finding(f, idx + 1)
-        cards.append(render_plain_english_finding_card(enriched))
+from app.report_finding_registry import (
+    canonicalize_report_findings as _report_findings,
+    finding_value as _finding_value,
+)
 
-    return "".join(cards) if cards else '<p style="color:#64748b; font-size: 9pt; font-style: italic;">No findings were recorded for this discipline; this does not prove that no defects exist.</p>'
+
+def _format_finding_cards(findings: List[Any], limit: int = 8, detailed: bool = False) -> str:
+    """Use short chapter references; reserve full plain-English narratives for the findings register."""
+    cards = []
+    for idx, finding in enumerate(findings[:limit]):
+        if detailed:
+            enriched = PlainEnglishEngine.enrich_finding(finding, idx + 1)
+            cards.append(render_plain_english_finding_card(enriched))
+            continue
+        title = _esc(_finding_value(finding, "title", _finding_value(finding, "name", "Finding title unavailable")))
+        severity = _esc(str(_finding_value(finding, "severity", "Unclassified")).replace("_", " ").title())
+        finding_id = _esc(_finding_value(finding, "finding_id", _finding_value(finding, "id", f"finding-{idx + 1}")))
+        urls = _finding_value(finding, "affected_urls", None) or _finding_value(finding, "urls", None) or []
+        if isinstance(urls, str):
+            urls = [urls]
+        if not urls:
+            url = _finding_value(finding, "url", None) or _finding_value(finding, "affected_url", None)
+            urls = [url] if url else []
+        url_summary = ", ".join(str(url) for url in urls[:3] if url) or "Affected URL not recorded"
+        if len(urls) > 3:
+            url_summary += f" and {len(urls) - 3} more"
+        cards.append(
+            '<div class="card finding-reference" style="margin:6px 0;padding:9px 12px;break-inside:avoid;">'
+            f'<div style="font-size:9pt;font-weight:700;color:#0f172a;">{title}</div>'
+            f'<div style="font-size:7.5pt;color:#64748b;margin-top:3px;">{finding_id} · {severity} · {_esc(url_summary)}</div>'
+            '</div>'
+        )
+    return "".join(cards) if cards else '<p style="color:#64748b;font-size:9pt;font-style:italic;">No findings were recorded for this area. This does not prove that no defects exist.</p>'
 
 
 def _build_ch_brief(report: Any, manifest: Dict[str, Any]) -> str:
@@ -385,7 +410,7 @@ def _build_ch_brief(report: Any, manifest: Dict[str, Any]) -> str:
     comp_s = validate_score(getattr(scores, "competitor_score", None))
 
     callout = render_section_business_callout(
-        generate_section_explanation("ch_brief", "Executive Diagnostic Briefing", report, getattr(report, "findings", []))
+        generate_section_explanation("ch_brief", "Executive Diagnostic Briefing", report, _report_findings(report))
     )
 
     return f"""
@@ -489,7 +514,7 @@ def _build_ch_seo(report: Any, manifest: Dict[str, Any]) -> str:
     pages_count = len(pages)
     disc = getattr(manifest_obj, "total_pages_discovered", pages_count) or pages_count
 
-    findings = [f for f in getattr(report, "findings", []) if "SEO" in str(getattr(f, "category", "")).upper() or "TECH" in str(getattr(f, "category", "")).upper()]
+    findings = [f for f in _report_findings(report) if "SEO" in str(getattr(f, "category", "")).upper() or "TECH" in str(getattr(f, "category", "")).upper()]
     callout = render_section_business_callout(
         generate_section_explanation("ch_seo", "Technical SEO & Crawl Architecture", report, findings, {"pages_crawled": pages_count})
     )
@@ -499,19 +524,19 @@ def _build_ch_seo(report: Any, manifest: Dict[str, Any]) -> str:
 
     <div class="grid-3" style="margin-bottom: 16px;">
         <div class="card">
-            <div class="card-kicker">CRAWL TOPOLOGY</div>
-            <div class="card-title">{pages_count} URLs Analyzed</div>
-            <p style="font-size: 8pt; color: #475569;">Total discovered endpoints: {disc}. Canonical host consistency verified.</p>
+            <div class="card-kicker">CRAWL COVERAGE</div>
+            <div class="card-title">{pages_count} URLs Crawled</div>
+            <p style="font-size: 8pt; color: #475569;">Discovered URLs: {disc}. These counts describe this crawl only, not the entire website.</p>
         </div>
         <div class="card">
-            <div class="card-kicker">HTTP RESPONSE LEDGER</div>
-            <div class="card-title">100% 200 OK Sample</div>
-            <p style="font-size: 8pt; color: #475569;">Zero redirect loops or catastrophic 5xx server drops observed in crawl.</p>
+            <div class="card-kicker">HTTP STATUS</div>
+            <div class="card-title">See recorded observations</div>
+            <p style="font-size: 8pt; color: #475569;">No all-pages status claim is made here. Review the linked page evidence for observed response codes.</p>
         </div>
         <div class="card">
             <div class="card-kicker">ROBOTS &amp; SITEMAP</div>
-            <div class="card-title">Directives Valid</div>
-            <p style="font-size: 8pt; color: #475569;">User-agent crawler directives open for commercial routes.</p>
+            <div class="card-title">Evidence-dependent</div>
+            <p style="font-size: 8pt; color: #475569;">These checks are reported only when their actual observations are present in the audit data.</p>
         </div>
     </div>
 
@@ -523,9 +548,9 @@ def _build_ch_seo(report: Any, manifest: Dict[str, Any]) -> str:
 def _build_ch_geo(report: Any, manifest: Dict[str, Any]) -> str:
     geo = getattr(report, "geo_readiness", None)
     score_ext = getattr(geo, "extractability_score", None)
-    score_disp = f"{float(score_ext):.1f}" if score_ext is not None else "76.4"
+    score_disp = f"{float(score_ext):.1f}" if score_ext is not None else "NOT MEASURED"
 
-    findings = [f for f in getattr(report, "findings", []) if "GEO" in str(getattr(f, "category", "")).upper()]
+    findings = [f for f in _report_findings(report) if "GEO" in str(getattr(f, "category", "")).upper()]
     callout = render_section_business_callout(
         generate_section_explanation("ch_geo", "Generative Engine Optimization (GEO)", report, findings)
     )
@@ -536,8 +561,8 @@ def _build_ch_geo(report: Any, manifest: Dict[str, Any]) -> str:
     <div class="grid-2" style="margin-bottom: 16px;">
         <div class="card">
             <div class="card-kicker">FIRST-PARTY EXTRACTABILITY INDEX</div>
-            <div style="font-size: 26pt; font-weight: 800; color: #7c3aed; margin: 4px 0;">{score_disp}<span style="font-size: 12pt; color: #64748b;">/100</span></div>
-            <p style="font-size: 8pt; color: #475569;">Reflects deterministic parsing efficiency and factual density of primary routes.</p>
+            <div style="font-size: 22pt; font-weight: 800; color: #475569; margin: 4px 0;">{score_disp}{'<span style="font-size: 12pt; color: #64748b;">/100</span>' if score_ext is not None else ''}</div>
+            <p style="font-size: 8pt; color: #475569;">A score is shown only when this audit recorded one. Unmeasured does not mean zero.</p>
         </div>
         <div class="card">
             <div class="card-kicker">/llms.txt AI PERMISSIONS DIRECTIVE</div>
@@ -547,22 +572,10 @@ def _build_ch_geo(report: Any, manifest: Dict[str, Any]) -> str:
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-        <div class="card-kicker">8-DIMENSION GENERATIVE ENGINE BREAKDOWN</div>
-        <div class="data-table-wrapper" style="margin-top:8px;">
-            <table class="print-table">
-                <thead>
-                    <tr><th>Dimension</th><th>Evaluation Criteria</th><th>Assessment</th><th>Impact</th></tr>
-                </thead>
-                <tbody>
-                    <tr><td><strong>Entity Clarity</strong></td><td>Disambiguation of core company &amp; products</td><td>Verified</td><td>High</td></tr>
-                    <tr><td><strong>Content Extractability</strong></td><td>Self-contained definition passages</td><td>Improvement Area</td><td>Critical</td></tr>
-                    <tr><td><strong>Source Credibility</strong></td><td>Author attribution, references &amp; citations</td><td>Verified</td><td>Medium</td></tr>
-                    <tr><td><strong>Topical Coverage</strong></td><td>Depth of commercial domain terminology</td><td>Substantial</td><td>High</td></tr>
-                    <tr><td><strong>Schema Graph</strong></td><td>Machine-readable JSON-LD entity nodes</td><td>Patch Pending</td><td>Critical</td></tr>
-                </tbody>
-            </table>
-        </div>
-        <div class="chart-explanation-note">8-Dimension GEO Matrix: Evaluates on-page extractability, schema graph presence, entity attribution, and LLM bot permissions. Improvement areas directly limit how generative AI tools describe your offerings.</div>
+        <div class="card-kicker">ASSESSMENT COVERAGE</div>
+        <p style="font-size: 8pt; color: #475569; margin: 4px 0 0 0;">
+            This section reports observations captured during this audit. A dimension without a recorded check is unmeasured, not passed. Full explanations and evidence are provided once in the findings register.
+        </p>
     </div>
 
     <h3 style="font-size: 12pt; margin: 16px 0 8px 0; color: #0f172a;">Generative Engine Optimization Findings</h3>
@@ -573,7 +586,7 @@ def _build_ch_geo(report: Any, manifest: Dict[str, Any]) -> str:
 def _build_ch_aeo(report: Any, manifest: Dict[str, Any]) -> str:
     card = getattr(report, "ai_visibility_scorecard", None)
     runs = getattr(card, "successful_runs", 0) if card else 0
-    findings = [f for f in getattr(report, "findings", []) if "AEO" in str(getattr(f, "category", "")).upper() or "SEARCH" in str(getattr(f, "category", "")).upper()]
+    findings = [f for f in _report_findings(report) if "AEO" in str(getattr(f, "category", "")).upper() or "SEARCH" in str(getattr(f, "category", "")).upper()]
     callout = render_section_business_callout(
         generate_section_explanation("ch_aeo", "Answer Engine Optimization (AEO) & AI Citations", report, findings)
     )
@@ -583,19 +596,19 @@ def _build_ch_aeo(report: Any, manifest: Dict[str, Any]) -> str:
 
     <div class="grid-3" style="margin-bottom: 16px;">
         <div class="card">
-            <div class="card-kicker">LIVE ENGINE QUERY RUNS</div>
-            <div class="card-title">{runs if runs > 0 else 'Multi-Model'} Evaluated</div>
-            <p style="font-size: 8pt; color: #475569;">Tested across ChatGPT Search, Perplexity Sonar, Google AIO &amp; Gemini.</p>
+            <div class="card-kicker">AI TEST RUNS</div>
+            <div class="card-title">{runs if runs > 0 else 'NOT RECORDED'}</div>
+            <p style="font-size: 8pt; color: #475569;">Successful runs recorded for this audit. A missing count is not treated as a completed test.</p>
         </div>
         <div class="card">
-            <div class="card-kicker">CITATION GROUNDING</div>
-            <div class="card-title">Direct Domain URL Attributions</div>
-            <p style="font-size: 8pt; color: #475569;">Live citation extraction on commercial brand inquiry set.</p>
+            <div class="card-kicker">CITATION OBSERVATIONS</div>
+            <div class="card-title">See recorded findings</div>
+            <p style="font-size: 8pt; color: #475569;">Citation claims are included only when observations were saved for this run.</p>
         </div>
         <div class="card">
-            <div class="card-kicker">ANSWER PASSAGE READINESS</div>
-            <div class="card-title">40–60 Word Blocks</div>
-            <p style="font-size: 8pt; color: #475569;">Concise question-answer pairs required to win generative snippet summaries.</p>
+            <div class="card-kicker">ANSWER CONTENT</div>
+            <div class="card-title">Evidence-dependent</div>
+            <p style="font-size: 8pt; color: #475569;">No universal word-count target is presented as a measured result.</p>
         </div>
     </div>
 
@@ -605,7 +618,7 @@ def _build_ch_aeo(report: Any, manifest: Dict[str, Any]) -> str:
 
 
 def _build_ch_competitive(report: Any, manifest: Dict[str, Any]) -> str:
-    findings = [f for f in getattr(report, "findings", []) if "COMP" in str(getattr(f, "category", "")).upper()]
+    findings = [f for f in _report_findings(report) if "COMP" in str(getattr(f, "category", "")).upper()]
     callout = render_section_business_callout(
         generate_section_explanation("ch_competitive", "Competitive Digital Visibility", report, findings)
     )
@@ -614,23 +627,10 @@ def _build_ch_competitive(report: Any, manifest: Dict[str, Any]) -> str:
     {callout}
 
     <div class="card" style="margin-bottom: 16px;">
-        <div class="card-kicker">COMPETITIVE PARITY &amp; BENCHMARK MATRIX</div>
-        <p style="font-size: 8.5pt; color: #475569; margin: 4px 0 10px 0;">
-            Head-to-head evaluation against recorded industry alternatives across technical discoverability and entity coverage.
+        <div class="card-kicker">COMPARISON COVERAGE</div>
+        <p style="font-size: 8pt; color: #475569; margin: 4px 0 0 0;">
+            Competitor averages and deltas are shown only when comparable measurements from identified competitors are recorded. This report does not substitute example values for missing benchmark data.
         </p>
-        <div class="data-table-wrapper">
-            <table class="print-table">
-                <thead>
-                    <tr><th>Parameter</th><th>Target Property ({_esc(manifest['domain'])})</th><th>Industry Competitor Avg</th><th>Competitive Delta</th></tr>
-                </thead>
-                <tbody>
-                    <tr><td><strong>Schema Entity Depth</strong></td><td>Organization, WebSite</td><td>Organization, Product, FAQ, Article</td><td>-2 Rich Types</td></tr>
-                    <tr><td><strong>TTFB Latency</strong></td><td>Under 250ms (Clean)</td><td>~320ms</td><td>+70ms Advantage</td></tr>
-                    <tr><td><strong>Answer Passage Snippets</strong></td><td>Emerging / Unstructured</td><td>Structured Definition Hubs</td><td>Opportunity Gap</td></tr>
-                </tbody>
-            </table>
-        </div>
-        <div class="chart-explanation-note">Competitive Delta: Evaluates schema depth, server latencies, and passage readiness against recorded sector peers. Missing competitor data is reported as Data Unavailable rather than speculative scores.</div>
     </div>
 
     <h3 style="font-size: 12pt; margin: 16px 0 8px 0; color: #0f172a;">Competitive Differentiation Findings</h3>
@@ -639,7 +639,7 @@ def _build_ch_competitive(report: Any, manifest: Dict[str, Any]) -> str:
 
 
 def _build_ch_conversion(report: Any, manifest: Dict[str, Any]) -> str:
-    findings = [f for f in getattr(report, "findings", []) if "CONV" in str(getattr(f, "category", "")).upper() or "UX" in str(getattr(f, "category", "")).upper()]
+    findings = [f for f in _report_findings(report) if "CONV" in str(getattr(f, "category", "")).upper() or "UX" in str(getattr(f, "category", "")).upper()]
     callout = render_section_business_callout(
         generate_section_explanation("ch_conversion", "Conversion Rate Optimization (CRO)", report, findings)
     )
@@ -649,14 +649,14 @@ def _build_ch_conversion(report: Any, manifest: Dict[str, Any]) -> str:
 
     <div class="grid-2" style="margin-bottom: 16px;">
         <div class="card">
-            <div class="card-kicker">VALUE PROPOSITION AUDIT</div>
-            <div class="card-title">Above-the-Fold Delivery</div>
-            <p style="font-size: 8pt; color: #475569;">This run does not record a structured above-the-fold measurement. Review linked page evidence before drawing a conclusion.</p>
+            <div class="card-kicker">VALUE PROPOSITION</div>
+            <div class="card-title">Review recorded page evidence</div>
+            <p style="font-size: 8pt; color: #475569;">Claims about message clarity or above-the-fold content require an observation from the sampled page.</p>
         </div>
         <div class="card">
-            <div class="card-kicker">CALL-TO-ACTION (CTA) ERGONOMICS</div>
-            <div class="card-title">Button Visibility</div>
-            <p style="font-size: 8pt; color: #475569;">CTA presence and visibility are not established unless supported by a recorded page observation.</p>
+            <div class="card-kicker">CALL TO ACTION</div>
+            <div class="card-title">Review recorded page evidence</div>
+            <p style="font-size: 8pt; color: #475569;">Button and conversion-path conclusions are included only when captured in this audit.</p>
         </div>
     </div>
 
@@ -718,7 +718,7 @@ def _build_ch_page_by_page(report: Any, manifest: Dict[str, Any]) -> str:
 
 
 def _build_ch_roadmap(report: Any, manifest: Dict[str, Any]) -> str:
-    findings = list(getattr(report, "findings", []) or [])
+    findings = _report_findings(report)
     callout = render_section_business_callout(
         generate_section_explanation("ch_roadmap", "Prioritized Remediation Plan", report, findings)
     )
@@ -792,9 +792,9 @@ def _build_ch_methodology(report: Any, manifest: Dict[str, Any]) -> str:
 
 
 def _build_ch_appendix(report: Any, manifest: Dict[str, Any]) -> str:
-    findings = list(getattr(report, "findings", []) or [])
+    findings = _report_findings(report)
     callout = render_section_business_callout(
-        generate_section_explanation("ch_appendix", "Institutional Findings Register & Evidence Ledger", report, findings)
+        generate_section_explanation("ch_appendix", "Findings Register & Evidence", report, findings)
     )
 
     return f"""
@@ -805,7 +805,7 @@ def _build_ch_appendix(report: Any, manifest: Dict[str, Any]) -> str:
         <p style="font-size: 8pt; color: #475569; margin: 4px 0 10px 0;">
             Finding status and evidence coverage depend on the recorded source data; not every finding is necessarily independently verified.
         </p>
-        {_format_finding_cards(findings, limit=20)}
+        {_format_finding_cards(findings, limit=100, detailed=True)}
     </div>
     """
 
@@ -842,7 +842,7 @@ def build_adaptive_publication_document(
     pages = getattr(manifest_obj, "pages", []) or getattr(report, "page_reports", []) or []
     pages_count = len(pages) if pages else None
     manifest["pages_crawled"] = pages_count
-    findings = list(getattr(report, "findings", []) or [])
+    findings = _report_findings(report)
 
     metadata = PublicationMetadata(
         family=family,
@@ -858,7 +858,7 @@ def build_adaptive_publication_document(
         grade=grade_val,
         overall_score=score_val,
         pages_crawled=pages_count,
-        findings_count=len(findings),
+        findings_count=len(_report_findings(report)),
         story_summary=str(getattr(report, "story_summary", None) or ""),
         primary_opportunity=str(getattr(report, "primary_strategic_opportunity", None) or ""),
         consultant_advice_what_to_ignore=str(getattr(report, "consultant_advice_what_to_ignore", None) or ""),

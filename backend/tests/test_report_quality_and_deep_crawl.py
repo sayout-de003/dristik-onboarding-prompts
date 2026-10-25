@@ -102,3 +102,41 @@ def test_deep_crawl_reports_partial_coverage_and_failed_urls(tmp_path):
 
 def test_deep_crawl_rejects_loopback_targets():
     assert not is_public_http_target("http://127.0.0.1/")
+
+
+
+def test_report_assembly_deduplicates_canonical_finding_ids():
+    from types import SimpleNamespace
+    from app.report_finding_registry import canonicalize_report_findings as _report_findings
+
+    first = SimpleNamespace(
+        finding_id="find_001", title="Missing homepage H1",
+        affected_urls=["https://example.com/"], severity="HIGH",
+    )
+    duplicate_reference = SimpleNamespace(
+        finding_id="find_001", title="Homepage heading missing",
+        affected_urls=["https://example.com/"], severity="HIGH",
+    )
+    distinct_page = SimpleNamespace(
+        finding_id="find_002", title="Missing homepage H1",
+        affected_urls=["https://example.com/about"], severity="HIGH",
+    )
+    report = SimpleNamespace(findings=[first, duplicate_reference, distinct_page])
+
+    result = _report_findings(report)
+    assert len(result) == 2
+    assert [item.finding_id for item in result] == ["find_001", "find_002"]
+
+
+def test_report_assembly_deduplicates_same_title_and_url_but_not_distinct_pages():
+    from types import SimpleNamespace
+    from app.report_finding_registry import canonicalize_report_findings as _report_findings
+
+    report = SimpleNamespace(findings=[
+        {"finding_id": "f1", "title": "Missing title tag", "url": "https://example.com/", "root_cause_category": "metadata", "how_to_fix": "Add a unique title tag"},
+        {"finding_id": "f2", "title": "  Missing   title tag ", "url": "https://example.com/", "root_cause_category": "metadata", "how_to_fix": "Add a unique title tag"},
+        {"finding_id": "f3", "title": "Missing title tag", "url": "https://example.com/about", "root_cause_category": "metadata", "how_to_fix": "Add a unique title tag"},
+    ])
+
+    result = _report_findings(report)
+    assert len(result) == 2
