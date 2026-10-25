@@ -11,6 +11,9 @@ This document records the current integration-platform tranche. Provider names i
 - OAuth callback handling for configured providers now performs a real API handshake before setting a connection to connected. OAuth state requires a strong configured secret and has a 15-minute expiry, nonce, and signature.
 - Added OAuth definitions for LinkedIn, Slack, Instagram Professional, and WhatsApp Business; these flows require provider app credentials and the scopes/approval granted by those platforms.
 - Connector credential updates are encrypted at rest; reconnect and local credential removal are exposed. The UI calls out that remote token revocation is not attempted unless a provider-specific revocation flow is implemented.
+- Added provider-aware OAuth token refresh where a configured provider supports refresh tokens (and Meta long-lived-token exchange), followed by live API verification.
+- Added durable idempotency records and explicit confirmation for supported Telegram messages, Slack messages, X posts, WhatsApp approved-template messages, and Instagram image publishing. Unknown outcomes are persisted as unknown to prevent silent duplicate retries.
+- Added live resource-read endpoints and UI previews for HubSpot contacts/companies/deals, Salesforce accounts/leads/opportunities/campaigns, Stripe customers/subscriptions/payment intents, and Sanity documents.
 - Added tenant-scoped adapter lookup, organization-scoped audit events, and fail-closed behavior for telemetry construction when an organization ID is not supplied.
 - Removed fake default scopes and fake last-sync timestamps from newly created integrations. Persistence failures are no longer silently treated as success.
 - Added a full directory UI for the 26 named integration targets plus legacy connector aliases, token entry for API-based providers, OAuth entry points where configured, and test/reconnect/forget/delete actions.
@@ -18,7 +21,7 @@ This document records the current integration-platform tranche. Provider names i
 ## Explicitly not complete yet
 
 - A provider-specific live handshake is not proof of every operation in the target registry. The registry's `verified_operations` remains empty until sandbox/real API contract tests pass.
-- Full CRUD, publishing, analytics, content mutation, post-deployment verification, and rollback are not implemented for every provider. The new generic API adapter refuses writes rather than pretending to support them.
+- Full CRUD, publishing, analytics, content mutation, post-deployment verification, and rollback are not implemented for every provider. The new generic API adapter refuses unmapped writes rather than pretending to support them. Only the explicit Telegram, Slack, X, WhatsApp template, and Instagram image actions are currently mapped.
 - Framer and Wix need dedicated supported-capability implementations; they are intentionally blocked from a false-success path.
 - X and TikTok OAuth/PKCE flows, complete account selection, webhook registration/signature verification, durable background jobs/retries/dead-letter handling, and provider-specific remote token revocation remain to be completed.
 - End-to-end tests against provider sandboxes and tenant-isolation tests with real authenticated identities are still required. The API keys/OAuth app secrets and app approvals must be configured by the deployment owner.
