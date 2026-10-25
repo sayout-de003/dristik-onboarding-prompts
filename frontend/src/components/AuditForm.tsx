@@ -36,28 +36,28 @@ export const PILLARS_LIST: PillarOption[] = [
     name: 'SEO',
     description: 'Technical, Crawl, Schema & On-Page',
     tag: 'Search Engine Optimization',
-    colorClass: 'text-amber-600 bg-amber-500/10 border-amber-500/30',
+    colorClass: 'text-teal-800 bg-teal-50 border-teal-200 dark:text-teal-200 dark:bg-teal-950/40 dark:border-teal-800',
   },
   {
     key: 'geo',
     name: 'GEO',
     description: 'Entity Knowledge Graphs & Citability',
     tag: 'Generative Engine Optimization',
-    colorClass: 'text-emerald-600 bg-emerald-500/10 border-emerald-500/30',
+    colorClass: 'text-teal-800 bg-teal-50 border-teal-200 dark:text-teal-200 dark:bg-teal-950/40 dark:border-teal-800',
   },
   {
     key: 'aeo',
     name: 'AEO',
     description: 'Direct AI Answers & Query Simulation',
     tag: 'Answer Engine Optimization',
-    colorClass: 'text-violet-600 bg-violet-500/10 border-violet-500/30',
+    colorClass: 'text-teal-800 bg-teal-50 border-teal-200 dark:text-teal-200 dark:bg-teal-950/40 dark:border-teal-800',
   },
   {
     key: 'cro',
     name: 'CRO',
     description: 'Conversion Funnels, Copy & UX Friction',
     tag: 'Conversion Rate Optimization',
-    colorClass: 'text-rose-600 bg-rose-500/10 border-rose-500/30',
+    colorClass: 'text-teal-800 bg-teal-50 border-teal-200 dark:text-teal-200 dark:bg-teal-950/40 dark:border-teal-800',
   },
 ];
 
