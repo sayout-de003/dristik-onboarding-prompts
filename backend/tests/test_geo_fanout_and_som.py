@@ -94,6 +94,7 @@ def test_share_of_model_calculation_and_displacement():
             was_first_party_cited=False,
             source_domains=["dynatrace.com", "splunk.com"],
             status="SUCCESS",
+            is_live=True,
         ),
         EvaluatedQueryRun(
             query_id="Q-03",
@@ -109,6 +110,7 @@ def test_share_of_model_calculation_and_displacement():
             was_first_party_cited=True,
             source_domains=["datadog.com"],
             status="SUCCESS",
+            is_live=True,
         ),
     ]
 
