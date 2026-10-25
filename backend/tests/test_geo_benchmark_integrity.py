@@ -80,3 +80,52 @@ def test_provider_response_defaults_are_not_live_evidence():
     )
     assert response.is_live is False
     assert response.status_code == 0
+
+
+def test_share_of_model_uses_observed_competitor_mention_denominator():
+    from app.geo.benchmark_runner import EvaluatedQueryRun
+
+    geo = runner()
+    evaluations = [
+        EvaluatedQueryRun(
+            query_id="q1", category="entity", query_text="Who is the target?",
+            engine_id="engine", engine_name="Engine", model_version="v1",
+            timestamp="2026-10-25T00:00:00Z", raw_response="Example is a provider.",
+            was_mentioned=True, was_first_party_cited=False, status="SUCCESS", is_live=True,
+        ),
+        EvaluatedQueryRun(
+            query_id="q2", category="comparative", query_text="Compare providers",
+            engine_id="engine", engine_name="Engine", model_version="v1",
+            timestamp="2026-10-25T00:00:00Z", raw_response="CompetitorCo is another provider.",
+            was_mentioned=False, was_first_party_cited=False, status="SUCCESS", is_live=True,
+        ),
+    ]
+    metric = geo.calculate_share_of_model(
+        evaluations=evaluations,
+        target_domain="example.com",
+        brand_name="Example",
+        competitors=["CompetitorCo"],
+    )
+    assert metric.total_evaluated_queries == 2
+    assert metric.share_of_model_pct == 50.0
+    assert metric.competitor_shares["CompetitorCo"] == 50.0
+
+
+def test_share_of_model_is_not_relabelled_mention_rate_without_competitors():
+    from app.geo.benchmark_runner import EvaluatedQueryRun
+
+    geo = runner()
+    evaluation = EvaluatedQueryRun(
+        query_id="q1", category="entity", query_text="Who is the target?",
+        engine_id="engine", engine_name="Engine", model_version="v1",
+        timestamp="2026-10-25T00:00:00Z", raw_response="Example is a provider.",
+        was_mentioned=True, was_first_party_cited=False, status="SUCCESS", is_live=True,
+    )
+    metric = geo.calculate_share_of_model(
+        evaluations=[evaluation],
+        target_domain="example.com",
+        brand_name="Example",
+        competitors=[],
+    )
+    assert metric.share_of_model_pct is None
+    assert metric.funnel_weighted_som_pct is None
