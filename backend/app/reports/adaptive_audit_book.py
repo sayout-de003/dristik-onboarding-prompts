@@ -364,7 +364,7 @@ def _format_finding_cards(findings: List[Any], limit: int = 8) -> str:
         enriched = PlainEnglishEngine.enrich_finding(f, idx + 1)
         cards.append(render_plain_english_finding_card(enriched))
 
-    return "".join(cards) if cards else '<p style="color:#64748b; font-size: 9pt; font-style: italic;">No high-priority defects recorded in this discipline.</p>'
+    return "".join(cards) if cards else '<p style="color:#64748b; font-size: 9pt; font-style: italic;">No findings were recorded for this discipline; this does not prove that no defects exist.</p>'
 
 
 def _build_ch_brief(report: Any, manifest: Dict[str, Any]) -> str:
@@ -426,7 +426,7 @@ def _build_ch_brief(report: Any, manifest: Dict[str, Any]) -> str:
                         <th>Discipline</th>
                         <th>Score availability</th>
                         <th>Score (0–100)</th>
-                        <th>Governance Standard</th>
+                        <th>Assessment method</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -435,40 +435,40 @@ def _build_ch_brief(report: Any, manifest: Dict[str, Any]) -> str:
                         <td>Technical SEO &amp; Crawlability</td>
                         <td><span style="color:#64748b; font-weight:700;">{ "SCORE RECORDED" if seo_s is not None else "NOT MEASURED" }</span></td>
                         <td><strong>{format(seo_s, ".1f") if seo_s is not None else "—"}</strong>{ " / 100" if seo_s is not None else ""}</td>
-                        <td>W3C / RFC 9110 HTTP Protocol</td>
+                        <td>Technical crawl and HTTP checks</td>
                     </tr>
                     <tr>
                         <td><strong>02</strong></td>
                         <td>Generative Engine Optimization (GEO)</td>
                         <td><span style="color:#64748b; font-weight:700;">{ "SCORE RECORDED" if geo_s is not None else "NOT MEASURED" }</span></td>
                         <td><strong>{format(geo_s, ".1f") if geo_s is not None else "—"}</strong>{ " / 100" if geo_s is not None else ""}</td>
-                        <td>First-Party AST Extractability</td>
+                        <td>On-page extractability; visibility measured separately</td>
                     </tr>
                     <tr>
                         <td><strong>03</strong></td>
                         <td>Answer Engine Visibility (AEO)</td>
                         <td><span style="color:#64748b; font-weight:700;">{ "SCORE RECORDED" if aeo_s is not None else "NOT MEASURED" }</span></td>
                         <td><strong>{format(aeo_s, ".1f") if aeo_s is not None else "—"}</strong>{ " / 100" if aeo_s is not None else ""}</td>
-                        <td>Live Multi-Model Query Benchmark</td>
+                        <td>Answer content and platform evidence where available</td>
                     </tr>
                     <tr>
                         <td><strong>04</strong></td>
                         <td>Conversion Ergonomics (CRO)</td>
                         <td><span style="color:#64748b; font-weight:700;">{ "SCORE RECORDED" if cro_s is not None else "NOT MEASURED" }</span></td>
                         <td><strong>{format(cro_s, ".1f") if cro_s is not None else "—"}</strong>{ " / 100" if cro_s is not None else ""}</td>
-                        <td>CTA Hierarchy &amp; Form Friction</td>
+                        <td>UX heuristics and analytics where available</td>
                     </tr>
                     <tr>
                         <td><strong>05</strong></td>
                         <td>Competitive Market Parity</td>
                         <td><span style="color:#64748b; font-weight:700;">{ "SCORE RECORDED" if comp_s is not None else "NOT MEASURED" }</span></td>
                         <td><strong>{format(comp_s, ".1f") if comp_s is not None else "—"}</strong>{ " / 100" if comp_s is not None else ""}</td>
-                        <td>Head-to-Head Inquiry Testing</td>
+                        <td>Comparable recorded competitor observations</td>
                     </tr>
                 </tbody>
             </table>
         </div>
-        <div class="chart-explanation-note">Scorecard Note: Each pillar score (0–100) reflects verified telemetry for that specific domain. Unmeasured areas or missing integrations are not shown as zeroes; they are marked Unmeasured until authenticated.</div>
+        <div class="chart-explanation-note">Scorecard note: a recorded score does not by itself prove live provider measurement. Missing scores remain unmeasured; inspect each pillar’s evidence and scope before interpreting its result.</div>
     </div>
 
     <div class="card">
@@ -771,7 +771,7 @@ def _build_ch_methodology(report: Any, manifest: Dict[str, Any]) -> str:
 
     <div class="grid-2" style="margin-bottom: 16px;">
         <div class="card">
-            <div class="card-kicker">ZERO-FAKE EVIDENCE ASSURANCE</div>
+            <div class="card-kicker">EVIDENCE PROVENANCE &amp; LIMITATIONS</div>
             <p style="font-size: 8pt; color: #334155; margin: 4px 0 0 0;">
                 Only observations present in the audit evidence should be treated as measured. Derived, inferred, estimated, simulated, unavailable, and untested values must retain their explicit status.
             </p>
