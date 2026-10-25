@@ -69,6 +69,7 @@ class ConnectorCredentialUpdateRequest(BaseModel):
     api_key: Optional[str] = None
     access_token: Optional[str] = None
     refresh_token: Optional[str] = None
+    webhook_secret: Optional[str] = None
     account_id: Optional[str] = None
     project_id: Optional[str] = None
     github_token: Optional[str] = None
@@ -87,6 +88,7 @@ class ConnectPlatformRequest(BaseModel):
     api_key: Optional[str] = None
     access_token: Optional[str] = None
     refresh_token: Optional[str] = None
+    webhook_secret: Optional[str] = None
     account_id: Optional[str] = None
     project_id: Optional[str] = None
     github_token: Optional[str] = None
@@ -156,6 +158,7 @@ async def connect_platform(
         api_key=api_key,
         access_token=req.access_token,
         refresh_token=req.refresh_token,
+        webhook_secret=req.webhook_secret,
         account_id=req.account_id,
         project_id=req.project_id,
         github_token=req.github_token,
@@ -231,7 +234,7 @@ async def update_integration_credentials(
         integration.target_url = updates.pop("target_url")
     credential_fields = {
         "api_url", "username", "app_password", "api_key", "access_token",
-        "refresh_token", "account_id", "project_id", "github_token",
+        "refresh_token", "webhook_secret", "account_id", "project_id", "github_token",
         "repository", "branch", "scopes",
     }
     credential_updates = {key: value for key, value in updates.items() if key in credential_fields}
