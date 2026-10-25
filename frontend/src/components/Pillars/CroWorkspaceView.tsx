@@ -61,13 +61,13 @@ export function CroWorkspaceView({
   const honest = report.honest_scores;
 
   const categoryCroScore = report.scores?.category_scores?.['UX_CONVERSION']?.score;
+  // Use only CRO-specific measured scores; never substitute a general site score.
   const croScore: number | null = croAudit?.overall_cro_score != null
     ? Math.round(croAudit.overall_cro_score)
-    : (honest?.human_score != null
-      ? Math.round(honest.human_score)
-      : (categoryCroScore != null ? Math.round(categoryCroScore) : null));
+    : (categoryCroScore != null ? Math.round(categoryCroScore) : null);
 
-  const croGrade = croAudit?.cro_grade || (croScore == null ? 'Unmeasured' : (croScore >= 85 ? 'A' : (croScore >= 70 ? 'B' : (croScore >= 55 ? 'C' : 'D'))));
+  // Grades require an explicit CRO grade from the scoring engine; thresholds are not calibrated here.
+  const croGrade = croAudit?.cro_grade || 'Not calibrated';
 
   // Category UX_CONVERSION findings
   const croFindings = (report.findings || []).filter(
@@ -120,7 +120,7 @@ export function CroWorkspaceView({
       }
       tabs={[
         { id: 'overview', label: 'Scorecard & Diagnostics' },
-        { id: 'ctas', label: `CTA Studio (${ctaData?.total_ctas_detected ?? ctasList.length})` },
+        { id: 'ctas', label: `CTA Studio (${ctaData?.total_ctas_detected ?? (ctaData ? ctasList.length : 'Not measured')})` },
         { id: 'valueprop', label: '5-Sec Hook & Value Prop' },
         { id: 'trust', label: `Trust & Social Proof (${socialProof?.trust_authority_score == null ? 'Not measured' : `${socialProof.trust_authority_score}%`})` },
         { id: 'pricing', label: 'Pricing & Risk Reversal' },
@@ -159,11 +159,11 @@ export function CroWorkspaceView({
               </span>
               <div className="flex items-baseline gap-2">
                 <span className="font-sans text-3xl font-bold text-good">
-                  {ctaData ? Math.round(ctaData.action_clarity_score) : 75}%
+                  {ctaData?.action_clarity_score == null ? 'Not measured' : Math.round(ctaData.action_clarity_score)}{ctaData?.action_clarity_score == null ? '' : '%'}
                 </span>
               </div>
               <p className="text-xs text-ink-500">
-                {ctaData ? `${ctaData.high_intent_count} high-intent / ${ctaData.total_ctas_detected} total CTAs` : 'High-intent CTA ratio'}
+                {ctaData ? `${ctaData.high_intent_count} high-intent / ${ctaData.total_ctas_detected} total CTAs` : 'CTA observations unavailable'}
               </p>
             </Card>
 
@@ -378,7 +378,7 @@ export function CroWorkspaceView({
             <div>
               <h3 className="font-sans text-lg font-bold text-ink">Call-to-Action (CTA) Architecture Studio</h3>
               <p className="text-xs text-ink-500">
-                Audited {ctaData?.total_ctas_detected ?? ctasList.length} interactive conversion triggers across the crawl.
+                Audited {ctaData?.total_ctas_detected ?? (ctaData ? ctasList.length : 'Not measured')} interactive conversion triggers across the crawl.
               </p>
             </div>
 
