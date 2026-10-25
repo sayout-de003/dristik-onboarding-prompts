@@ -108,7 +108,7 @@ def validate_final_report(report: Any, manifest: Any | None = None) -> dict[str,
         if getattr(manifest, "report_id", None) != getattr(report, "report_id", None):
             blockers.append("report and manifest report_id do not match")
         pinned_ids = {str(getattr(pin, "finding_id", "")) for pin in (getattr(manifest, "findings", None) or [])}
-        if pinned_ids and pinned_ids != finding_ids:
+        if hasattr(manifest, "findings") and pinned_ids != finding_ids:
             blockers.append("manifest finding pins do not match final report findings")
 
     if unsupported_findings:
