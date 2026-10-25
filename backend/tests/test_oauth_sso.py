@@ -188,13 +188,16 @@ def test_connectors_oauth_providers_status():
 def test_search_console_authorize_uses_registered_google_redirect():
     """Search Console must send the redirect URI registered on the Google client."""
     import uuid
+    email = f"gsc_{uuid.uuid4().hex[:8]}@example.com"
     signup = client.post("/api/v1/auth/signup", json={
         "full_name": "Search Owner",
-        "email": f"gsc_{uuid.uuid4().hex[:8]}@example.com",
+        "email": email,
         "password": "OwnerPass1",
         "organization_name": "Search Org",
     })
     assert signup.status_code == 200, signup.text
+    login = client.post("/api/v1/auth/login", json={"email": email, "password": "OwnerPass1"})
+    assert login.status_code == 200, login.text
     registered = "https://octaos.org/api/v1/external-authority/oauth/callback"
     with patch.object(settings, "GOOGLE_CLIENT_ID", "mock-google-id"), \
          patch.object(settings, "GOOGLE_CLIENT_SECRET", "mock-google-sec"), \
@@ -292,13 +295,16 @@ def test_ga4_connector_oauth_hosted_redirect_and_connect():
     from app.connectors.store import connector_store
     from app.domain.enums import ConnectorType, ConnectorHealthStatus
 
+    email = f"ga4_{uuid.uuid4().hex[:8]}@example.com"
     signup = client.post("/api/v1/auth/signup", json={
         "full_name": "GA4 Owner",
-        "email": f"ga4_{uuid.uuid4().hex[:8]}@example.com",
+        "email": email,
         "password": "OwnerPass1",
         "organization_name": "GA4 Org",
     })
     assert signup.status_code == 200, signup.text
+    login = client.post("/api/v1/auth/login", json={"email": email, "password": "OwnerPass1"})
+    assert login.status_code == 200, login.text
     org_id = signup.json()["user"]["org_id"]
 
     # 1. Authorize on a hosted domain with X-Forwarded-Host
