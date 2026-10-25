@@ -111,3 +111,20 @@ def test_page_intelligence_generates_sections_and_faqs():
     problem = next(s for s in sug.sections if s.section_id == "problem")
     assert "NOT_IN_EVIDENCE" in problem.suggested_copy or "NOT_IN_EVIDENCE" in (problem.current_preview or "")
     assert sug.primary_cta == "Start Free Trial"
+
+
+
+def test_copywriting_agents_receive_cross_domain_and_trend_policy():
+    """All copy specialists must use evidence-backed trends and page-level change decisions."""
+    for agent_id in COPYWRITING_AGENTS_V3:
+        prompt = task_card_for(agent_id)
+        assert "CROSS-DOMAIN CONTEXT AND KEYWORD FRESHNESS" in prompt
+        assert "NO_CHANGE_NEEDED" in prompt
+        assert "INSUFFICIENT_EVIDENCE" in prompt
+        assert "never invent search volume" in prompt.lower()
+        assert "page-by-page" in prompt.lower()
+
+
+def test_non_copywriting_agents_do_not_receive_copywriting_policy():
+    prompt = task_card_for("business.discovery.v3")
+    assert "CROSS-DOMAIN CONTEXT AND KEYWORD FRESHNESS" not in prompt
