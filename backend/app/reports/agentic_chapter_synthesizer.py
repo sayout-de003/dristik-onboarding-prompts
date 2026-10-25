@@ -608,6 +608,8 @@ class AgenticChapterSynthesizer:
             recs = []
             for f in defects[:2]:
                 rec = str(_get(f, "recommendation", "") or _get(f, "suggested_fix", "")).strip()
+                if not rec or "implement recommended architectural fix" in rec.lower():
+                    rec = "No specific change was written for this finding."
                 if rec and rec not in recs:
                     recs.append(rec)
             if recs:

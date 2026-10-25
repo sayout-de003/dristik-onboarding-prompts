@@ -251,7 +251,7 @@ class CoverGenerator:
             f"{m.findings_count} findings recorded" if isinstance(m.findings_count, int) and m.findings_count >= 0
             else "Finding count not recorded"
         )
-        score_display_label = f"{score_text} / 100 · GRADE {grade_text}" if score_is_valid else score_text
+        score_display_label = f"{score_text} / 100 · GRADE {grade_text}" if score_is_valid else f"{score_text} · {grade_text}"
 
         return f"""
         <div class="book-cover cover-page" style="background: {palette['bg_gradient']};">
