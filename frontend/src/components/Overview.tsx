@@ -173,8 +173,8 @@ export function Overview({
               <span className="text-[10px] font-mono uppercase tracking-[0.04em] text-ink-700 font-bold">
                 Enterprise Executive Scorecard
               </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-good/10 text-good font-semibold">
-                Certified
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-paper-50 border border-line text-ink-500 font-semibold">
+                {report ? 'Report snapshot' : 'Awaiting report'}
               </span>
             </div>
             <h1 className="font-sans text-3xl sm:text-4xl text-ink font-semibold tracking-tight">
