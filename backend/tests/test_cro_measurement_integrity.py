@@ -1,6 +1,4 @@
 """Regression tests for evidence-safe CRO analytics and metric semantics."""
-import math
-
 from app.cro.engine import _read_analytics, build_cro_intelligence
 from app.cro.metrics import experiment_lift, rate
 
@@ -69,7 +67,9 @@ def test_invalid_non_finite_or_negative_analytics_are_withheld():
         result = _read_analytics(payload)
         assert result["state"] == "INVALID_DATA"
         assert result["notice"]
-        assert result["sessions"] is None or result["sessions"] >= 0
+        assert result["sessions"] is None
+        assert result["key_events"] is None
+        assert result["revenue"] is None
 
 
 def test_math_helpers_reject_non_finite_values():
