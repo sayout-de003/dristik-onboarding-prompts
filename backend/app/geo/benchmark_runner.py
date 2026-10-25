@@ -671,16 +671,24 @@ class GeoBenchmarkRunner:
         brand_name: str,
         competitors: Optional[List[str]] = None,
     ) -> ShareOfModelMetric:
-        """
-        Calculates enterprise Share of Model (SoM), ordinal position distributions,
-        and competitor displacement instances where rivals stole top recommendations.
-        """
-        clean_domain = (target_domain or "").lower().replace("https://", "").replace("http://", "").split("/")[0]
-        brand = (brand_name or clean_domain.split(".")[0]).lower().strip()
-        comp_list = [c.lower().strip() for c in (competitors or []) if c and c.strip()]
+        """Calculate an explicitly defined share among observed tracked entities.
 
-        successes = [e for e in evaluations if e.status == "SUCCESS"]
+        This is not market share. It is the target's fraction of observed target
+        plus supplied-competitor mentions in successful live responses. Without a
+        competitor universe, mention rate must not be relabeled as Share of Model.
+        """
+        clean_domain = self._normalize_hostname(target_domain)
+        brand = (brand_name or clean_domain.split(".")[0]).strip()
+        comp_list = list(dict.fromkeys(
+            str(c).strip() for c in (competitors or [])
+            if c and str(c).strip()
+        ))
+        successes = [
+            row for row in evaluations
+            if row.status == "SUCCESS" and getattr(row, "is_live", False)
+        ]
         total = len(successes)
+
         if total == 0:
             return ShareOfModelMetric(
                 target_domain=clean_domain,
@@ -695,25 +703,62 @@ class GeoBenchmarkRunner:
                 competitor_displacements=[],
             )
 
+        competitor_hits = {comp: 0 for comp in comp_list}
         target_mentions = 0
         target_first_party_citations = 0
-        rank_1 = 0
-        rank_2_3 = 0
-        rank_4_plus = 0
-        unranked = 0
+        competitor_citations = 0
+        competitor_domain_universe = {
+            comp: self._normalize_hostname(comp)
+            for comp in comp_list
+            if "." in self._normalize_hostname(comp)
+        }
+        citation_universe_measurable = bool(competitor_domain_universe)
+        rank_1 = rank_2_3 = rank_4_plus = unranked = 0
         position_weight_sum = 0.0
+        displacements: List[Dict[str, Any]] = []
+        stages = {
+            "awareness": {"total": 0, "mentions": 0, "weight": 1.0},
+            "consideration": {"total": 0, "mentions": 0, "weight": 2.5},
+            "decision": {"total": 0, "mentions": 0, "weight": 4.0},
+        }
+        target_weighted_mentions = 0.0
+        all_entity_weighted_mentions = 0.0
 
         for ev in successes:
+            raw = ev.raw_response or ""
+            target_hit = bool(ev.was_mentioned)
+            target_mentions += int(target_hit)
+            target_first_party_citations += int(bool(ev.was_first_party_cited))
+
+            this_competitors = []
+            for comp in comp_list:
+                comp_host = self._normalize_hostname(comp)
+                if "." in comp_host:
+                    comp_hit = self._contains_domain(raw, comp_host) or any(
+                        self._is_first_party_host(source, comp_host) for source in (ev.source_domains or [])
+                    )
+                else:
+                    comp_hit = self._contains_term(raw, comp.lower())
+                if comp_hit:
+                    competitor_hits[comp] += 1
+                    this_competitors.append(comp)
+
+            if citation_universe_measurable:
+                cited_domains = [self._normalize_hostname(d) for d in (ev.source_domains or [])]
+                competitor_citations += sum(
+                    1 for host in cited_domains
+                    if any(self._is_first_party_host(host, comp_domain)
+                           for comp_domain in competitor_domain_universe.values())
+                )
+
             if ev.was_mentioned:
-                target_mentions += 1
-                pos = ev.mention_position
-                if pos == 1:
+                if ev.mention_position == 1:
                     rank_1 += 1
                     position_weight_sum += 1.0
-                elif pos in (2, 3):
+                elif ev.mention_position in (2, 3):
                     rank_2_3 += 1
                     position_weight_sum += 0.75
-                elif pos and pos >= 4:
+                elif ev.mention_position is not None and ev.mention_position >= 4:
                     rank_4_plus += 1
                     position_weight_sum += 0.40
                 else:
@@ -722,90 +767,68 @@ class GeoBenchmarkRunner:
             else:
                 unranked += 1
 
-            if ev.was_first_party_cited:
-                target_first_party_citations += 1
+            if this_competitors and (not target_hit or (ev.mention_position is not None and ev.mention_position > 1)):
+                for comp in this_competitors:
+                    displacements.append({
+                        "query_id": ev.query_id,
+                        "query_text": ev.query_text,
+                        "engine": ev.engine_name,
+                        "displacing_competitor": comp,
+                        "target_mentioned": target_hit,
+                        "target_position": ev.mention_position,
+                        "reason": (
+                            f"Competitor '{comp}' appeared in the answer while "
+                            f"'{brand_name}' was {'omitted' if not target_hit else f'ranked #{ev.mention_position}'}."
+                        ),
+                    })
 
-        # Competitor shares & displacements
-        competitor_shares: Dict[str, float] = {}
-        displacements: List[Dict[str, Any]] = []
-
-        for comp in comp_list:
-            comp_mentions = 0
-            for ev in successes:
-                raw_lower = (ev.raw_response or "").lower()
-                c_hit = comp in raw_lower or any(comp in s for s in ev.source_domains)
-                if c_hit:
-                    comp_mentions += 1
-                    if not ev.was_mentioned:
-                        displacements.append({
-                            "query_id": ev.query_id,
-                            "query_text": ev.query_text,
-                            "engine": ev.engine_name,
-                            "displacing_competitor": comp,
-                            "target_mentioned": False,
-                            "reason": f"Competitor '{comp}' was recommended while '{brand_name}' was omitted from the answer.",
-                        })
-                    elif ev.mention_position and ev.mention_position > 1:
-                        displacements.append({
-                            "query_id": ev.query_id,
-                            "query_text": ev.query_text,
-                            "engine": ev.engine_name,
-                            "displacing_competitor": comp,
-                            "target_mentioned": True,
-                            "target_position": ev.mention_position,
-                            "reason": f"Competitor '{comp}' led the recommendation list while '{brand_name}' was ranked #{ev.mention_position}.",
-                        })
-
-            competitor_shares[comp] = round((comp_mentions / total) * 100.0, 1)
-
-        som_pct = round((target_mentions / total) * 100.0, 1)
-        cit_share_pct = round((target_first_party_citations / total) * 100.0, 1)
-        rank_score = round((position_weight_sum / total) * 100.0, 1)
-
-        # Stage-weighted metrics
-        # Decision: commercial, comparative, high_intent (weight 4.0)
-        # Consideration: services, problem (weight 2.5)
-        # Awareness: entity, audience, geographic, other (weight 1.0)
-        stages = {
-            "awareness": {"total": 0, "mentions": 0, "weight": 1.0},
-            "consideration": {"total": 0, "mentions": 0, "weight": 2.5},
-            "decision": {"total": 0, "mentions": 0, "weight": 4.0},
-        }
-
-        weighted_mentions = 0.0
-        weighted_total = 0.0
-
-        for ev in successes:
-            cat = (getattr(ev, "category", "") or "").lower()
-            if cat in ("commercial", "comparative", "high_intent"):
+            category = (getattr(ev, "category", "") or "").lower()
+            if category in ("commercial", "comparative", "high_intent"):
                 stage_key = "decision"
-            elif cat in ("services", "problem"):
+            elif category in ("services", "problem"):
                 stage_key = "consideration"
             else:
                 stage_key = "awareness"
+            stage = stages[stage_key]
+            stage["total"] += 1
+            weight = stage["weight"]
+            if target_hit:
+                stage["mentions"] += 1
+                target_weighted_mentions += weight
+                all_entity_weighted_mentions += weight
+            all_entity_weighted_mentions += weight * len(this_competitors)
 
-            st = stages[stage_key]
-            st["total"] += 1
-            w = st["weight"]
-            weighted_total += w
-
-            if ev.was_mentioned:
-                st["mentions"] += 1
-                weighted_mentions += w
+        total_competitor_hits = sum(competitor_hits.values())
+        entity_mention_denominator = target_mentions + total_competitor_hits
+        som_pct = (
+            round(target_mentions / entity_mention_denominator * 100.0, 1)
+            if comp_list and entity_mention_denominator > 0 else None
+        )
+        competitor_shares = {
+            comp: round(count / entity_mention_denominator * 100.0, 1)
+            for comp, count in competitor_hits.items()
+            if entity_mention_denominator > 0
+        }
+        funnel_som = (
+            round(target_weighted_mentions / all_entity_weighted_mentions * 100.0, 1)
+            if comp_list and all_entity_weighted_mentions > 0 else None
+        )
+        citation_denominator = target_first_party_citations + competitor_citations
+        citation_share = (
+            round(target_first_party_citations / citation_denominator * 100.0, 1)
+            if citation_universe_measurable and citation_denominator > 0 else None
+        )
 
         stage_breakdown: Dict[str, Dict[str, Any]] = {}
-        for s_name, s_data in stages.items():
-            s_tot = s_data["total"]
-            s_men = s_data["mentions"]
-            rate = round((s_men / max(1, s_tot)) * 100.0, 1) if s_tot > 0 else None
-            stage_breakdown[s_name] = {
-                "total_queries": s_tot,
-                "mentions": s_men,
-                "mention_rate_pct": rate,
-                "commercial_weight": s_data["weight"],
+        for name, data in stages.items():
+            count = data["total"]
+            mentions = data["mentions"]
+            stage_breakdown[name] = {
+                "total_queries": count,
+                "mentions": mentions,
+                "mention_rate_pct": round(mentions / count * 100.0, 1) if count else None,
+                "commercial_weight": data["weight"],
             }
-
-        funnel_som = round((weighted_mentions / max(0.1, weighted_total)) * 100.0, 1) if weighted_total > 0 else som_pct
 
         return ShareOfModelMetric(
             target_domain=clean_domain,
@@ -813,8 +836,8 @@ class GeoBenchmarkRunner:
             total_evaluated_queries=total,
             share_of_model_pct=som_pct,
             funnel_weighted_som_pct=funnel_som,
-            first_party_citation_share_pct=cit_share_pct,
-            recommendation_rank_score=rank_score,
+            first_party_citation_share_pct=citation_share,
+            recommendation_rank_score=round(position_weight_sum / total * 100.0, 1),
             ordinal_distribution={
                 "rank_1": rank_1,
                 "rank_2_3": rank_2_3,
