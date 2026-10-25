@@ -350,7 +350,14 @@ class CrawlerService:
                 visited_in_chain.add(current_url)
 
                 if settings.SSRF_PROTECTION_ENABLED:
-                    is_safe, reason = is_safe_url(current_url)
+                    try:
+                        is_safe, reason = await asyncio.wait_for(
+                            asyncio.to_thread(is_safe_url, current_url),
+                            timeout=3.0,
+                        )
+                    except asyncio.TimeoutError:
+                        direct_err = f"SSRF blocked redirect validation timeout: {current_url}"
+                        break
                     if not is_safe:
                         direct_err = f"SSRF blocked redirect: {current_url} ({reason})"
                         break
