@@ -44,6 +44,10 @@ def verify_shared_secret(expected_secret: str | None, supplied_secret: str | Non
 
 def webhook_event_key(provider: str, payload: Any, raw_body: bytes) -> str:
     """Prefer provider event identifiers; use a stable body hash when none is available."""
+    if provider == "whatsapp_business":
+        # A Meta delivery can batch multiple messages/statuses; hash the full delivery
+        # rather than deduplicating distinct batches by only their first message ID.
+        return hashlib.sha256(provider.encode() + b":" + raw_body).hexdigest()
     if isinstance(payload, dict):
         candidates = [
             payload.get("event_id"),
