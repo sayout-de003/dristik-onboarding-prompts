@@ -77,6 +77,18 @@ export function CroIntelligencePanel({ report, analysisId }: CroIntelligencePane
           {intel.discovered_urls != null ? ` · ${intel.discovered_urls} discovered` : ''}
         </p>
         {intel.model_basis && <p className="text-xs text-ink-500">{intel.model_basis}</p>}
+        {intel.coverage && (
+          <div className="rounded border border-line bg-paper-50 p-3 space-y-1">
+            <p className="text-xs font-mono uppercase tracking-wide text-ink-600">Coverage and execution limits</p>
+            <p className="text-xs text-ink-700">
+              {intel.coverage.inspected_pages ?? intel.sample_size ?? 'Not measured'} inspected · {intel.coverage.discovered_urls ?? intel.discovered_urls ?? 'Discovery total unavailable'} discovered · {intel.coverage.sample_coverage_pct == null ? 'Sample percentage unavailable' : `${intel.coverage.sample_coverage_pct.toFixed(1)}% sample coverage`}
+            </p>
+            <p className="text-xs text-ink-600">
+              Rendered DOM: {intel.coverage.rendered_dom_status || 'NOT_VERIFIED'} · User journeys: {intel.coverage.journey_execution_status || 'NOT_EXECUTED'}
+            </p>
+            {intel.coverage.note && <p className="text-xs text-ink-500">{intel.coverage.note}</p>}
+          </div>
+        )}
       </Card>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
