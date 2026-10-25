@@ -44,13 +44,17 @@ def _token(credentials: ConnectorCredentials) -> str | None:
 
 
 def _origin(value: str | None, fallback: str) -> str:
+    """Accept only HTTPS Salesforce instance hosts; never probe arbitrary user URLs."""
     raw = (value or "").strip()
     if not raw:
         return fallback
     parsed = urlparse(raw if "://" in raw else f"https://{raw}")
-    if parsed.scheme not in ("https", "http") or not parsed.netloc:
+    host = (parsed.hostname or "").lower().rstrip(".")
+    if parsed.scheme != "https" or not host:
         return fallback
-    return f"{parsed.scheme}://{parsed.netloc}"
+    if not (host == "salesforce.com" or host.endswith(".salesforce.com") or host == "salesforce.mil" or host.endswith(".salesforce.mil")):
+        return fallback
+    return f"https://{host}" + (f":{parsed.port}" if parsed.port and parsed.port != 443 else "")
 
 
 class ProviderApiConnector(BaseConnector):
@@ -169,10 +173,10 @@ class ProviderApiConnector(BaseConnector):
                 status = ConnectorHealthStatus.ERROR
                 authenticated = False
                 message = f"Provider service returned HTTP {response.status_code}."
-            elif response.status_code >= 400:
+            elif response.status_code >= 300:
                 status = ConnectorHealthStatus.ERROR
                 authenticated = False
-                message = f"Provider API returned HTTP {response.status_code}; verify resource identifiers and granted scopes."
+                message = f"Provider API returned HTTP {response.status_code}; redirects are not followed for credential safety."
             else:
                 payload: Any = {}
                 try:
