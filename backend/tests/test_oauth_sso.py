@@ -318,7 +318,7 @@ def test_ga4_connector_oauth_hosted_redirect_and_connect():
          patch.object(settings, "GOOGLE_OAUTH_REDIRECT_URI", None), \
          patch.object(settings, "EXTERNAL_OAUTH_REDIRECT_URI", None), \
          patch.object(settings, "OAUTH_REDIRECT_URI", "http://localhost:8000/api/v1/connectors/oauth/callback"):
-        res = secure_secure_client.get(
+        res = secure_client.get(
             "/api/v1/connectors/oauth/google_analytics_4/authorize?domain=acme-store.com",
             headers={"Host": "hosted-app.dristik.ai", "X-Forwarded-Proto": "https"},
             follow_redirects=False,
@@ -341,7 +341,7 @@ def test_ga4_connector_oauth_hosted_redirect_and_connect():
     with patch("app.connectors.oauth_providers._exchange", return_value=mock_token_data), \
          patch.object(settings, "GOOGLE_CLIENT_ID", "mock-ga4-id"), \
          patch.object(settings, "GOOGLE_CLIENT_SECRET", "mock-ga4-sec"):
-        res = secure_secure_client.get(
+        res = secure_client.get(
             f"/api/v1/connectors/oauth/callback?code=test_code_123&state={state}",
             headers={"Host": "hosted-app.dristik.ai", "X-Forwarded-Proto": "https"},
         )
@@ -363,7 +363,7 @@ def test_ga4_connector_oauth_hosted_redirect_and_connect():
         assert latest_ga4.status == ConnectorHealthStatus.CONNECTED
 
         # 4. Verify /api/v1/integrations/status reflects connected == True
-        status_res = secure_secure_client.get("/api/v1/integrations/status")
+        status_res = secure_client.get("/api/v1/integrations/status")
         assert status_res.status_code == 200
         data = status_res.json()
         assert data["google_analytics_4"]["connected"] is True
