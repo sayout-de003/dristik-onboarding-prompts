@@ -70,7 +70,9 @@ def google_redirect_uri(request: Optional[Request] = None) -> str:
     configured = settings.registered_google_redirect_uri()
     if not configured:
         return _callback(request)
-    if "localhost" in configured and request is not None:
+    if "localhost" in configured and settings.ENVIRONMENT.lower() == "production":
+        raise HTTPException(status_code=503, detail="Set GOOGLE_OAUTH_REDIRECT_URI to the canonical HTTPS production callback URL.")
+    if "localhost" in configured and request is not None and settings.ENVIRONMENT.lower() != "production":
         host = request.headers.get("x-forwarded-host") or request.headers.get("host")
         if host and not host.startswith("localhost") and not host.startswith("127.0.0.1"):
             scheme = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
