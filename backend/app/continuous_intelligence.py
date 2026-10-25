@@ -176,14 +176,29 @@ async def execute_continuous_run(profile,run_id,trigger_type):
                     "url": finding.get("url") or finding.get("target_url"),
                     "recommendation": finding.get("recommendation") or finding.get("remediation") or finding.get("fix"),
                 })
-        score_payload = payload.get("scores") or payload.get("honest_scores") or {}
+        score_payload = payload.get("honest_scores") or payload.get("scores") or {}
         if hasattr(score_payload, "model_dump"):
             score_payload = score_payload.model_dump(mode="json")
         if not isinstance(score_payload, dict):
             score_payload = {}
+        score_summary = {}
+        for score_key, score_value in score_payload.items():
+            if isinstance(score_value, (int, float)) and not isinstance(score_value, bool):
+                score_summary[score_key] = score_value
+            elif isinstance(score_value, dict):
+                for nested_key, nested_value in score_value.items():
+                    if isinstance(nested_value, (int, float)) and not isinstance(nested_value, bool):
+                        score_summary[f"{score_key}.{nested_key}"] = nested_value
+        character_safe_copy = payload.get("character_safe_copy")
+        page_reports = payload.get("page_reports") or []
+        copywriting_status = "AVAILABLE" if character_safe_copy or any(
+            isinstance(page, dict) and any(key in page for key in ("copy_recommendations", "recommended_copy", "copywriting"))
+            for page in page_reports
+        ) else "SEE_FULL_REPORT"
         previous = next((item for item in store.list_runs(profile["org_id"], 100)
                          if item["profile_id"] == profile["profile_id"] and item["run_id"] != run_id
-                         and item["status"] == "COMPLETED" and item.get("result", {}).get("report_available")), None)
+                         and item["status"] == "COMPLETED" and item.get("scheduled_month", "") < _month()
+                         and item.get("result", {}).get("report_available")), None)
         comparison = {"status": "NO_BASELINE", "note": "A comparable previous completed monthly audit is not available yet."}
         if previous:
             prior = previous.get("result") or {}
@@ -196,15 +211,16 @@ async def execute_continuous_run(profile,run_id,trigger_type):
                 "findings_count_current": after_count,
                 "findings_count_delta": (after_count - before_count) if isinstance(before_count, int) else None,
                 "score_comparison": {
-                    key: {"before": prior.get("score_summary", {}).get(key), "current": score_payload.get(key)}
-                    for key in score_payload.keys()
-                    if isinstance(score_payload.get(key), (int, float))
+                    key: {"before": prior.get("score_summary", {}).get(key), "current": score_summary.get(key)}
+                    for key in score_summary.keys()
+                    if isinstance(score_summary.get(key), (int, float))
                     and isinstance(prior.get("score_summary", {}).get(key), (int, float))
                 },
             }
         result={"analysis_id":run.analysis_id,"status":"COMPLETED","pillars_requested":PILLARS,
           "findings_count":len(current_findings),"findings_summary":finding_summaries,
-          "score_summary":{k:v for k,v in score_payload.items() if isinstance(v,(int,float,str))},
+          "score_summary":score_summary,"copywriting_status":copywriting_status,
+          "character_safe_copy":character_safe_copy,"page_reports_count":len(page_reports),
           "report_available":True,"report_url":f"/api/v1/analyses/{run.analysis_id}/report",
           "monthly_comparison":comparison,
           "trend_status":"PARTIAL" if tracked_keywords else "UNAVAILABLE",
