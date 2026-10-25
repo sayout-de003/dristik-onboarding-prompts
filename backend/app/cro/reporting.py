@@ -169,6 +169,16 @@ class CroReportGenerator:
             journeys=_esc(coverage.get("journey_execution_status", "NOT_EXECUTED")),
             note=_esc(coverage.get("note", "Coverage was not recorded.")),
         )
+        calibration = intel.scoring_calibration or {}
+        calibration_html = (
+            "<section><h3>Scoring calibration</h3><p><strong>Status:</strong> {status}</p>"
+            "<p>{basis}</p><p><strong>Priority model:</strong> {priority}</p><p>{note}</p></section>"
+        ).format(
+            status=_esc(calibration.get("status", "NOT_RECORDED")),
+            basis=_esc(calibration.get("basis", "Scoring basis was not recorded.")),
+            priority=_esc(calibration.get("priority_calibration", "NOT_RECORDED")),
+            note=_esc(calibration.get("note", "Calibration limitations were not recorded.")),
+        )
         return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
