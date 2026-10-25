@@ -2607,7 +2607,7 @@ export type ConnectorType =
   | 'hubspot'
   | 'salesforce'
   | 'stripe';
-export type ConnectorHealthStatus = 'connected' | 'disconnected' | 'error' | 'unauthorized';
+export type ConnectorHealthStatus = 'connected' | 'disconnected' | 'degraded' | 'auth_required' | 'unavailable' | 'error' | 'unauthorized';
 
 export interface RemediationPatch {
   patch_id: string;
