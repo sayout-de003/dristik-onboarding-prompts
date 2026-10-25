@@ -116,7 +116,7 @@ class CompleteGeoReportGenerator:
                 },
                 "05_technical_accessibility_and_content_parity": {
                     "canonical_audit": report.canonical_audit.model_dump() if report.canonical_audit else None,
-                    "rendering_parity_notes": "DOM text extracted via headless browser and direct HTTP streams to verify zero hidden client-side critical answers.",
+                    "rendering_parity_notes": "Rendering parity is reported only when the audit run records both rendered and direct-response evidence; no parity conclusion is inferred from this report template alone.",
                 },
                 "06_content_extractability_and_answer_readiness": {
                     "extractability_score": extractability_score,
@@ -147,7 +147,8 @@ class CompleteGeoReportGenerator:
                     "citation_rate": citation_rate,
                 },
                 "11_citation_analysis_and_source_attribution": {
-                    "distinct_citations_found": getattr(v_card, "successful_runs", 0) if v_card else 0,
+                    "distinct_citations_found": None,
+                    "citation_count_note": "A distinct citation count is not available from the report scorecard; successful query runs are not citation counts.",
                     "source_distribution": "First-party domain vs aggregator citations",
                 },
                 "12_answer_accuracy_and_brand_representation": {
