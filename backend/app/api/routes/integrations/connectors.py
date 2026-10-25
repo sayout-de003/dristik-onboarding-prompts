@@ -53,6 +53,13 @@ async def connector_registry(user: UserIdentity = Depends(get_current_user)):
     return {"providers": items, "total": len(items)}
 
 
+class ConnectorActionRequest(BaseModel):
+    action: str = Field(..., min_length=1, max_length=80)
+    idempotency_key: str = Field(..., min_length=8, max_length=128)
+    approval_confirmed: bool = False
+    payload: Dict[str, Any] = Field(default_factory=dict)
+
+
 class ConnectorCredentialUpdateRequest(BaseModel):
     name: Optional[str] = None
     target_url: Optional[str] = None
@@ -377,6 +384,65 @@ async def read_connector_resource(
         },
     )
     return result
+
+
+@router.post("/{integration_id}/actions")
+async def execute_connector_action(
+    integration_id: str,
+    req: ConnectorActionRequest,
+    user: UserIdentity = Depends(require_permission("patches:generate")),
+):
+    """Run an explicitly confirmed, idempotent provider action with a live preflight."""
+    if not req.approval_confirmed:
+        raise HTTPException(status_code=400, detail="Confirm this action explicitly before Dristik sends a provider write.")
+    integration = _owned_integration(integration_id, user)
+    connector = connector_store.get_connector_for_org(integration_id, user.org_id)
+    if not connector:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    action_runner = getattr(connector, "perform_action", None)
+    if not callable(action_runner):
+        raise HTTPException(status_code=501, detail="No provider action adapter is registered for this integration.")
+    reservation = connector_store.begin_action(user.org_id, integration_id, req.idempotency_key, req.action)
+    if not reservation.get("created"):
+        if reservation.get("action") != req.action:
+            raise HTTPException(status_code=409, detail="Idempotency key was already used for a different action.")
+        if reservation.get("status") == "SUCCEEDED":
+            return {"idempotent_replay": True, "result": reservation.get("result")}
+        if reservation.get("status") == "RUNNING":
+            raise HTTPException(status_code=409, detail="This action is already running; do not retry with a new key until its outcome is reconciled.")
+        raise HTTPException(status_code=409, detail="This idempotency key already has a non-success outcome. Reconcile the provider state before starting a new action.")
+
+    health = await connector.test_connection()
+    integration.status = health.status
+    connector_store.persist(integration)
+    if not health.authenticated:
+        result = {"status": "PREFLIGHT_FAILED", "provider": integration.provider.value, "action": req.action, "message": health.message}
+        connector_store.complete_action(user.org_id, integration_id, req.idempotency_key, "FAILED", result)
+        connector_store.record_event(
+            org_id=integration.org_id, action="PROVIDER_ACTION", result="PREFLIGHT_FAILED",
+            integration_id=integration_id, actor_id=_actor_id(user),
+            details={"provider": integration.provider.value, "action": req.action, "idempotency_key": req.idempotency_key},
+        )
+        raise HTTPException(status_code=409, detail={"message": "Provider preflight failed; no action was sent.", "health": health.model_dump(mode="json")})
+
+    result = await action_runner(req.action, req.payload)
+    action_status = str(result.get("status", "FAILED")) if isinstance(result, dict) else "FAILED"
+    durable_status = "SUCCEEDED" if action_status == "SUCCEEDED" else ("UNKNOWN" if action_status == "UNKNOWN" else "FAILED")
+    safe_result = result if isinstance(result, dict) else {"status": "FAILED", "message": "Provider action returned an invalid response."}
+    connector_store.complete_action(user.org_id, integration_id, req.idempotency_key, durable_status, safe_result)
+    evidence = safe_result.get("evidence") if isinstance(safe_result, dict) else None
+    connector_store.record_event(
+        org_id=integration.org_id, action="PROVIDER_ACTION", result=durable_status,
+        integration_id=integration_id, actor_id=_actor_id(user),
+        details={
+            "provider": integration.provider.value, "action": req.action,
+            "idempotency_key": req.idempotency_key,
+            "external_id": safe_result.get("external_id") if isinstance(safe_result, dict) else None,
+            "response_sha256": evidence.get("response_sha256") if isinstance(evidence, dict) else None,
+            "verification_status": evidence.get("verification_status") if isinstance(evidence, dict) else "NOT_REPORTED",
+        },
+    )
+    return {"idempotent_replay": False, "result": safe_result}
 
 
 @router.delete("/{integration_id}")
