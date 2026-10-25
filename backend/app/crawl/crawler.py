@@ -85,11 +85,13 @@ class CrawlerService:
         robots_url = f"{base_origin}/robots.txt"
         sitemap_urls: List[str] = []
         try:
-            resp = await client.get(robots_url, headers=self.headers, timeout=5.0)
-            if resp.status_code == 200 and resp.text:
-                content = resp.text
-                sitemap_urls.extend(declared_sitemaps(content))
-                return True, content[:2000], sitemap_urls
+            async with client.stream("GET", robots_url, headers=self.headers, timeout=5.0) as resp:
+                if resp.status_code == 200:
+                    max_bytes = int(getattr(settings, "CRAWL_MAX_SITEMAP_BYTES", 2 * 1024 * 1024) or 2 * 1024 * 1024)
+                    body = await read_response_limited(resp, max_bytes)
+                    content = body.decode("utf-8", errors="replace")
+                    sitemap_urls.extend(declared_sitemaps(content))
+                    return True, content[:2000], sitemap_urls
         except Exception:
             pass
         return False, None, sitemap_urls
@@ -131,10 +133,15 @@ class CrawlerService:
                 continue
             visited_xml_sitemaps.add(s_url)
             try:
-                resp = await client.get(s_url, headers=self.headers, timeout=6.0)
-                if resp.status_code == 200 and ("xml" in resp.headers.get("content-type", "") or resp.text.startswith("<?xml") or "<urlset" in resp.text or "<sitemapindex" in resp.text):
-                    found_sitemap_url = s_url
-                    locs = re.findall(r"<loc>(.*?)</loc>", resp.text, re.IGNORECASE)
+                async with client.stream("GET", s_url, headers=self.headers, timeout=6.0) as resp:
+                    if resp.status_code != 200:
+                        continue
+                    max_bytes = int(getattr(settings, "CRAWL_MAX_SITEMAP_BYTES", 2 * 1024 * 1024) or 2 * 1024 * 1024)
+                    sitemap_body = await read_response_limited(resp, max_bytes)
+                    sitemap_text = sitemap_body.decode("utf-8", errors="replace")
+                    if "xml" in resp.headers.get("content-type", "") or sitemap_text.startswith("<?xml") or "<urlset" in sitemap_text or "<sitemapindex" in sitemap_text:
+                        found_sitemap_url = s_url
+                        locs = re.findall(r"<loc>(.*?)</loc>", sitemap_text, re.IGNORECASE)
                     for loc in locs:
                         if at_cap():
                             break
@@ -143,10 +150,13 @@ class CrawlerService:
                             if loc_clean not in visited_xml_sitemaps and len(visited_xml_sitemaps) < 25:
                                 visited_xml_sitemaps.add(loc_clean)
                                 try:
-                                    sub_resp = await client.get(loc_clean, headers=self.headers, timeout=5.0)
-                                    if sub_resp.status_code == 200:
-                                        sub_locs = re.findall(r"<loc>(.*?)</loc>", sub_resp.text, re.IGNORECASE)
-                                        for s_loc in sub_locs:
+                                    async with client.stream("GET", loc_clean, headers=self.headers, timeout=5.0) as sub_resp:
+                                        if sub_resp.status_code == 200:
+                                            max_bytes = int(getattr(settings, "CRAWL_MAX_SITEMAP_BYTES", 2 * 1024 * 1024) or 2 * 1024 * 1024)
+                                            sub_body = await read_response_limited(sub_resp, max_bytes)
+                                            sub_text = sub_body.decode("utf-8", errors="replace")
+                                            sub_locs = re.findall(r"<loc>(.*?)</loc>", sub_text, re.IGNORECASE)
+                                            for s_loc in sub_locs:
                                             if at_cap():
                                                 break
                                             add_page(s_loc.strip())
