@@ -1388,7 +1388,7 @@ class AnalysisOrchestrator:
             )
             graph_summary = blackboard.evidence_graph.export_graph_summary()
 
-            from app.audit.manifest import build_run_manifest, seal_manifest
+            from app.crawl.audit.manifest import build_run_manifest, seal_manifest
             graph_snap = blackboard.evidence_store._ensure_snapshots().put(
                 source="evidence_graph",
                 body=blackboard.evidence_graph.export_graph_data(),
@@ -1765,7 +1765,7 @@ class AnalysisOrchestrator:
             # the manifest or persisting the report. Keep evidence gaps explicit rather than
             # certifying findings whose evidence is absent.
             from app.report_integrity_gate import validate_final_report
-            from app.audit.manifest import FindingPin
+            from app.crawl.audit.manifest import FindingPin
             run_manifest.findings = [
                 FindingPin(
                     finding_id=str(getattr(f, "finding_id", "")),
