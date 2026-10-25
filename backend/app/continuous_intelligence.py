@@ -164,9 +164,49 @@ async def execute_continuous_run(profile,run_id,trigger_type):
             ]
         except Exception as keyword_exc:
             logger.info("Keyword tracking context unavailable for %s: %s", profile["domain"], type(keyword_exc).__name__)
+        current_findings = findings if isinstance(findings, list) else []
+        finding_summaries = []
+        for finding in current_findings[:50]:
+            if isinstance(finding, dict):
+                finding_summaries.append({
+                    "id": finding.get("finding_id") or finding.get("id"),
+                    "title": finding.get("title") or finding.get("name") or finding.get("issue"),
+                    "severity": finding.get("severity") or finding.get("priority"),
+                    "category": finding.get("category") or finding.get("pillar"),
+                    "url": finding.get("url") or finding.get("target_url"),
+                    "recommendation": finding.get("recommendation") or finding.get("remediation") or finding.get("fix"),
+                })
+        score_payload = payload.get("scores") or payload.get("honest_scores") or {}
+        if hasattr(score_payload, "model_dump"):
+            score_payload = score_payload.model_dump(mode="json")
+        if not isinstance(score_payload, dict):
+            score_payload = {}
+        previous = next((item for item in store.list_runs(profile["org_id"], 100)
+                         if item["profile_id"] == profile["profile_id"] and item["run_id"] != run_id
+                         and item["status"] == "COMPLETED" and item.get("result", {}).get("report_available")), None)
+        comparison = {"status": "NO_BASELINE", "note": "A comparable previous completed monthly audit is not available yet."}
+        if previous:
+            prior = previous.get("result") or {}
+            before_count, after_count = prior.get("findings_count"), len(current_findings)
+            comparison = {
+                "status": "COMPARABLE_SNAPSHOT",
+                "previous_run_id": previous["run_id"],
+                "previous_month": previous.get("scheduled_month"),
+                "findings_count_before": before_count,
+                "findings_count_current": after_count,
+                "findings_count_delta": (after_count - before_count) if isinstance(before_count, int) else None,
+                "score_comparison": {
+                    key: {"before": prior.get("score_summary", {}).get(key), "current": score_payload.get(key)}
+                    for key in score_payload.keys()
+                    if isinstance(score_payload.get(key), (int, float))
+                    and isinstance(prior.get("score_summary", {}).get(key), (int, float))
+                },
+            }
         result={"analysis_id":run.analysis_id,"status":"COMPLETED","pillars_requested":PILLARS,
-          "findings_count":len(findings) if isinstance(findings,list) else None,"report_available":True,
-          "report_url":f"/api/v1/analyses/{run.analysis_id}/report",
+          "findings_count":len(current_findings),"findings_summary":finding_summaries,
+          "score_summary":{k:v for k,v in score_payload.items() if isinstance(v,(int,float,str))},
+          "report_available":True,"report_url":f"/api/v1/analyses/{run.analysis_id}/report",
+          "monthly_comparison":comparison,
           "trend_status":"PARTIAL" if tracked_keywords else "UNAVAILABLE",
           "trend_note":"Tracked SERP observations are included where available. Broader live keyword-demand trends require a connected trend provider; no search-volume or trend-direction values are invented.",
           "tracked_keyword_observations":tracked_keywords,
