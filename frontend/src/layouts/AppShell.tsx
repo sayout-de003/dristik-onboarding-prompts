@@ -340,9 +340,9 @@ export function AppShell(props: AppShellProps) {
                     run.status === 'completed' ? 'bg-good' : run.status === 'failed' ? 'bg-bad' : 'bg-pine animate-pulse'
                   }`}
                 />
-                <span className="capitalize">{status}</span>
+                <span className="capitalize" aria-live="polite">{status}</span>
                 <span className="font-mono font-medium text-ink-700 bg-paper-200 px-1.5 py-0.5 rounded text-[11px]">
-                  {run.status === 'completed' ? '100%' : `${run.progress_percentage ?? 0}%`}
+                  {run.status === 'completed' ? '100%' : Number.isFinite(run.progress_percentage) ? `${run.progress_percentage}%` : 'Progress not reported'}
                 </span>
               </span>
             )}
