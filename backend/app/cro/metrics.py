@@ -5,6 +5,7 @@ do not turn an assumed lift into revenue.
 """
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 
@@ -14,6 +15,10 @@ def rate(numerator: Optional[float], denominator: Optional[float]) -> Optional[f
         return None
     if isinstance(numerator, bool) or isinstance(denominator, bool):
         return None
+    if not isinstance(numerator, (int, float)) or not isinstance(denominator, (int, float)):
+        return None
+    if not math.isfinite(float(numerator)) or not math.isfinite(float(denominator)):
+        return None
     if denominator <= 0 or numerator < 0:
         return None
     return numerator / denominator
@@ -21,7 +26,15 @@ def rate(numerator: Optional[float], denominator: Optional[float]) -> Optional[f
 
 def experiment_lift(variant_rate: Optional[float], control_rate: Optional[float]) -> Optional[float]:
     """(variant − control) ÷ control. A zero or missing control makes lift undefined."""
-    if variant_rate is None or control_rate is None or control_rate <= 0 or variant_rate < 0:
+    if variant_rate is None or control_rate is None:
+        return None
+    if isinstance(variant_rate, bool) or isinstance(control_rate, bool):
+        return None
+    if not isinstance(variant_rate, (int, float)) or not isinstance(control_rate, (int, float)):
+        return None
+    if not math.isfinite(float(variant_rate)) or not math.isfinite(float(control_rate)):
+        return None
+    if control_rate <= 0 or variant_rate < 0:
         return None
     return (variant_rate - control_rate) / control_rate
 
