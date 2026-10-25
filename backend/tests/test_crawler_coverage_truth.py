@@ -1,5 +1,5 @@
 from app.crawl.crawler import CrawlerService
-from app.domain.models import PageEvidence
+from app.domain.models import CrawlInventory, CrawlManifest, PageEvidence
 
 
 def test_truncated_discovery_inventory_cannot_be_labeled_full_crawl():
@@ -43,3 +43,14 @@ def test_failed_robots_fetch_is_not_reported_as_definitely_missing():
         discovered_urls=[root],
     )
     assert manifest.crawl_health["robots_txt_status"] == "Missing / Inaccessible"
+
+
+
+def test_unassessed_crawl_coverage_is_not_defaulted_to_full_coverage():
+    manifest = CrawlManifest(domain="example.com", pages=[])
+    inventory = CrawlInventory()
+    assert manifest.url_coverage_pct is None
+    assert manifest.sampling_status == "NOT_ASSESSED"
+    assert inventory.url_coverage_pct is None
+    assert inventory.sampling_status == "NOT_ASSESSED"
+    assert inventory.calculate_coverage() is None
