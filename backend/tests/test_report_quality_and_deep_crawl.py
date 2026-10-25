@@ -5,7 +5,7 @@ import hashlib
 
 import pytest
 
-from app.crawl_orchestration import DeepCrawlStore, is_same_origin, normalize_url
+from app.crawl_orchestration import DeepCrawlStore, is_public_http_target, is_same_origin, normalize_url
 from app.report_quality import validate_report_payload
 
 
@@ -98,3 +98,7 @@ def test_deep_crawl_reports_partial_coverage_and_failed_urls(tmp_path):
     snapshot = store.get_job("job_2", "org_a")
     assert snapshot["failed"] == 1
     assert snapshot["partial"] is True
+
+
+def test_deep_crawl_rejects_loopback_targets():
+    assert not is_public_http_target("http://127.0.0.1/")
