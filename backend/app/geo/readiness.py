@@ -228,6 +228,8 @@ def _score_content_extractability(
     summary = f"{headings} H2/H3 blocks; {supported} questions have quotable answers."
     if passage_res:
         summary += f" {passage_res.highly_citable_count} highly citation-ready passages."
+    else:
+        summary += " Passage analysis unavailable; no fallback passage points were added."
 
     return GeoDimensionScore(
         key=GeoDimensionKey.CONTENT_EXTRACTABILITY.value,
@@ -322,14 +324,9 @@ def _score_factual_grounding(
 ) -> GeoDimensionScore:
     if conflicting > 0:
         score = 20.0
-        summary = f"{conflicting} conflicting commercial fact(s) detected. Contradictory signals reduce AI trust."
+        summary = f"{conflicting} conflicting commercial fact(s) detected in the crawled sample."
     elif claims_res:
-        raw = min(100.0, claims_res.claim_clarity_score)
-        score = raw
-        summary = f"{claims_res.citable_claims_count} verified citable claims with no detected contradictions."
-    elif claims_res:
-        raw = min(100.0, claims_res.claim_clarity_score)
-        score = raw
+        score = max(0.0, min(100.0, claims_res.claim_clarity_score))
         summary = f"{claims_res.citable_claims_count} citable claims assessed; no contradiction was detected in the crawled sample."
     else:
         return GeoDimensionScore(
@@ -347,7 +344,7 @@ def _score_factual_grounding(
     return GeoDimensionScore(
         key=GeoDimensionKey.FACTUAL_GROUNDING.value,
         label="Factual grounding & claim verifiability",
-        score=max(0.0, min(100.0, score)),
+        score=round(score, 1),
         band=_band(score),
         confidence=0.70 if not claims_res else 0.80,
         summary=summary,
@@ -358,7 +355,6 @@ def _score_factual_grounding(
         is_measured=True,
         measurement_note=None,
     )
-
 
 def _score_external_authority(entity_res) -> GeoDimensionScore:
     """
@@ -451,11 +447,11 @@ def _compute_composite(dimension_scores: Dict[str, GeoDimensionScore]) -> Option
     total_score = 0.0
     for key, ds in dimension_scores.items():
         weight = _WEIGHTS.get(key, 0.0)
-        if ds.is_measured and weight > 0.0:
+        if ds.is_measured and ds.score is not None and weight > 0.0:
             total_score += ds.score * weight
             total_weight += weight
     if total_weight == 0.0:
-        return 50.0  # Cannot compute — return neutral
+        return None
     return round(total_score / total_weight, 1)
 
 
