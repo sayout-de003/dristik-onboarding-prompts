@@ -285,6 +285,98 @@ class ProviderApiConnector(BaseConnector):
             "message": "Resource summaries come from the live provider API response. A successful handshake does not prove unsupported writes or AI-search citation visibility.",
         }
 
+    async def read_resource(self, resource: str, limit: int = 25) -> Dict[str, Any]:
+        """Read a small allowlisted set of real CRM/CMS resources and attach response provenance."""
+        provider = self.credentials.provider
+        token = _token(self.credentials)
+        bounded_limit = max(1, min(int(limit), 100))
+        if not token:
+            return {"status": "NOT_CONNECTED", "provider": provider.value, "resource": resource, "records": [], "message": "Credentials are not configured."}
+        headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+        params: dict[str, str] = {}
+        url = ""
+        if provider == ConnectorType.HUBSPOT:
+            allowed = {
+                "contacts": "firstname,lastname,email,createdate",
+                "companies": "name,domain,industry,createdate",
+                "deals": "dealname,dealstage,amount,closedate,createdate",
+            }
+            if resource not in allowed:
+                return {"status": "NOT_SUPPORTED", "provider": provider.value, "resource": resource, "records": [], "message": "Allowed resources: contacts, companies, deals."}
+            url = f"https://api.hubapi.com/crm/objects/2026-09/{resource}"
+            params = {"limit": str(bounded_limit), "properties": allowed[resource]}
+        elif provider == ConnectorType.STRIPE:
+            allowed = {"customers", "subscriptions", "payment_intents"}
+            if resource not in allowed:
+                return {"status": "NOT_SUPPORTED", "provider": provider.value, "resource": resource, "records": [], "message": "Allowed resources: customers, subscriptions, payment_intents."}
+            url = f"https://api.stripe.com/v1/{resource}"
+            params = {"limit": str(min(bounded_limit, 100))}
+        elif provider == ConnectorType.SALESFORCE:
+            allowed = {
+                "accounts": ("Account", "Id,Name,Industry,Website"),
+                "leads": ("Lead", "Id,Name,Company,Status,CreatedDate"),
+                "opportunities": ("Opportunity", "Id,Name,StageName,Amount,CloseDate"),
+                "campaigns": ("Campaign", "Id,Name,Status,StartDate,EndDate"),
+            }
+            if resource not in allowed:
+                return {"status": "NOT_SUPPORTED", "provider": provider.value, "resource": resource, "records": [], "message": "Allowed resources: accounts, leads, opportunities, campaigns."}
+            base = _origin(self.credentials.api_url, "")
+            if not base:
+                return {"status": "UNAVAILABLE", "provider": provider.value, "resource": resource, "records": [], "message": "A valid Salesforce instance URL is required."}
+            try:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0), follow_redirects=False) as client:
+                    versions_response = await client.get(f"{base}/services/data/", headers=headers)
+                    versions_response.raise_for_status()
+                    versions = versions_response.json()
+                    version_rows = [row for row in versions if isinstance(row, dict) and row.get("version")] if isinstance(versions, list) else []
+                    if not version_rows:
+                        return {"status": "UNAVAILABLE", "provider": provider.value, "resource": resource, "records": [], "message": "Salesforce did not return API version metadata."}
+                    version = max(version_rows, key=lambda row: float(row["version"]))["version"]
+                    object_name, fields = allowed[resource]
+                    query = f"SELECT {fields} FROM {object_name} LIMIT {bounded_limit}"
+                    response = await client.get(f"{base}/services/data/v{version}/query", headers=headers, params={"q": query})
+            except httpx.HTTPStatusError as exc:
+                return {"status": "UNAVAILABLE", "provider": provider.value, "resource": resource, "records": [], "http_status": exc.response.status_code, "message": "Salesforce rejected the read request; check scopes and object permissions."}
+            except (httpx.HTTPError, ValueError, KeyError):
+                return {"status": "UNAVAILABLE", "provider": provider.value, "resource": resource, "records": [], "message": "Salesforce resource read failed."}
+        elif provider == ConnectorType.SANITY and resource == "documents":
+            project_id = (self.credentials.repository or "").strip()
+            dataset = (self.credentials.branch or "").strip()
+            if not project_id or not dataset:
+                return {"status": "UNAVAILABLE", "provider": provider.value, "resource": resource, "records": [], "message": "Sanity project ID and dataset are required."}
+            url = f"https://{project_id}.api.sanity.io/v2021-06-07/data/query/{dataset}"
+            params = {"query": f"*[_type != \"sanity.imageAsset\"][0...{bounded_limit}]{{_id,_type,_updatedAt}}"}
+            headers["Authorization"] = f"Bearer {token}"
+        else:
+            return {"status": "NOT_SUPPORTED", "provider": provider.value, "resource": resource, "records": [], "message": "This resource operation is not implemented for this provider."}
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0), follow_redirects=False) as client:
+                response = await client.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            payload = response.json()
+        except httpx.HTTPStatusError as exc:
+            return {"status": "UNAVAILABLE", "provider": provider.value, "resource": resource, "records": [], "http_status": exc.response.status_code, "message": "Provider rejected the resource read; check credentials, scopes, and resource access."}
+        except (httpx.HTTPError, ValueError):
+            return {"status": "UNAVAILABLE", "provider": provider.value, "resource": resource, "records": [], "message": "Provider resource read failed."}
+        if provider == ConnectorType.SANITY:
+            rows = payload.get("result") or []
+        elif provider == ConnectorType.SALESFORCE:
+            rows = payload.get("records") or []
+        else:
+            rows = payload.get("results") or payload.get("data") or []
+        records = [row for row in rows[:bounded_limit] if isinstance(row, dict)] if isinstance(rows, list) else []
+        serialized = json.dumps(payload, sort_keys=True, default=str)
+        observed_at = datetime.now(timezone.utc).isoformat()
+        return {
+            "status": "LIVE_DATA", "provider": provider.value, "resource": resource,
+            "records": records, "resource_count": len(records), "observed_at": observed_at,
+            "evidence": {
+                "source": url, "http_status": response.status_code, "observed_at": observed_at,
+                "response_sha256": hashlib.sha256(serialized.encode("utf-8")).hexdigest(),
+                "verification_status": "LIVE_API_RESPONSE",
+            },
+        }
+
     async def preview_patch(self, patch: RemediationPatch) -> Dict[str, Any]:
         return {
             "supported": False, "patch_id": patch.patch_id,
