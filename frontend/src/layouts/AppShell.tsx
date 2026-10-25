@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Bell,
+  BarChart3,
   Contact,
   CreditCard,
   LayoutDashboard,
@@ -129,6 +130,7 @@ export function AppShell(props: AppShellProps) {
   const actions = useMemo<CommandAction[]>(() => {
     const items: CommandAction[] = [
       { id: 'home', label: 'New audit', group: 'Workspace', onSelect: onNewAudit },
+      { id: 'analytics', label: 'Delta Analytics', group: 'Workspace', onSelect: () => onNavigate('analytics') },
       { id: 'grader', label: 'Public grader', group: 'Workspace', onSelect: () => onNavigate('grader') },
       { id: 'pricing', label: 'Pricing', group: 'Workspace', onSelect: () => onNavigate('pricing') },
       { id: 'contact', label: 'Contact', group: 'Workspace', onSelect: () => onNavigate('contact') },
@@ -207,6 +209,7 @@ export function AppShell(props: AppShellProps) {
 
   const productLinks = [
     { id: 'home', label: 'Audits', icon: LayoutDashboard, active: view === 'home', onClick: () => onNavigate('home') },
+    ...(user ? [{ id: 'analytics', label: 'Delta Analytics', icon: BarChart3, active: view === 'analytics', onClick: () => onNavigate('analytics') }] : []),
     { id: 'pricing', label: 'Pricing', icon: CreditCard, active: view === 'pricing', onClick: () => onNavigate('pricing') },
     { id: 'contact', label: 'Contact', icon: Contact, active: view === 'contact', onClick: () => onNavigate('contact') },
     ...(user
