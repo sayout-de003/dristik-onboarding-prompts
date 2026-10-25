@@ -159,7 +159,7 @@ class ProviderApiConnector(BaseConnector):
                 response = await client.request(method, url, headers=headers, params=params)
             latency = round((time.perf_counter() - started) * 1000, 2)
             self._last_status_code = response.status_code
-            self._last_endpoint = url
+            self._last_endpoint = url.replace(token, "[REDACTED]")
             self._last_observed_at = datetime.now(timezone.utc).isoformat()
             try:
                 self._last_payload = response.json()
