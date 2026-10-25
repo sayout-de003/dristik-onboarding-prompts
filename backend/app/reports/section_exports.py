@@ -1594,62 +1594,57 @@ class SectionReportGenerator:
                         return extracted
         return None
 
-    def _get_section_score(self, report: ExecutiveReport, section_key: str) -> int:
+    def _get_section_score(self, report: ExecutiveReport, section_key: str) -> Optional[int]:
         honest = getattr(report, "honest_scores", None)
         scores = getattr(report, "scores", None)
         cat_scores = getattr(scores, "category_scores", {}) or {} if scores else {}
-        base_score = 70
-        if scores:
-            extracted_base = self._extract_score_num(getattr(scores, "overall_score", None))
-            if extracted_base is not None:
-                base_score = extracted_base
-
+        # Do not substitute the overall score for a missing pillar-specific result.
         if section_key in ("crawl", "seo"):
             if honest and getattr(honest, "honest_google_search", None) is not None:
                 val = self._extract_score_num(getattr(honest, "honest_google_search"))
                 if val is not None:
                     return val
             cat_val = self._resolve_category_score(cat_scores, "TECHNICAL_SEO", "ON_PAGE_SEO", "technical_seo", "on_page_seo")
-            return cat_val if cat_val is not None else base_score
+            return cat_val
         elif section_key in ("geo", "aeo"):
             if honest and getattr(honest, "honest_ai_readiness", None) is not None:
                 val = self._extract_score_num(getattr(honest, "honest_ai_readiness"))
                 if val is not None:
                     return val
             cat_val = self._resolve_category_score(cat_scores, "GEO", "AI_SEARCH", "geo", "ai_search", "SCHEMA", "schema")
-            return cat_val if cat_val is not None else base_score
+            return cat_val
         elif section_key == "cro":
             if honest and getattr(honest, "honest_human_experience", None) is not None:
                 val = self._extract_score_num(getattr(honest, "honest_human_experience"))
                 if val is not None:
                     return val
             cat_val = self._resolve_category_score(cat_scores, "UX_CONVERSION", "ux_conversion", "CRO", "cro")
-            return cat_val if cat_val is not None else base_score
+            return cat_val
         elif section_key == "competitors":
             bakeoff = getattr(report, "competitor_bakeoff", None)
             if bakeoff:
                 tot = (bakeoff.target_wins or 0) + (bakeoff.competitor_wins or 0) + (bakeoff.ties or 0)
                 if tot > 0:
                     return int(((bakeoff.target_wins or 0) / tot) * 100)
-            return 65
-        return base_score
+            return None
+        return None
 
     def _get_section_summary(self, report: ExecutiveReport, section_key: str) -> str:
         if section_key == "crawl":
-            return "Multi-page crawl validated HTTP response codes, TTFB network latencies, robots.txt crawler permissions, and canonical URI consistency."
+            return "Crawl observations and their coverage are limited to the page telemetry recorded for this run."
         elif section_key == "seo":
-            return "Comprehensive search engine optimization assessment covering title/meta lengths, H1 heading outline hierarchy, and indexation hygiene."
+            return "Search optimization findings are limited to the checks and page evidence recorded for this run."
         elif section_key == "geo":
-            return "Generative engine optimization audit evaluating prose factual density, /llms.txt manifests, and AI answer engine citability metrics."
+            return "Generative search findings are limited to recorded content checks and explicitly measured provider observations."
         elif section_key == "aeo":
             return (
                 "Answer-engine audit of question coverage, answer quality, source eligibility, and observed visibility. "
                 "Readiness, live visibility, and business impact stay separate."
             )
         elif section_key == "cro":
-            return "Conversion rate optimization assessment identifying above-the-fold value proposition clarity, CTA ergonomics, and commercial friction points."
+            return "Conversion findings are limited to recorded user-experience and conversion-related observations."
         elif section_key == "competitors":
-            return "Head-to-head empirical testing across commercial buyer inquiry queries against verified industry peers and rival market leaders."
+            return "Competitor conclusions require recorded comparison observations; absent comparison data is not scored."
         return report.story_summary or "Deterministic website intelligence audit."
 
     def _render_finding(self, finding) -> str:
@@ -1661,10 +1656,12 @@ class SectionReportGenerator:
             rows = []
             for p in pages[:8]:
                 u = getattr(p, "url", "")
-                st = getattr(p, "status_code", 200)
+                st = getattr(p, "status_code", None)
                 t = getattr(p, "title", "") or "—"
                 h1 = (getattr(p, "h1", []) or ["—"])[0]
-                rows.append(f"<tr><td><code>{u}</code></td><td>{st}</td><td>{t[:45]}</td><td>{h1[:40]}</td></tr>")
+                status_text = str(st) if isinstance(st, int) and not isinstance(st, bool) else "Not recorded"
+                url_text = u if u else "URL not recorded"
+                rows.append(f"<tr><td><code>{url_text}</code></td><td>{status_text}</td><td>{t[:45]}</td><td>{h1[:40]}</td></tr>")
             return f"""
             <h2>Crawled Pages & Routing Ledger</h2>
             <table>
