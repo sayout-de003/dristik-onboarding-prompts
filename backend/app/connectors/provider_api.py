@@ -22,12 +22,25 @@ from app.domain.models import RemediationPatch
 
 
 def _token(credentials: ConnectorCredentials) -> str | None:
-    return (
+    direct = (
         getattr(credentials, "access_token", None)
-        or credentials.api_key
         or credentials.github_token
         or credentials.app_password
     )
+    if direct:
+        return direct
+    raw = credentials.api_key
+    if not raw:
+        return None
+    try:
+        stored = json.loads(raw)
+        if isinstance(stored, dict):
+            token = stored.get("access_token") or stored.get("token")
+            if token:
+                return str(token)
+    except (TypeError, ValueError):
+        pass
+    return raw
 
 
 def _origin(value: str | None, fallback: str) -> str:
