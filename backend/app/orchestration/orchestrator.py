@@ -1830,7 +1830,9 @@ class AnalysisOrchestrator:
                 run.current_step = "Validated report could not be durably persisted"
                 run.is_sealed = False
                 try:
-                    self.repository.save_run(run)
+                    # Clear any stale findings for a reused run ID while recording the
+                    # failed, uncertified state. The replacement is transactional.
+                    self.repository.save_run(run, findings=[])
                 except Exception:
                     logger.exception("Could not persist failure state for %s", analysis_id)
                 await self._emit_event(
