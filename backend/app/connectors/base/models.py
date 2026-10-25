@@ -9,6 +9,10 @@ class ConnectorCredentials(BaseModel):
     provider: ConnectorType
     api_url: Optional[str] = None
     api_key: Optional[str] = None
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    account_id: Optional[str] = None
+    project_id: Optional[str] = None
     username: Optional[str] = None
     app_password: Optional[str] = None
     github_token: Optional[str] = None
