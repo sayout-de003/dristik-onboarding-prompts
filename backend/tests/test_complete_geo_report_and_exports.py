@@ -248,3 +248,24 @@ def test_geo_report_fastapi_endpoints():
     finally:
         orchestrator.get_run = original_get_run
 
+
+
+def test_geo_report_keeps_unmeasured_metrics_and_certification_explicit():
+    report = _make_dummy_geo_report()
+    data = geo_report_generator.render_json_report(report)
+
+    assert data["certification_status"] == "NOT_ASSESSED"
+    assert data["kpis"]["measured_citation_rate"] is None
+    citation_section = data["sections"]["11_citation_analysis_and_source_attribution"]
+    assert citation_section["distinct_citations_found"] is None
+    assert citation_section["citation_count_status"].startswith("NOT_MEASURED")
+    accuracy_section = data["sections"]["12_answer_accuracy_and_brand_representation"]
+    assert accuracy_section["hallucinations_detected"] is None
+    assert accuracy_section["hallucination_status"] == "NOT_ASSESSED"
+    crawler_section = data["sections"]["04_ai_discoverability_and_crawler_access"]
+    assert crawler_section["ai_bots_audit_status"] == "NOT_ASSESSED"
+
+    html_report = geo_report_generator.render_html_report(report)
+    assert "78/100" not in html_report
+    assert "0 Critical Brand Hallucinations identified in baseline" not in html_report
+    assert "NOT ASSESSED" in html_report
