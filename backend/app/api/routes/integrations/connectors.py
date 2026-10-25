@@ -412,7 +412,17 @@ async def execute_connector_action(
             raise HTTPException(status_code=409, detail="This action is already running; do not retry with a new key until its outcome is reconciled.")
         raise HTTPException(status_code=409, detail="This idempotency key already has a non-success outcome. Reconcile the provider state before starting a new action.")
 
-    health = await connector.test_connection()
+    try:
+        health = await connector.test_connection()
+    except Exception as exc:
+        result = {"status": "PREFLIGHT_FAILED", "provider": integration.provider.value, "action": req.action, "message": f"Live preflight raised {type(exc).__name__}; no action was sent."}
+        connector_store.complete_action(user.org_id, integration_id, req.idempotency_key, "FAILED", result)
+        connector_store.record_event(
+            org_id=integration.org_id, action="PROVIDER_ACTION", result="PREFLIGHT_FAILED",
+            integration_id=integration_id, actor_id=_actor_id(user),
+            details={"provider": integration.provider.value, "action": req.action, "idempotency_key": req.idempotency_key},
+        )
+        raise HTTPException(status_code=502, detail=result["message"]) from exc
     integration.status = health.status
     connector_store.persist(integration)
     if not health.authenticated:
@@ -425,7 +435,15 @@ async def execute_connector_action(
         )
         raise HTTPException(status_code=409, detail={"message": "Provider preflight failed; no action was sent.", "health": health.model_dump(mode="json")})
 
-    result = await action_runner(req.action, req.payload)
+    try:
+        result = await action_runner(req.action, req.payload)
+    except Exception as exc:
+        # The remote side effect may have happened before the exception. Persist UNKNOWN
+        # and require reconciliation instead of silently inviting a duplicate retry.
+        result = {
+            "status": "UNKNOWN", "provider": integration.provider.value, "action": req.action,
+            "message": f"Action outcome is unknown after {type(exc).__name__}; reconcile the provider before retrying.",
+        }
     action_status = str(result.get("status", "FAILED")) if isinstance(result, dict) else "FAILED"
     durable_status = "SUCCEEDED" if action_status == "SUCCEEDED" else ("UNKNOWN" if action_status == "UNKNOWN" else "FAILED")
     safe_result = result if isinstance(result, dict) else {"status": "FAILED", "message": "Provider action returned an invalid response."}
