@@ -82,12 +82,10 @@ def peek_signed_state(state: str) -> Optional[Dict[str, Any]]:
         raw, sig = state.split(".", 1)
     except ValueError:
         return None
-    secrets = []
     auth_secret = (settings.AUTH_SECRET or "").encode()
-    if auth_secret:
-        secrets.append(auth_secret)
-    secrets.extend((b"dristik-auth-secret", b"dristik"))
-    for secret in secrets:
+    if not auth_secret:
+        return None
+    for secret in (auth_secret,):
         expected = hmac.new(secret, raw.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, sig):
             continue
@@ -160,7 +158,7 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
     },
     "hubspot": {
         "label": "HubSpot",
-        "connector": ConnectorType.CRM,
+        "connector": ConnectorType.HUBSPOT,
         "client_id": "HUBSPOT_CLIENT_ID",
         "client_secret": "HUBSPOT_CLIENT_SECRET",
         "authorize": "https://app.hubspot.com/oauth/authorize",
@@ -169,7 +167,7 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
     },
     "salesforce": {
         "label": "Salesforce",
-        "connector": ConnectorType.CRM,
+        "connector": ConnectorType.SALESFORCE,
         "client_id": "SALESFORCE_CLIENT_ID",
         "client_secret": "SALESFORCE_CLIENT_SECRET",
         "authorize": "https://login.salesforce.com/services/oauth2/authorize",
@@ -178,7 +176,7 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
     },
     "stripe": {
         "label": "Stripe",
-        "connector": ConnectorType.CRM,
+        "connector": ConnectorType.STRIPE,
         "client_id": "STRIPE_CLIENT_ID",
         "client_secret": "STRIPE_CLIENT_SECRET",
         "authorize": "https://connect.stripe.com/oauth/authorize",
@@ -209,7 +207,9 @@ def _unsign(state: str) -> Dict[str, str]:
         raw, sig = state.split(".", 1)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="OAuth state is invalid.") from exc
-    secret = (settings.AUTH_SECRET or "dristik").encode()
+    secret = (settings.AUTH_SECRET or "").encode()
+    if not secret:
+        raise HTTPException(status_code=503, detail="OAuth state signing is not configured.")
     expected = hmac.new(secret, raw.encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, sig):
         raise HTTPException(status_code=400, detail="OAuth state signature does not match.")
