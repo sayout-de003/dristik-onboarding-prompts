@@ -78,6 +78,7 @@ def test_share_of_model_calculation_and_displacement():
             was_first_party_cited=True,
             source_domains=["dynatrace.com", "datadog.com", "g2.com"],
             status="SUCCESS",
+            is_live=True,
         ),
         EvaluatedQueryRun(
             query_id="Q-02",
@@ -119,16 +120,17 @@ def test_share_of_model_calculation_and_displacement():
     )
 
     assert som.total_evaluated_queries == 3
-    # Datadog was mentioned in 2 of 3 successful queries -> 66.7%
-    assert som.share_of_model_pct == 66.7
-    # First-party cited in 2 of 3 -> 66.7%
-    assert som.first_party_citation_share_pct == 66.7
+    # Share of Model is target mentions / all observed target + tracked competitor mentions.
+    # Target=2, Dynatrace=2, New Relic=1, denominator=5.
+    assert som.share_of_model_pct == 40.0
+    # Competitor citation share is unmeasured because the competitor universe has no domains.
+    assert som.first_party_citation_share_pct is None
     assert som.ordinal_distribution["rank_1"] == 1
     assert som.ordinal_distribution["rank_2_3"] == 1
 
     # Dynatrace competitor share: mentioned in Q-01 and Q-02 -> 66.7%
     assert "dynatrace" in som.competitor_shares
-    assert som.competitor_shares["dynatrace"] == 66.7
+    assert som.competitor_shares["dynatrace"] == 40.0
 
     # Displacements: Q-02 where Dynatrace was recommended but Datadog omitted
     assert len(som.competitor_displacements) >= 1
@@ -198,12 +200,13 @@ def test_api_endpoints_fanout_som_crawler():
                 "was_first_party_cited": True,
                 "source_domains": ["linear.app"],
                 "status": "SUCCESS",
+                "is_live": True,
             }
         ],
     })
     assert resp2.status_code == 200
     data2 = resp2.json()
-    assert data2["share_of_model_pct"] == 100.0
+    assert data2["share_of_model_pct"] == 50.0\n    assert data2["competitor_shares"]["jira"] == 50.0
     assert data2["ordinal_distribution"]["rank_1"] == 1
 
     # 3. Crawler log analysis endpoint
