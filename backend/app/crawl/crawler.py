@@ -246,6 +246,8 @@ class CrawlerService:
         if BrowserRenderService.is_available():
             try:
                 pw_html, pw_status, pw_ttfb, pw_headers, pw_err, pw_text, pw_perf = await BrowserRenderService.render_page(url)
+                if pw_err == "ssrf_blocked_browser_request":
+                    return None, None, 0, (time.time() - start_time) * 1000, {}, 0, "SSRF blocked unsafe browser redirect or subresource", None
                 if pw_html:
                     max_response_bytes = int(getattr(settings, "CRAWL_MAX_RESPONSE_BYTES", 5 * 1024 * 1024) or 5 * 1024 * 1024)
                     if len(pw_html.encode("utf-8")) > max_response_bytes:
