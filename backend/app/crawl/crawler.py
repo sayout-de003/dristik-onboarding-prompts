@@ -469,9 +469,16 @@ class CrawlerService:
         base_origin = f"{parsed_target.scheme}://{parsed_target.netloc}"
         normalized_root = self._normalize_url(raw_url, base_domain, base_origin) or raw_url
 
-        # 1. SSRF Verification
+        # 1. SSRF Verification. Bound DNS validation so a slow resolver cannot
+        # stall the entire audit worker indefinitely; timeout fails closed.
         if settings.SSRF_PROTECTION_ENABLED:
-            is_safe, reason = is_safe_url(normalized_root)
+            try:
+                is_safe, reason = await asyncio.wait_for(
+                    asyncio.to_thread(is_safe_url, normalized_root),
+                    timeout=3.0,
+                )
+            except asyncio.TimeoutError as exc:
+                raise ValueError("Security Alert: SSRF validation timed out; crawl blocked.") from exc
             if not is_safe:
                 raise ValueError(f"Security Alert: {reason}")
 
