@@ -4,7 +4,6 @@ Generates multi-page vector-styled presentation decks for C-level executives.
 """
 from typing import Dict, Any, Optional
 import logging
-import math
 
 from app.domain.evidence.integrity import validate_score
 from fastapi import APIRouter, Depends, HTTPException, Response
