@@ -1,5 +1,5 @@
 """Regression tests for evidence-safe CRO analytics and metric semantics."""
-from app.cro.engine import _parse_page, _read_analytics, _read_search, build_cro_intelligence
+from app.cro.engine import _Obs, _Rules, _parse_page, _read_analytics, _read_search, build_cro_intelligence
 from app.cro.metrics import experiment_lift, rate
 from app.connectors.google.google_report import _analytics_from_payload, map_analytics
 from app.cro.reporting import cro_report_generator
@@ -300,3 +300,49 @@ def test_missing_http_status_is_not_rewritten_to_success():
     )
     assert not any("returned HTTP 200" in item.evidence for item in report.findings)
 
+
+
+
+def test_rpv_specialist_does_not_use_sessions_as_visitor_denominator():
+    obs = _Obs()
+    obs.analytics = {
+        "state": "MEASURED",
+        "sessions": 100,
+        "revenue": 500.0,
+        "period": "last 30 days",
+    }
+    check = {
+        "check_id": "metric_rpv",
+        "section": "metrics",
+        "part": "revenue",
+        "section_title": "Revenue metrics",
+        "label": "Revenue per visitor",
+        "specialist": "cro.metrics",
+        "key": "metric_rpv",
+    }
+    result = _Rules(obs).metric_rpv(check)
+    assert result["evidence_state"] == "DATA_UNAVAILABLE"
+    assert "sessions were not substituted for visitors" in result["summary"]
+
+
+def test_rpv_specialist_uses_explicit_eligible_visitors():
+    obs = _Obs()
+    obs.analytics = {
+        "state": "MEASURED",
+        "sessions": 150,
+        "eligible_visitors": 100,
+        "revenue": 500.0,
+        "period": "last 30 days",
+    }
+    check = {
+        "check_id": "metric_rpv",
+        "section": "metrics",
+        "part": "revenue",
+        "section_title": "Revenue metrics",
+        "label": "Revenue per visitor",
+        "specialist": "cro.metrics",
+        "key": "metric_rpv",
+    }
+    result = _Rules(obs).metric_rpv(check)
+    assert result["evidence_state"] == "VERIFIED"
+    assert "500.0 attributed revenue ÷ 100 eligible visitors" in result["summary"]
