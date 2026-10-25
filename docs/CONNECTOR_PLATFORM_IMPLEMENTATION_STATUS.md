@@ -29,6 +29,15 @@ This document records the current integration-platform tranche. Provider names i
 - Revenue attribution still needs a persisted cross-system journey model to link analytics events, CRM deals, and Stripe revenue without double counting.
 - The existing WordPress, Webflow, Shopify, GitHub, GSC, GA4, CrUX, DataForSEO, CRM, AI-search and Generic Web adapters remain subject to the requested full implementation audit. They are not automatically certified by this registry.
 
+## Required deployment configuration for these paths
+
+- Set a unique `AUTH_SECRET` of at least 32 characters and a canonical HTTPS `OAUTH_REDIRECT_URI`; configure `GOOGLE_OAUTH_REDIRECT_URI` for Google flows.
+- Set provider app credentials for each OAuth provider you enable (for example `LINKEDIN_CLIENT_ID/SECRET`, `SLACK_CLIENT_ID/SECRET`, `INSTAGRAM_CLIENT_ID/SECRET`, and `WHATSAPP_BUSINESS_CLIENT_ID/SECRET`).
+- Set `SLACK_SIGNING_SECRET` for Slack inbound event signatures.
+- Set `META_APP_SECRET` and `META_WEBHOOK_VERIFY_TOKEN` for Meta/WhatsApp webhook verification.
+- Telegram webhook ingress requires a per-connection `webhook_secret` that exactly matches the secret configured with Telegram's `setWebhook`. Dristik validates incoming updates but does not register the webhook URL automatically yet.
+- Configure provider scopes and app-review permissions in each vendor console. Dristik's successful handshake only proves the endpoint used by that check accepted the credential.
+
 ## Acceptance gate
 
 A provider may be labelled fully verified only when a test proves: real authentication, live read behavior, every claimed write behavior, post-write independent verification, credential redaction/encryption, tenant and permission isolation, rate-limit/error handling, webhook security and event-processing behavior where applicable, disconnect/revocation behavior, and successful/failing contract tests. Until then, show the precise state (`DISCONNECTED`, `DEGRADED`, `AUTH_REQUIRED`, `UNAVAILABLE`, or `CONNECTED`) and the operation-level verification status.
