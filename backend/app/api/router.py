@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from app.api.routes.audits.analyses import router as analyses_router
 from app.api.routes.audits.deep_crawls import router as deep_crawls_router
 from app.api.routes.audits.public_grader import router as public_grader_router
+from app.api.routes.audits.recurring import router as recurring_audits_router
 from app.api.routes.audits.stream import router as stream_router
 from app.api.routes.identity.auth import router as auth_router
 from app.api.routes.identity.orgs import router as orgs_router
@@ -41,6 +42,7 @@ _PREFIXED_ROUTERS = (
     analyses_router,
     deep_crawls_router,
     public_grader_router,
+    recurring_audits_router,
     stream_router,
     commercial_router,
     payments_router,
