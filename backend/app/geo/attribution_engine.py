@@ -1,12 +1,15 @@
 """
-Dristik AI GEO Closed-Loop Attribution & Before/After Verification Engine.
-Quantifies the exact causal ROI of deployed remediation patches (llms.txt, JSON-LD schema, inverted-pyramid copy)
-by computing pre-patch vs post-patch benchmark deltas across live AI answer engines.
+Evidence-bounded before/after GEO comparison.
+
+This module reports observed changes across comparable successful query runs.
+It does not infer Share of Model from mention/citation deltas and does not claim
+causality from a before/after comparison alone.
 """
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -18,11 +21,11 @@ class QueryAttributionDelta(BaseModel):
     engine_id: str
     pre_rank: Optional[int] = None
     post_rank: Optional[int] = None
-    rank_delta: int = 0  # Positive means moved up in rank
-    pre_cited: bool = False
-    post_cited: bool = False
-    citation_gained: bool = False
-    status: str = "IMPROVED"  # IMPROVED | UNCHANGED | REGRESSED
+    rank_delta: Optional[int] = None
+    pre_cited: Optional[bool] = None
+    post_cited: Optional[bool] = None
+    citation_gained: Optional[bool] = None
+    status: str = "NOT_COMPARABLE"  # IMPROVED | UNCHANGED | REGRESSED | NOT_COMPARABLE
 
 
 class GeoAttributionReport(BaseModel):
@@ -30,27 +33,49 @@ class GeoAttributionReport(BaseModel):
     brand_name: str
     pre_patch_run_id: str
     post_patch_run_id: str
-    pre_mention_rate_pct: float
-    post_mention_rate_pct: float
-    mention_rate_delta_pct: float
-    pre_citation_rate_pct: float
-    post_citation_rate_pct: float
-    citation_rate_delta_pct: float
-    pre_share_of_model_pct: float
-    post_share_of_model_pct: float
-    som_delta_pct: float
-    total_queries_evaluated: int
-    improved_queries_count: int
-    regressed_queries_count: int
-    net_improvement_pct: float
+    pre_mention_rate_pct: Optional[float] = None
+    post_mention_rate_pct: Optional[float] = None
+    mention_rate_delta_pct: Optional[float] = None
+    pre_citation_rate_pct: Optional[float] = None
+    post_citation_rate_pct: Optional[float] = None
+    citation_rate_delta_pct: Optional[float] = None
+    # Share of Model is intentionally unmeasured here: this engine has no
+    # competitor-universe denominator and must not substitute mention rate.
+    pre_share_of_model_pct: Optional[float] = None
+    post_share_of_model_pct: Optional[float] = None
+    som_delta_pct: Optional[float] = None
+    total_queries_evaluated: int = 0
+    improved_queries_count: int = 0
+    regressed_queries_count: int = 0
+    net_improvement_pct: Optional[float] = None
+    status: str = "INSUFFICIENT_COMPARABLE_DATA"
+    measurement_note: str = (
+        "Before/after differences are observed changes, not proof that a remediation caused them. "
+        "Share of Model requires a defined competitor universe and is not inferred from mention rate."
+    )
     query_deltas: List[QueryAttributionDelta] = Field(default_factory=list)
-    executive_roi_summary: str
+    executive_roi_summary: str = "Insufficient comparable successful query runs to calculate changes."
 
 
 class GeoAttributionEngine:
-    """
-    Computes before/after impact of deployed fixes to provide clear attribution.
-    """
+    """Compare valid, like-for-like observations without manufacturing missing metrics."""
+
+    @staticmethod
+    def _is_successful(row: Any) -> bool:
+        status = str(getattr(row, "status", "SUCCESS") or "SUCCESS").upper()
+        return status in {"SUCCESS", "SUCCEEDED", "COMPLETED"} and not getattr(row, "error_message", None)
+
+    @staticmethod
+    def _key(row: Any) -> Tuple[str, str, str, str, str]:
+        # Do not compare different prompts, locales or model versions as if they
+        # were the same experiment.
+        return (
+            str(getattr(row, "query_id", "") or ""),
+            str(getattr(row, "engine_id", "") or ""),
+            str(getattr(row, "locale", "") or ""),
+            str(getattr(row, "model_version", "") or ""),
+            str(getattr(row, "query_text", "") or "").strip(),
+        )
 
     def calculate_attribution(
         self,
@@ -59,136 +84,114 @@ class GeoAttributionEngine:
         target_domain: str,
         brand_name: str,
         pre_run_id: str = "pre_patch",
-        post_run_id: str = "post_patch"
+        post_run_id: str = "post_patch",
     ) -> GeoAttributionReport:
-        pre_map = {f"{getattr(r, 'query_id', '')}::{getattr(r, 'engine_id', '')}": r for r in pre_patch_evaluations}
-        post_map = {f"{getattr(r, 'query_id', '')}::{getattr(r, 'engine_id', '')}": r for r in post_patch_evaluations}
-
-        common_keys = set(pre_map.keys()).intersection(set(post_map.keys()))
+        pre_rows = {self._key(row): row for row in pre_patch_evaluations if self._is_successful(row)}
+        post_rows = {self._key(row): row for row in post_patch_evaluations if self._is_successful(row)}
+        common_keys = sorted(set(pre_rows).intersection(post_rows))
         total = len(common_keys)
 
-        if total == 0:
-            return GeoAttributionReport(
-                target_domain=target_domain,
-                brand_name=brand_name,
-                pre_patch_run_id=pre_run_id,
-                post_patch_run_id=post_run_id,
-                pre_mention_rate_pct=0.0,
-                post_mention_rate_pct=0.0,
-                mention_rate_delta_pct=0.0,
-                pre_citation_rate_pct=0.0,
-                post_citation_rate_pct=0.0,
-                citation_rate_delta_pct=0.0,
-                pre_share_of_model_pct=0.0,
-                post_share_of_model_pct=0.0,
-                som_delta_pct=0.0,
-                total_queries_evaluated=0,
-                improved_queries_count=0,
-                regressed_queries_count=0,
-                net_improvement_pct=0.0,
-                executive_roi_summary="No overlapping queries between pre-patch and post-patch evaluations."
-            )
-
-        pre_mentions = 0
-        post_mentions = 0
-        pre_citations = 0
-        post_citations = 0
-
-        deltas: List[QueryAttributionDelta] = []
-        improved_cnt = 0
-        regressed_cnt = 0
-
-        for key in common_keys:
-            pre_r = pre_map[key]
-            post_r = post_map[key]
-
-            pre_m = getattr(pre_r, "was_mentioned", False)
-            post_m = getattr(post_r, "was_mentioned", False)
-            if pre_m:
-                pre_mentions += 1
-            if post_m:
-                post_mentions += 1
-
-            pre_c = getattr(pre_r, "was_first_party_cited", False)
-            post_c = getattr(post_r, "was_first_party_cited", False)
-            if pre_c:
-                pre_citations += 1
-            if post_c:
-                post_citations += 1
-
-            pre_pos = getattr(pre_r, "mention_position", None)
-            post_pos = getattr(post_r, "mention_position", None)
-
-            # Rank delta calculation: None is treated as unranked (e.g. rank 99)
-            p_val = pre_pos if pre_pos is not None else 99
-            c_val = post_pos if post_pos is not None else 99
-            r_delta = p_val - c_val  # If p_val=5 and c_val=2, delta = +3 (improved)
-
-            citation_gained = not pre_c and post_c
-
-            if r_delta > 0 or citation_gained or (not pre_m and post_m):
-                status = "IMPROVED"
-                improved_cnt += 1
-            elif r_delta < 0 or (pre_c and not post_c) or (pre_m and not post_m):
-                status = "REGRESSED"
-                regressed_cnt += 1
-            else:
-                status = "UNCHANGED"
-
-            deltas.append(QueryAttributionDelta(
-                query_id=getattr(post_r, "query_id", ""),
-                query_text=getattr(post_r, "query_text", ""),
-                engine_id=getattr(post_r, "engine_id", ""),
-                pre_rank=pre_pos,
-                post_rank=post_pos,
-                rank_delta=r_delta if (pre_pos or post_pos) else 0,
-                pre_cited=pre_c,
-                post_cited=post_c,
-                citation_gained=citation_gained,
-                status=status
-            ))
-
-        pre_m_rate = round((pre_mentions / total) * 100, 1)
-        post_m_rate = round((post_mentions / total) * 100, 1)
-        m_delta = round(post_m_rate - pre_m_rate, 1)
-
-        pre_c_rate = round((pre_citations / total) * 100, 1)
-        post_c_rate = round((post_citations / total) * 100, 1)
-        c_delta = round(post_c_rate - pre_c_rate, 1)
-
-        # Approximate SoM delta
-        som_delta = round(m_delta * 0.7 + c_delta * 0.3, 1)
-        pre_som = pre_m_rate
-        post_som = round(pre_som + som_delta, 1)
-
-        net_imp = round(((improved_cnt - regressed_cnt) / total) * 100, 1)
-
-        summary = (
-            f"Deployment of remediation patches resulted in a {m_delta:+} percentage point change in AI answer engine mentions "
-            f"({pre_m_rate}% -> {post_m_rate}%) and a {c_delta:+} point change in direct first-party citations. "
-            f"{improved_cnt} of {total} query runs experienced positive position gains."
-        )
-
-        return GeoAttributionReport(
+        base = dict(
             target_domain=target_domain,
             brand_name=brand_name,
             pre_patch_run_id=pre_run_id,
             post_patch_run_id=post_run_id,
-            pre_mention_rate_pct=pre_m_rate,
-            post_mention_rate_pct=post_m_rate,
-            mention_rate_delta_pct=m_delta,
-            pre_citation_rate_pct=pre_c_rate,
-            post_citation_rate_pct=post_c_rate,
-            citation_rate_delta_pct=c_delta,
-            pre_share_of_model_pct=pre_som,
-            post_share_of_model_pct=post_som,
-            som_delta_pct=som_delta,
+        )
+        if total == 0:
+            return GeoAttributionReport(
+                **base,
+                status="INSUFFICIENT_COMPARABLE_DATA",
+                executive_roi_summary=(
+                    "No comparable successful query/engine/model/locale runs overlap between "
+                    "the before and after measurements. No performance delta is reported."
+                ),
+            )
+
+        pre_mentions = post_mentions = pre_citations = post_citations = 0
+        deltas: List[QueryAttributionDelta] = []
+        improved = regressed = 0
+
+        for key in common_keys:
+            pre_row, post_row = pre_rows[key], post_rows[key]
+            pre_mention = bool(getattr(pre_row, "was_mentioned", False))
+            post_mention = bool(getattr(post_row, "was_mentioned", False))
+            pre_cited = bool(getattr(pre_row, "was_first_party_cited", False))
+            post_cited = bool(getattr(post_row, "was_first_party_cited", False))
+            pre_mentions += int(pre_mention)
+            post_mentions += int(post_mention)
+            pre_citations += int(pre_cited)
+            post_citations += int(post_cited)
+
+            pre_rank = getattr(pre_row, "mention_position", None)
+            post_rank = getattr(post_row, "mention_position", None)
+            rank_delta: Optional[int] = None
+            if pre_rank is not None and post_rank is not None:
+                rank_delta = int(pre_rank) - int(post_rank)  # positive means improved
+            elif pre_rank is None and post_rank is not None:
+                rank_delta = 1
+            elif pre_rank is not None and post_rank is None:
+                rank_delta = -1
+
+            citation_gained = (not pre_cited and post_cited)
+            improved_signal = rank_delta is not None and rank_delta > 0
+            regressed_signal = rank_delta is not None and rank_delta < 0
+            if improved_signal or citation_gained or (not pre_mention and post_mention):
+                status = "IMPROVED"
+                improved += 1
+            elif regressed_signal or (pre_cited and not post_cited) or (pre_mention and not post_mention):
+                status = "REGRESSED"
+                regressed += 1
+            else:
+                status = "UNCHANGED"
+
+            deltas.append(QueryAttributionDelta(
+                query_id=str(getattr(post_row, "query_id", "") or ""),
+                query_text=str(getattr(post_row, "query_text", "") or ""),
+                engine_id=str(getattr(post_row, "engine_id", "") or ""),
+                pre_rank=pre_rank,
+                post_rank=post_rank,
+                rank_delta=rank_delta,
+                pre_cited=pre_cited,
+                post_cited=post_cited,
+                citation_gained=citation_gained,
+                status=status,
+            ))
+
+        pre_mention_rate = round(pre_mentions / total * 100, 1)
+        post_mention_rate = round(post_mentions / total * 100, 1)
+        pre_citation_rate = round(pre_citations / total * 100, 1)
+        post_citation_rate = round(post_citations / total * 100, 1)
+        mention_delta = round(post_mention_rate - pre_mention_rate, 1)
+        citation_delta = round(post_citation_rate - pre_citation_rate, 1)
+        net_improvement = round((improved - regressed) / total * 100, 1)
+
+        summary = (
+            f"Across {total} comparable successful query runs, brand mention rate changed "
+            f"from {pre_mention_rate:.1f}% to {post_mention_rate:.1f}% "
+            f"({mention_delta:+.1f} percentage points), and first-party citation rate changed "
+            f"from {pre_citation_rate:.1f}% to {post_citation_rate:.1f}% "
+            f"({citation_delta:+.1f} percentage points). These are observed before/after "
+            "differences, not proof of causal impact. Share of Model was not calculated."
+        )
+
+        return GeoAttributionReport(
+            **base,
+            pre_mention_rate_pct=pre_mention_rate,
+            post_mention_rate_pct=post_mention_rate,
+            mention_rate_delta_pct=mention_delta,
+            pre_citation_rate_pct=pre_citation_rate,
+            post_citation_rate_pct=post_citation_rate,
+            citation_rate_delta_pct=citation_delta,
+            pre_share_of_model_pct=None,
+            post_share_of_model_pct=None,
+            som_delta_pct=None,
             total_queries_evaluated=total,
-            improved_queries_count=improved_cnt,
-            regressed_queries_count=regressed_cnt,
-            net_improvement_pct=net_imp,
+            improved_queries_count=improved,
+            regressed_queries_count=regressed,
+            net_improvement_pct=net_improvement,
+            status="MEASURED",
             query_deltas=deltas,
-            executive_roi_summary=summary
+            executive_roi_summary=summary,
         )
 
 
