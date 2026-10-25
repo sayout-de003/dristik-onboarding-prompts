@@ -1605,21 +1605,21 @@ class SectionReportGenerator:
                 if val is not None:
                     return val
             cat_val = self._resolve_category_score(cat_scores, "TECHNICAL_SEO", "ON_PAGE_SEO", "technical_seo", "on_page_seo")
-            return cat_val if cat_val is not None else base_score
+            return cat_val
         elif section_key in ("geo", "aeo"):
             if honest and getattr(honest, "honest_ai_readiness", None) is not None:
                 val = self._extract_score_num(getattr(honest, "honest_ai_readiness"))
                 if val is not None:
                     return val
             cat_val = self._resolve_category_score(cat_scores, "GEO", "AI_SEARCH", "geo", "ai_search", "SCHEMA", "schema")
-            return cat_val if cat_val is not None else base_score
+            return cat_val
         elif section_key == "cro":
             if honest and getattr(honest, "honest_human_experience", None) is not None:
                 val = self._extract_score_num(getattr(honest, "honest_human_experience"))
                 if val is not None:
                     return val
             cat_val = self._resolve_category_score(cat_scores, "UX_CONVERSION", "ux_conversion", "CRO", "cro")
-            return cat_val if cat_val is not None else base_score
+            return cat_val
         elif section_key == "competitors":
             bakeoff = getattr(report, "competitor_bakeoff", None)
             if bakeoff:
@@ -1627,7 +1627,7 @@ class SectionReportGenerator:
                 if tot > 0:
                     return int(((bakeoff.target_wins or 0) / tot) * 100)
             return None
-        return base_score
+        return None
 
     def _get_section_summary(self, report: ExecutiveReport, section_key: str) -> str:
         if section_key == "crawl":
