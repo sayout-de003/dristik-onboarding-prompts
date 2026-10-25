@@ -370,6 +370,55 @@ async def _exchange(provider: str, code: str, shop: str, redirect_uri: Optional[
     return data
 
 
+async def refresh_provider_credentials(provider: str, credentials: ConnectorCredentials) -> Dict[str, Any]:
+    """Refresh OAuth credentials only for providers with a configured, supported refresh flow."""
+    spec = PROVIDERS.get(provider)
+    if spec is None:
+        raise HTTPException(status_code=409, detail="This connection has no configured OAuth refresh adapter.")
+    access_token = credentials.access_token
+    refresh_token = credentials.refresh_token
+    if not access_token and credentials.api_key:
+        try:
+            stored = json.loads(credentials.api_key)
+            access_token = stored.get("access_token") if isinstance(stored, dict) else None
+            refresh_token = refresh_token or (stored.get("refresh_token") if isinstance(stored, dict) else None)
+        except (TypeError, ValueError):
+            pass
+    if provider in ("instagram", "whatsapp_business"):
+        if not access_token:
+            raise HTTPException(status_code=409, detail="Meta token is missing; reconnect the account.")
+        params = {
+            "grant_type": "fb_exchange_token",
+            "client_id": _setting(spec["client_id"]),
+            "client_secret": _setting(spec["client_secret"]),
+            "fb_exchange_token": access_token,
+        }
+        url = spec["token"]
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.get(url, params=params, headers={"Accept": "application/json"})
+    else:
+        if not refresh_token:
+            raise HTTPException(status_code=409, detail="No refresh token is available for this connection; reconnect it through OAuth.")
+        body = {
+            "client_id": _setting(spec["client_id"]),
+            "client_secret": _setting(spec["client_secret"]),
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "redirect_uri": _callback(),
+        }
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(spec["token"], data=body, headers={"Accept": "application/json"})
+    if not response.is_success:
+        raise HTTPException(status_code=502, detail="The provider rejected the refresh request. Reconnect the account and verify its app configuration.")
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail="The provider returned an invalid refresh response.") from exc
+    if not data.get("access_token"):
+        raise HTTPException(status_code=502, detail="The provider refresh response did not contain an access token.")
+    return data
+
+
 def _fallback_return(path: str) -> str:
     return (
         "<script>function done(){window.location.replace(%s);}setTimeout(done,600);</script>"
