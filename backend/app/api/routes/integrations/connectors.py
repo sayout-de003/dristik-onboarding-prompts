@@ -8,7 +8,7 @@ import json
 import urllib.parse
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
 import httpx
 
@@ -21,9 +21,152 @@ from app.core.config import settings
 from app.connectors.store import connector_store
 from app.connectors.oauth_providers import router as oauth_router
 from app.connectors.platform_registry import registry_payload
+from app.connectors.webhook_security import body_sha256, verify_meta_signature, verify_shared_secret, verify_slack_signature, webhook_event_key
 
 router = APIRouter(prefix="/connectors", tags=["Platform Connectors"])
 router.include_router(oauth_router)
+
+@router.get("/webhooks/whatsapp/{integration_id}")
+async def verify_whatsapp_webhook(integration_id: str, request: Request):
+    """Meta webhook challenge verification for a specific tenant connection."""
+    integration = connector_store.get_integration(integration_id)
+    if not integration or integration.provider != ConnectorType.WHATSAPP_BUSINESS:
+        raise HTTPException(status_code=404, detail="WhatsApp Business integration not found.")
+    verify_token = settings.META_WEBHOOK_VERIFY_TOKEN or ""
+    if not verify_token:
+        raise HTTPException(status_code=503, detail="META_WEBHOOK_VERIFY_TOKEN is not configured.")
+    mode = request.query_params.get("hub.mode", "")
+    supplied = request.query_params.get("hub.verify_token", "")
+    challenge = request.query_params.get("hub.challenge", "")
+    if mode != "subscribe" or not challenge or not verify_shared_secret(verify_token, supplied):
+        raise HTTPException(status_code=403, detail="Webhook verification challenge rejected.")
+    return PlainTextResponse(challenge)
+
+
+@router.post("/webhooks/slack/{integration_id}")
+async def receive_slack_webhook(integration_id: str, request: Request):
+    """Verify Slack signatures and deduplicate incoming events before acknowledging."""
+    secret = settings.SLACK_SIGNING_SECRET or ""
+    if not secret:
+        raise HTTPException(status_code=503, detail="SLACK_SIGNING_SECRET is not configured.")
+    raw_body = await request.body()
+    timestamp = request.headers.get("x-slack-request-timestamp", "")
+    signature = request.headers.get("x-slack-signature", "")
+    if not verify_slack_signature(secret, timestamp, signature, raw_body):
+        raise HTTPException(status_code=401, detail="Slack signature is invalid or stale.")
+    integration = connector_store.get_integration(integration_id)
+    if not integration or integration.provider != ConnectorType.SLACK:
+        raise HTTPException(status_code=404, detail="Slack integration not found.")
+    try:
+        content_type = request.headers.get("content-type", "")
+        if "application/x-www-form-urlencoded" in content_type:
+            form = urllib.parse.parse_qs(raw_body.decode("utf-8", errors="replace"))
+            raw_payload = (form.get("payload") or ["{}"])[0]
+            payload = json.loads(raw_payload)
+        else:
+            payload = json.loads(raw_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError):
+        raise HTTPException(status_code=400, detail="Slack webhook body is not valid JSON/form payload.")
+    if isinstance(payload, dict) and payload.get("type") == "url_verification" and payload.get("challenge"):
+        return {"challenge": payload["challenge"]}
+    credentials = connector_store.get_credentials(integration_id)
+    expected_team = (credentials.account_id if credentials else None) or (integration.settings or {}).get("account_id")
+    event_payload = payload.get("event") if isinstance(payload, dict) and isinstance(payload.get("event"), dict) else {}
+    team_payload = payload.get("team") if isinstance(payload, dict) and isinstance(payload.get("team"), dict) else {}
+    actual_team = (payload.get("team_id") if isinstance(payload, dict) else None) or event_payload.get("team_id") or team_payload.get("id")
+    if not expected_team:
+        raise HTTPException(status_code=409, detail="Slack webhook cannot be tenant-bound until its authorized team ID is recorded.")
+    if not actual_team or str(actual_team) != str(expected_team):
+        raise HTTPException(status_code=403, detail="Slack webhook team does not match this integration.")
+    event_type = str(payload.get("type") or (payload.get("event") or {}).get("type") or "unknown") if isinstance(payload, dict) else "unknown"
+    event_key = webhook_event_key("slack", payload, raw_body)
+    digest = body_sha256(raw_body)
+    inserted = connector_store.record_webhook_event(integration.org_id, "slack", integration_id, event_key, event_type, digest)
+    connector_store.record_event(
+        org_id=integration.org_id, action="WEBHOOK_RECEIVED",
+        result="VERIFIED" if inserted else "DUPLICATE",
+        integration_id=integration_id,
+        details={"provider": "slack", "event_type": event_type, "payload_sha256": digest},
+    )
+    return {"ok": True, "verified": True, "duplicate": not inserted}
+
+
+@router.post("/webhooks/whatsapp/{integration_id}")
+async def receive_whatsapp_webhook(integration_id: str, request: Request):
+    """Verify Meta webhook signatures and deduplicate WhatsApp Business events."""
+    secret = settings.META_APP_SECRET or ""
+    if not secret:
+        raise HTTPException(status_code=503, detail="META_APP_SECRET is not configured.")
+    raw_body = await request.body()
+    signature = request.headers.get("x-hub-signature-256", "")
+    if not verify_meta_signature(secret, signature, raw_body):
+        raise HTTPException(status_code=401, detail="Meta webhook signature is invalid.")
+    integration = connector_store.get_integration(integration_id)
+    if not integration or integration.provider != ConnectorType.WHATSAPP_BUSINESS:
+        raise HTTPException(status_code=404, detail="WhatsApp Business integration not found.")
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise HTTPException(status_code=400, detail="Meta webhook body is not valid JSON.")
+    credentials = connector_store.get_credentials(integration_id)
+    expected_phone_id = (credentials.repository if credentials else None) or (credentials.account_id if credentials else None)
+    phone_ids = []
+    if isinstance(payload, dict):
+        for entry in payload.get("entry") or []:
+            if not isinstance(entry, dict):
+                continue
+            for change in entry.get("changes") or []:
+                value = change.get("value") if isinstance(change, dict) else None
+                metadata = value.get("metadata") if isinstance(value, dict) else None
+                if isinstance(metadata, dict) and metadata.get("phone_number_id"):
+                    phone_ids.append(str(metadata["phone_number_id"]))
+    if not expected_phone_id:
+        raise HTTPException(status_code=409, detail="WhatsApp webhook cannot be tenant-bound until its Phone Number ID is recorded.")
+    if not phone_ids or str(expected_phone_id) not in phone_ids:
+        raise HTTPException(status_code=403, detail="WhatsApp webhook phone number does not match this integration.")
+    event_type = str(payload.get("object") or "unknown") if isinstance(payload, dict) else "unknown"
+    event_key = webhook_event_key("whatsapp_business", payload, raw_body)
+    digest = body_sha256(raw_body)
+    inserted = connector_store.record_webhook_event(integration.org_id, "whatsapp_business", integration_id, event_key, event_type, digest)
+    connector_store.record_event(
+        org_id=integration.org_id, action="WEBHOOK_RECEIVED",
+        result="VERIFIED" if inserted else "DUPLICATE",
+        integration_id=integration_id,
+        details={"provider": "whatsapp_business", "event_type": event_type, "payload_sha256": digest},
+    )
+    return {"ok": True, "verified": True, "duplicate": not inserted}
+
+
+@router.post("/webhooks/telegram/{integration_id}")
+async def receive_telegram_webhook(integration_id: str, request: Request):
+    """Validate Telegram's configured secret-token header and deduplicate updates."""
+    integration = connector_store.get_integration(integration_id)
+    if not integration or integration.provider != ConnectorType.TELEGRAM:
+        raise HTTPException(status_code=404, detail="Telegram integration not found.")
+    credentials = connector_store.get_credentials(integration_id)
+    expected_secret = credentials.webhook_secret if credentials else None
+    if not expected_secret:
+        raise HTTPException(status_code=503, detail="A Telegram webhook secret has not been configured for this connection.")
+    supplied_secret = request.headers.get("x-telegram-bot-api-secret-token", "")
+    if not verify_shared_secret(expected_secret, supplied_secret):
+        raise HTTPException(status_code=401, detail="Telegram webhook secret token is invalid.")
+    raw_body = await request.body()
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise HTTPException(status_code=400, detail="Telegram webhook body is not valid JSON.")
+    event_type = "callback_query" if isinstance(payload, dict) and payload.get("callback_query") else ("message" if isinstance(payload, dict) and payload.get("message") else "unknown")
+    event_key = webhook_event_key("telegram", payload, raw_body)
+    digest = body_sha256(raw_body)
+    inserted = connector_store.record_webhook_event(integration.org_id, "telegram", integration_id, event_key, event_type, digest)
+    connector_store.record_event(
+        org_id=integration.org_id, action="WEBHOOK_RECEIVED",
+        result="VERIFIED" if inserted else "DUPLICATE",
+        integration_id=integration_id,
+        details={"provider": "telegram", "event_type": event_type, "payload_sha256": digest},
+    )
+    return {"ok": True, "verified": True, "duplicate": not inserted}
+
 
 @router.get("/audit-events")
 async def connector_audit_events(limit: int = 100, user: UserIdentity = Depends(get_current_user)):
@@ -53,6 +196,13 @@ async def connector_registry(user: UserIdentity = Depends(get_current_user)):
     return {"providers": items, "total": len(items)}
 
 
+class ConnectorActionRequest(BaseModel):
+    action: str = Field(..., min_length=1, max_length=80)
+    idempotency_key: str = Field(..., min_length=8, max_length=128)
+    approval_confirmed: bool = False
+    payload: Dict[str, Any] = Field(default_factory=dict)
+
+
 class ConnectorCredentialUpdateRequest(BaseModel):
     name: Optional[str] = None
     target_url: Optional[str] = None
@@ -62,6 +212,7 @@ class ConnectorCredentialUpdateRequest(BaseModel):
     api_key: Optional[str] = None
     access_token: Optional[str] = None
     refresh_token: Optional[str] = None
+    webhook_secret: Optional[str] = None
     account_id: Optional[str] = None
     project_id: Optional[str] = None
     github_token: Optional[str] = None
@@ -80,6 +231,7 @@ class ConnectPlatformRequest(BaseModel):
     api_key: Optional[str] = None
     access_token: Optional[str] = None
     refresh_token: Optional[str] = None
+    webhook_secret: Optional[str] = None
     account_id: Optional[str] = None
     project_id: Optional[str] = None
     github_token: Optional[str] = None
@@ -149,12 +301,13 @@ async def connect_platform(
         api_key=api_key,
         access_token=req.access_token,
         refresh_token=req.refresh_token,
+        webhook_secret=req.webhook_secret,
         account_id=req.account_id,
         project_id=req.project_id,
         github_token=req.github_token,
         repository=req.repository,
         branch=req.branch or "main",
-        scopes=req.scopes
+        scopes=[]  # Client-declared scopes are not evidence of provider-granted permissions.
     )
 
     integration = connector_store.add_integration(
@@ -224,7 +377,7 @@ async def update_integration_credentials(
         integration.target_url = updates.pop("target_url")
     credential_fields = {
         "api_url", "username", "app_password", "api_key", "access_token",
-        "refresh_token", "account_id", "project_id", "github_token",
+        "refresh_token", "webhook_secret", "account_id", "project_id", "github_token",
         "repository", "branch", "scopes",
     }
     credential_updates = {key: value for key, value in updates.items() if key in credential_fields}
@@ -248,6 +401,56 @@ async def update_integration_credentials(
         result="SUCCESS" if health.authenticated else health.status.value.upper(),
         integration_id=integration_id, actor_id=_actor_id(user),
         details={"provider": integration.provider.value, "authenticated": health.authenticated},
+    )
+    return {"success": health.authenticated, "integration": integration, "health": health}
+
+
+@router.post("/{integration_id}/refresh")
+async def refresh_integration_credentials(
+    integration_id: str,
+    user: UserIdentity = Depends(require_permission("patches:generate")),
+):
+    """Refresh OAuth credentials when the provider supports a refresh flow, then re-test."""
+    integration = _owned_integration(integration_id, user)
+    if (integration.settings or {}).get("auth_mode") != "oauth2":
+        raise HTTPException(status_code=409, detail="This integration was not connected through the configured OAuth flow.")
+    provider_key = str((integration.settings or {}).get("oauth_provider") or "")
+    credentials = connector_store.get_credentials(integration_id)
+    if credentials is None:
+        raise HTTPException(status_code=404, detail="Integration credentials not found")
+    from app.connectors.oauth_providers import refresh_provider_credentials
+    token_data = await refresh_provider_credentials(provider_key, credentials)
+    stored = {}
+    if credentials.api_key:
+        try:
+            parsed = json.loads(credentials.api_key)
+            if isinstance(parsed, dict):
+                stored = parsed
+        except (TypeError, ValueError):
+            stored = {}
+    stored.update({
+        "type": "oauth2",
+        "provider": provider_key,
+        "access_token": token_data.get("access_token"),
+        "refresh_token": token_data.get("refresh_token") or credentials.refresh_token or stored.get("refresh_token") or "",
+    })
+    updated_credentials = credentials.model_copy(update={
+        "access_token": token_data.get("access_token"),
+        "refresh_token": token_data.get("refresh_token") or credentials.refresh_token,
+        "api_key": json.dumps(stored),
+    })
+    connector_store.update_credentials(integration_id, updated_credentials)
+    connector = connector_store.get_connector_for_org(integration_id, user.org_id)
+    if not connector:
+        raise HTTPException(status_code=500, detail="Could not initialize connector after token refresh.")
+    health = await connector.test_connection()
+    integration.status = health.status
+    connector_store.persist(integration)
+    connector_store.record_event(
+        org_id=integration.org_id, action="OAUTH_TOKEN_REFRESH",
+        result="SUCCESS" if health.authenticated else health.status.value.upper(),
+        integration_id=integration_id, actor_id=_actor_id(user),
+        details={"provider": provider_key, "authenticated": health.authenticated},
     )
     return {"success": health.authenticated, "integration": integration, "health": health}
 
@@ -341,6 +544,120 @@ async def discover_integration_structure(integration_id: str, user: UserIdentity
         },
     )
     return result
+
+@router.get("/{integration_id}/resources/{resource}")
+async def read_connector_resource(
+    integration_id: str,
+    resource: str,
+    limit: int = 25,
+    user: UserIdentity = Depends(require_permission("mission:read")),
+):
+    """Read a provider-specific allowlisted resource and record response provenance."""
+    integration = _owned_integration(integration_id, user)
+    connector = connector_store.get_connector_for_org(integration_id, user.org_id)
+    if not connector:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    reader = getattr(connector, "read_resource", None)
+    if not callable(reader):
+        raise HTTPException(
+            status_code=501,
+            detail="This provider has no registered resource-read operation. Its directory presence is not proof of support.",
+        )
+    result = await reader(resource, limit=limit)
+    evidence = result.get("evidence") if isinstance(result, dict) else None
+    status_label = str(result.get("status", "UNAVAILABLE")) if isinstance(result, dict) else "UNAVAILABLE"
+    connector_store.record_event(
+        org_id=integration.org_id, action="RESOURCE_READ",
+        result=status_label, integration_id=integration_id, actor_id=_actor_id(user),
+        details={
+            "provider": integration.provider.value, "resource": resource,
+            "limit": max(1, min(int(limit), 100)),
+            "resource_count": result.get("resource_count") if isinstance(result, dict) else None,
+            "source": evidence.get("source") if isinstance(evidence, dict) else None,
+            "observed_at": evidence.get("observed_at") if isinstance(evidence, dict) else None,
+            "response_sha256": evidence.get("response_sha256") if isinstance(evidence, dict) else None,
+            "verification_status": evidence.get("verification_status") if isinstance(evidence, dict) else "NOT_REPORTED",
+        },
+    )
+    return result
+
+
+@router.post("/{integration_id}/actions")
+async def execute_connector_action(
+    integration_id: str,
+    req: ConnectorActionRequest,
+    user: UserIdentity = Depends(require_permission("patches:generate")),
+):
+    """Run an explicitly confirmed, idempotent provider action with a live preflight."""
+    if not req.approval_confirmed:
+        raise HTTPException(status_code=400, detail="Confirm this action explicitly before Dristik sends a provider write.")
+    integration = _owned_integration(integration_id, user)
+    connector = connector_store.get_connector_for_org(integration_id, user.org_id)
+    if not connector:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    action_runner = getattr(connector, "perform_action", None)
+    if not callable(action_runner):
+        raise HTTPException(status_code=501, detail="No provider action adapter is registered for this integration.")
+    reservation = connector_store.begin_action(user.org_id, integration_id, req.idempotency_key, req.action)
+    if not reservation.get("created"):
+        if reservation.get("action") != req.action:
+            raise HTTPException(status_code=409, detail="Idempotency key was already used for a different action.")
+        if reservation.get("status") == "SUCCEEDED":
+            return {"idempotent_replay": True, "result": reservation.get("result")}
+        if reservation.get("status") == "RUNNING":
+            raise HTTPException(status_code=409, detail="This action is already running; do not retry with a new key until its outcome is reconciled.")
+        raise HTTPException(status_code=409, detail="This idempotency key already has a non-success outcome. Reconcile the provider state before starting a new action.")
+
+    try:
+        health = await connector.test_connection()
+    except Exception as exc:
+        result = {"status": "PREFLIGHT_FAILED", "provider": integration.provider.value, "action": req.action, "message": f"Live preflight raised {type(exc).__name__}; no action was sent."}
+        connector_store.complete_action(user.org_id, integration_id, req.idempotency_key, "FAILED", result)
+        connector_store.record_event(
+            org_id=integration.org_id, action="PROVIDER_ACTION", result="PREFLIGHT_FAILED",
+            integration_id=integration_id, actor_id=_actor_id(user),
+            details={"provider": integration.provider.value, "action": req.action, "idempotency_key": req.idempotency_key},
+        )
+        raise HTTPException(status_code=502, detail=result["message"]) from exc
+    integration.status = health.status
+    connector_store.persist(integration)
+    if not health.authenticated:
+        result = {"status": "PREFLIGHT_FAILED", "provider": integration.provider.value, "action": req.action, "message": health.message}
+        connector_store.complete_action(user.org_id, integration_id, req.idempotency_key, "FAILED", result)
+        connector_store.record_event(
+            org_id=integration.org_id, action="PROVIDER_ACTION", result="PREFLIGHT_FAILED",
+            integration_id=integration_id, actor_id=_actor_id(user),
+            details={"provider": integration.provider.value, "action": req.action, "idempotency_key": req.idempotency_key},
+        )
+        raise HTTPException(status_code=409, detail={"message": "Provider preflight failed; no action was sent.", "health": health.model_dump(mode="json")})
+
+    try:
+        result = await action_runner(req.action, req.payload)
+    except Exception as exc:
+        # The remote side effect may have happened before the exception. Persist UNKNOWN
+        # and require reconciliation instead of silently inviting a duplicate retry.
+        result = {
+            "status": "UNKNOWN", "provider": integration.provider.value, "action": req.action,
+            "message": f"Action outcome is unknown after {type(exc).__name__}; reconcile the provider before retrying.",
+        }
+    action_status = str(result.get("status", "FAILED")) if isinstance(result, dict) else "FAILED"
+    durable_status = "SUCCEEDED" if action_status == "SUCCEEDED" else ("UNKNOWN" if action_status == "UNKNOWN" else "FAILED")
+    safe_result = result if isinstance(result, dict) else {"status": "FAILED", "message": "Provider action returned an invalid response."}
+    connector_store.complete_action(user.org_id, integration_id, req.idempotency_key, durable_status, safe_result)
+    evidence = safe_result.get("evidence") if isinstance(safe_result, dict) else None
+    connector_store.record_event(
+        org_id=integration.org_id, action="PROVIDER_ACTION", result=durable_status,
+        integration_id=integration_id, actor_id=_actor_id(user),
+        details={
+            "provider": integration.provider.value, "action": req.action,
+            "idempotency_key": req.idempotency_key,
+            "external_id": safe_result.get("external_id") if isinstance(safe_result, dict) else None,
+            "response_sha256": evidence.get("response_sha256") if isinstance(evidence, dict) else None,
+            "verification_status": evidence.get("verification_status") if isinstance(evidence, dict) else "NOT_REPORTED",
+        },
+    )
+    return {"idempotent_replay": False, "result": safe_result}
+
 
 @router.delete("/{integration_id}")
 async def delete_integration(integration_id: str, user: UserIdentity = Depends(require_permission("patches:generate"))):

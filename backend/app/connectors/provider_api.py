@@ -159,7 +159,7 @@ class ProviderApiConnector(BaseConnector):
                 response = await client.request(method, url, headers=headers, params=params)
             latency = round((time.perf_counter() - started) * 1000, 2)
             self._last_status_code = response.status_code
-            self._last_endpoint = url
+            self._last_endpoint = url.replace(token, "[REDACTED]")
             self._last_observed_at = datetime.now(timezone.utc).isoformat()
             try:
                 self._last_payload = response.json()
@@ -284,6 +284,209 @@ class ProviderApiConnector(BaseConnector):
             "evidence": evidence,
             "message": "Resource summaries come from the live provider API response. A successful handshake does not prove unsupported writes or AI-search citation visibility.",
         }
+
+    async def read_resource(self, resource: str, limit: int = 25) -> Dict[str, Any]:
+        """Read a small allowlisted set of real CRM/CMS resources and attach response provenance."""
+        provider = self.credentials.provider
+        token = _token(self.credentials)
+        bounded_limit = max(1, min(int(limit), 100))
+        if not token:
+            return {"status": "NOT_CONNECTED", "provider": provider.value, "resource": resource, "records": [], "message": "Credentials are not configured."}
+        headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+        params: dict[str, str] = {}
+        url = ""
+        if provider == ConnectorType.HUBSPOT:
+            allowed = {
+                "contacts": "firstname,lastname,email,createdate",
+                "companies": "name,domain,industry,createdate",
+                "deals": "dealname,dealstage,amount,closedate,createdate",
+            }
+            if resource not in allowed:
+                return {"status": "NOT_SUPPORTED", "provider": provider.value, "resource": resource, "records": [], "message": "Allowed resources: contacts, companies, deals."}
+            url = f"https://api.hubapi.com/crm/objects/2026-09/{resource}"
+            params = {"limit": str(bounded_limit), "properties": allowed[resource]}
+        elif provider == ConnectorType.STRIPE:
+            allowed = {"customers", "subscriptions", "payment_intents"}
+            if resource not in allowed:
+                return {"status": "NOT_SUPPORTED", "provider": provider.value, "resource": resource, "records": [], "message": "Allowed resources: customers, subscriptions, payment_intents."}
+            url = f"https://api.stripe.com/v1/{resource}"
+            params = {"limit": str(min(bounded_limit, 100))}
+        elif provider == ConnectorType.SALESFORCE:
+            allowed = {
+                "accounts": ("Account", "Id,Name,Industry,Website"),
+                "leads": ("Lead", "Id,Name,Company,Status,CreatedDate"),
+                "opportunities": ("Opportunity", "Id,Name,StageName,Amount,CloseDate"),
+                "campaigns": ("Campaign", "Id,Name,Status,StartDate,EndDate"),
+            }
+            if resource not in allowed:
+                return {"status": "NOT_SUPPORTED", "provider": provider.value, "resource": resource, "records": [], "message": "Allowed resources: accounts, leads, opportunities, campaigns."}
+            base = _origin(self.credentials.api_url, "")
+            if not base:
+                return {"status": "UNAVAILABLE", "provider": provider.value, "resource": resource, "records": [], "message": "A valid Salesforce instance URL is required."}
+            try:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0), follow_redirects=False) as client:
+                    versions_response = await client.get(f"{base}/services/data/", headers=headers)
+                    versions_response.raise_for_status()
+                    versions = versions_response.json()
+                    version_rows = [row for row in versions if isinstance(row, dict) and row.get("version")] if isinstance(versions, list) else []
+                    if not version_rows:
+                        return {"status": "UNAVAILABLE", "provider": provider.value, "resource": resource, "records": [], "message": "Salesforce did not return API version metadata."}
+                    version = max(version_rows, key=lambda row: float(row["version"]))["version"]
+                    object_name, fields = allowed[resource]
+                    query = f"SELECT {fields} FROM {object_name} LIMIT {bounded_limit}"
+                    url = f"{base}/services/data/v{version}/query"
+                    params = {"q": query}
+            except httpx.HTTPStatusError as exc:
+                return {"status": "UNAVAILABLE", "provider": provider.value, "resource": resource, "records": [], "http_status": exc.response.status_code, "message": "Salesforce rejected the read request; check scopes and object permissions."}
+            except (httpx.HTTPError, ValueError, KeyError):
+                return {"status": "UNAVAILABLE", "provider": provider.value, "resource": resource, "records": [], "message": "Salesforce resource read failed."}
+        elif provider == ConnectorType.SANITY and resource == "documents":
+            project_id = (self.credentials.repository or "").strip()
+            dataset = (self.credentials.branch or "").strip()
+            if not project_id or not dataset:
+                return {"status": "UNAVAILABLE", "provider": provider.value, "resource": resource, "records": [], "message": "Sanity project ID and dataset are required."}
+            url = f"https://{project_id}.api.sanity.io/v2021-06-07/data/query/{dataset}"
+            params = {"query": f"*[_type != \"sanity.imageAsset\"][0...{bounded_limit}]{{_id,_type,_updatedAt}}"}
+            headers["Authorization"] = f"Bearer {token}"
+        else:
+            return {"status": "NOT_SUPPORTED", "provider": provider.value, "resource": resource, "records": [], "message": "This resource operation is not implemented for this provider."}
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0), follow_redirects=False) as client:
+                response = await client.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            payload = response.json()
+        except httpx.HTTPStatusError as exc:
+            return {"status": "UNAVAILABLE", "provider": provider.value, "resource": resource, "records": [], "http_status": exc.response.status_code, "message": "Provider rejected the resource read; check credentials, scopes, and resource access."}
+        except (httpx.HTTPError, ValueError):
+            return {"status": "UNAVAILABLE", "provider": provider.value, "resource": resource, "records": [], "message": "Provider resource read failed."}
+        if provider == ConnectorType.SANITY:
+            rows = payload.get("result") or []
+        elif provider == ConnectorType.SALESFORCE:
+            rows = payload.get("records") or []
+        else:
+            rows = payload.get("results") or payload.get("data") or []
+        records = [row for row in rows[:bounded_limit] if isinstance(row, dict)] if isinstance(rows, list) else []
+        serialized = json.dumps(payload, sort_keys=True, default=str)
+        observed_at = datetime.now(timezone.utc).isoformat()
+        return {
+            "status": "LIVE_DATA", "provider": provider.value, "resource": resource,
+            "records": records, "resource_count": len(records), "observed_at": observed_at,
+            "evidence": {
+                "source": url, "http_status": response.status_code, "observed_at": observed_at,
+                "response_sha256": hashlib.sha256(serialized.encode("utf-8")).hexdigest(),
+                "verification_status": "LIVE_API_RESPONSE",
+            },
+        }
+
+    async def perform_action(self, action: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute only explicitly mapped, user-confirmed provider actions."""
+        provider = self.credentials.provider
+        token = _token(self.credentials)
+        if not token:
+            return {"status": "NOT_CONNECTED", "provider": provider.value, "action": action, "message": "Credentials are not configured."}
+        url = ""
+        method = "POST"
+        headers = {"Accept": "application/json", "Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        body: Dict[str, Any] = {}
+        if provider == ConnectorType.TELEGRAM and action == "send_message":
+            if not payload.get("chat_id") or not payload.get("text"):
+                return {"status": "INVALID_INPUT", "provider": provider.value, "action": action, "message": "chat_id and text are required."}
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            body = {"chat_id": str(payload["chat_id"]), "text": str(payload["text"])}
+        elif provider == ConnectorType.SLACK and action == "post_message":
+            if not payload.get("channel") or not payload.get("text"):
+                return {"status": "INVALID_INPUT", "provider": provider.value, "action": action, "message": "channel and text are required."}
+            url = "https://slack.com/api/chat.postMessage"
+            body = {"channel": str(payload["channel"]), "text": str(payload["text"])}
+        elif provider == ConnectorType.X and action == "publish_post":
+            if not payload.get("text"):
+                return {"status": "INVALID_INPUT", "provider": provider.value, "action": action, "message": "text is required."}
+            url = "https://api.x.com/2/tweets"
+            body = {"text": str(payload["text"])}
+        elif provider == ConnectorType.WHATSAPP_BUSINESS and action == "send_template":
+            phone_id = (self.credentials.repository or "").strip()
+            if not phone_id or not payload.get("to") or not payload.get("template_name"):
+                return {"status": "INVALID_INPUT", "provider": provider.value, "action": action, "message": "Phone Number ID, to, and an approved template_name are required."}
+            url = f"https://graph.facebook.com/v22.0/{phone_id}/messages"
+            headers["Authorization"] = f"Bearer {token}"
+            body = {
+                "messaging_product": "whatsapp", "to": str(payload["to"]), "type": "template",
+                "template": {
+                    "name": str(payload["template_name"]),
+                    "language": {"code": str(payload.get("language_code") or "en_US")},
+                    **({"components": payload["components"]} if isinstance(payload.get("components"), list) else {}),
+                },
+            }
+        elif provider == ConnectorType.INSTAGRAM and action == "publish_image":
+            account_id = str(getattr(self.credentials, "account_id", None) or self.credentials.repository or "").strip()
+            media_url = str(payload.get("media_url") or "").strip()
+            if not account_id or not media_url.startswith("https://"):
+                return {"status": "INVALID_INPUT", "provider": provider.value, "action": action, "message": "Instagram Professional account ID and an HTTPS media_url are required."}
+            if not media_url or not payload.get("media_url"):
+                return {"status": "INVALID_INPUT", "provider": provider.value, "action": action, "message": "media_url is required."}
+            try:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=5.0), follow_redirects=False) as client:
+                    create = await client.post(
+                        f"https://graph.facebook.com/v22.0/{account_id}/media", headers=headers,
+                        data={"image_url": media_url, "caption": str(payload.get("caption") or ""), "access_token": token},
+                    )
+                    create.raise_for_status()
+                    creation_id = create.json().get("id")
+                    if not creation_id:
+                        return {"status": "FAILED", "provider": provider.value, "action": action, "message": "Meta did not return a media container ID."}
+                    publish = await client.post(
+                        f"https://graph.facebook.com/v22.0/{account_id}/media_publish", headers=headers,
+                        data={"creation_id": creation_id, "access_token": token},
+                    )
+                    publish.raise_for_status()
+                    response_payload = publish.json()
+                observed_at = datetime.now(timezone.utc).isoformat()
+                serialized = json.dumps(response_payload, sort_keys=True, default=str)
+                return {
+                    "status": "SUCCEEDED" if response_payload.get("id") else "FAILED",
+                    "provider": provider.value, "action": action, "external_id": response_payload.get("id"),
+                    "observed_at": observed_at, "message": "Instagram media publish response received.",
+                    "evidence": {"source": f"https://graph.facebook.com/v22.0/{account_id}/media_publish", "observed_at": observed_at, "http_status": publish.status_code, "response_sha256": hashlib.sha256(serialized.encode("utf-8")).hexdigest(), "verification_status": "PROVIDER_ACCEPTED"},
+                }
+            except httpx.HTTPStatusError as exc:
+                return {"status": "FAILED", "provider": provider.value, "action": action, "http_status": exc.response.status_code, "message": "Instagram rejected the publish request; verify account type, permissions, media URL, and app review."}
+            except httpx.HTTPError:
+                return {"status": "UNKNOWN", "provider": provider.value, "action": action, "message": "Instagram request outcome is unknown after a network failure. Reconcile the provider account before retrying."}
+        else:
+            return {"status": "NOT_SUPPORTED", "provider": provider.value, "action": action, "message": "No reviewed action mapping exists for this provider/action pair; no request was sent."}
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=5.0), follow_redirects=False) as client:
+                response = await client.request(method, url, headers=headers, json=body)
+            try:
+                response_payload = response.json()
+            except ValueError:
+                response_payload = {}
+            observed_at = datetime.now(timezone.utc).isoformat()
+            if response.status_code >= 300:
+                return {"status": "FAILED", "provider": provider.value, "action": action, "http_status": response.status_code, "message": "Provider rejected the action; check scopes, account permissions, and required payload fields."}
+            if provider == ConnectorType.TELEGRAM:
+                accepted = response_payload.get("ok") is True
+                result_obj = response_payload.get("result") or {}
+                external_id = result_obj.get("message_id")
+            elif provider == ConnectorType.SLACK:
+                accepted = response_payload.get("ok") is True
+                external_id = response_payload.get("ts")
+            else:
+                accepted = bool((response_payload.get("data") or {}).get("id"))
+                external_id = (response_payload.get("data") or {}).get("id")
+            serialized = json.dumps(response_payload, sort_keys=True, default=str)
+            source = url.replace(token, "[REDACTED]") if provider == ConnectorType.TELEGRAM else url
+            return {
+                "status": "SUCCEEDED" if accepted else "FAILED", "provider": provider.value, "action": action,
+                "external_id": external_id, "observed_at": observed_at,
+                "http_status": response.status_code,
+                "message": "Provider accepted the action." if accepted else "Provider API did not confirm acceptance.",
+                "evidence": {"source": source, "observed_at": observed_at, "http_status": response.status_code, "response_sha256": hashlib.sha256(serialized.encode("utf-8")).hexdigest(), "verification_status": "PROVIDER_ACCEPTED" if accepted else "PROVIDER_REJECTED"},
+            }
+        except httpx.TimeoutException:
+            return {"status": "UNKNOWN", "provider": provider.value, "action": action, "message": "Provider request timed out; reconcile the provider account before retrying with a new idempotency key."}
+        except httpx.HTTPError:
+            return {"status": "UNKNOWN", "provider": provider.value, "action": action, "message": "Provider request failed at the network layer; reconcile the provider account before retrying."}
 
     async def preview_patch(self, patch: RemediationPatch) -> Dict[str, Any]:
         return {

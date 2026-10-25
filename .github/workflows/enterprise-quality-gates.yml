@@ -7,6 +7,7 @@ on:
       - main
       - master
       - fix/evidence-first-enterprise-audits
+      - feat/complete-integration-platform
 
 permissions:
   contents: read
@@ -29,7 +30,7 @@ jobs:
       - name: Compile backend modules
         run: python -m compileall -q app
       - name: Run evidence integrity tests
-        run: python -m pytest tests/test_evidence_integrity_contract.py tests/test_platform_registry_contract.py -q
+        run: python -m pytest tests/test_evidence_integrity_contract.py tests/test_platform_registry_contract.py tests/test_webhook_security.py -q
 
   frontend:
     name: Frontend typecheck, build and tests

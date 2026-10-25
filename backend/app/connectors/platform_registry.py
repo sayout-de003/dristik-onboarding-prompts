@@ -73,10 +73,18 @@ def registry_payload(adapter_keys: set[str] | None = None) -> list[dict[str, Any
             registered_operations: list[str] = []
         elif provider.adapter_key == "provider_api":
             registered_operations = ["health", "live_resource_discovery"]
+            if provider.id in {"slack", "whatsapp_business", "telegram"}:
+                registered_operations.append("webhook_ingress")
         else:
             # Legacy adapters expose the common lifecycle interface, but are not certified
             # until provider contract tests have passed against real/sandbox accounts.
             registered_operations = ["health", "resource_discovery", "preview_patch", "apply_patch", "rollback_patch"]
+        operation_status = {
+            operation: ("REGISTERED_UNVERIFIED" if operation in registered_operations else "NOT_IMPLEMENTED_OR_NOT_VERIFIED")
+            for operation in provider.operations
+        }
+        for operation in registered_operations:
+            operation_status.setdefault(operation, "REGISTERED_UNVERIFIED")
         result.append({
             "id": provider.id,
             "label": provider.label,
@@ -85,10 +93,7 @@ def registry_payload(adapter_keys: set[str] | None = None) -> list[dict[str, Any
             "target_operations": list(provider.operations),
             "operations": registered_operations,
             "verified_operations": [],
-            "operation_status": {
-                operation: ("REGISTERED_UNVERIFIED" if operation in registered_operations else "NOT_IMPLEMENTED_OR_NOT_VERIFIED")
-                for operation in provider.operations
-            },
+            "operation_status": operation_status,
             "adapter_registered": adapter_registered,
             "implementation_status": "adapter_registered_unverified" if adapter_registered else "adapter_required",
             "connection_status": "DISCONNECTED",

@@ -11,6 +11,8 @@ import html
 import json
 import urllib.parse
 import logging
+import secrets
+import time
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -40,14 +42,16 @@ def _setting(name: str) -> str:
 def _callback(request: Optional[Request] = None) -> str:
     configured = _setting("OAUTH_REDIRECT_URI")
     if configured:
-        # If configured with localhost, but incoming request came from a remote host/domain,
-        # prefer the real request host to avoid dead localhost redirects on hosted servers.
-        if "localhost" in configured and request:
+        if "localhost" in configured and settings.ENVIRONMENT.lower() == "production":
+            raise HTTPException(status_code=503, detail="Set OAUTH_REDIRECT_URI to the canonical HTTPS production callback URL.")
+        if "localhost" in configured and request and settings.ENVIRONMENT.lower() != "production":
             host = request.headers.get("x-forwarded-host") or request.headers.get("host")
             if host and not host.startswith("localhost") and not host.startswith("127.0.0.1"):
                 scheme = request.headers.get("x-forwarded-proto") or request.url.scheme or "http"
                 return f"{scheme}://{host}/api/v1/connectors/oauth/callback"
         return configured
+    if settings.ENVIRONMENT.lower() == "production":
+        raise HTTPException(status_code=503, detail="OAUTH_REDIRECT_URI must be configured in production.")
     if request:
         host = request.headers.get("x-forwarded-host") or request.headers.get("host")
         if host:
@@ -66,7 +70,9 @@ def google_redirect_uri(request: Optional[Request] = None) -> str:
     configured = settings.registered_google_redirect_uri()
     if not configured:
         return _callback(request)
-    if "localhost" in configured and request is not None:
+    if "localhost" in configured and settings.ENVIRONMENT.lower() == "production":
+        raise HTTPException(status_code=503, detail="Set GOOGLE_OAUTH_REDIRECT_URI to the canonical HTTPS production callback URL.")
+    if "localhost" in configured and request is not None and settings.ENVIRONMENT.lower() != "production":
         host = request.headers.get("x-forwarded-host") or request.headers.get("host")
         if host and not host.startswith("localhost") and not host.startswith("127.0.0.1"):
             scheme = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
@@ -232,10 +238,13 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
 
 
 def _sign(payload: Dict[str, str]) -> str:
-    raw = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode()
     secret_value = settings.AUTH_SECRET or ""
     if len(secret_value) < 32 or secret_value == "dristik-dev-secret-change-me":
         raise HTTPException(status_code=503, detail="OAuth state signing requires a configured secret of at least 32 characters.")
+    state_payload = dict(payload)
+    state_payload["iat"] = str(int(time.time()))
+    state_payload["nonce"] = secrets.token_urlsafe(24)
+    raw = base64.urlsafe_b64encode(json.dumps(state_payload, separators=(",", ":")).encode()).decode()
     secret = secret_value.encode()
     sig = hmac.new(secret, raw.encode(), hashlib.sha256).hexdigest()
     return f"{raw}.{sig}"
@@ -256,6 +265,16 @@ def _unsign(state: str) -> Dict[str, str]:
     data = json.loads(base64.urlsafe_b64decode(raw.encode()))
     if not isinstance(data, dict) or "provider" not in data:
         raise HTTPException(status_code=400, detail="OAuth state is missing the provider.")
+    try:
+        issued_at = int(data.get("iat", "0"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="OAuth state timestamp is invalid.") from exc
+    now = int(time.time())
+    nonce = str(data.get("nonce") or "")
+    if not nonce or issued_at > now + 60 or now - issued_at > 900:
+        raise HTTPException(status_code=400, detail="OAuth state has expired or is incomplete.")
+    if not connector_store.consume_oauth_nonce(nonce, issued_at + 900):
+        raise HTTPException(status_code=400, detail="OAuth state was already used or has expired.")
     return {str(k): str(v) for k, v in data.items()}
 
 
@@ -339,6 +358,7 @@ async def _exchange(provider: str, code: str, shop: str, redirect_uri: Optional[
     async with httpx.AsyncClient(timeout=20) as client:
         if provider in ("instagram", "whatsapp_business"):
             # Meta OAuth access-token exchange is a GET with query parameters.
+            body.pop("grant_type", None)
             response = await client.get(url, params=body, headers=headers)
         else:
             response = await client.post(url, data=body, headers=headers)
@@ -351,6 +371,55 @@ async def _exchange(provider: str, code: str, shop: str, redirect_uri: Optional[
     token = data.get("access_token")
     if not token:
         raise HTTPException(status_code=400, detail="No access token was returned. No connector was saved.")
+    return data
+
+
+async def refresh_provider_credentials(provider: str, credentials: ConnectorCredentials) -> Dict[str, Any]:
+    """Refresh OAuth credentials only for providers with a configured, supported refresh flow."""
+    spec = PROVIDERS.get(provider)
+    if spec is None:
+        raise HTTPException(status_code=409, detail="This connection has no configured OAuth refresh adapter.")
+    access_token = credentials.access_token
+    refresh_token = credentials.refresh_token
+    if not access_token and credentials.api_key:
+        try:
+            stored = json.loads(credentials.api_key)
+            access_token = stored.get("access_token") if isinstance(stored, dict) else None
+            refresh_token = refresh_token or (stored.get("refresh_token") if isinstance(stored, dict) else None)
+        except (TypeError, ValueError):
+            pass
+    if provider in ("instagram", "whatsapp_business"):
+        if not access_token:
+            raise HTTPException(status_code=409, detail="Meta token is missing; reconnect the account.")
+        params = {
+            "grant_type": "fb_exchange_token",
+            "client_id": _setting(spec["client_id"]),
+            "client_secret": _setting(spec["client_secret"]),
+            "fb_exchange_token": access_token,
+        }
+        url = spec["token"]
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.get(url, params=params, headers={"Accept": "application/json"})
+    else:
+        if not refresh_token:
+            raise HTTPException(status_code=409, detail="No refresh token is available for this connection; reconnect it through OAuth.")
+        body = {
+            "client_id": _setting(spec["client_id"]),
+            "client_secret": _setting(spec["client_secret"]),
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "redirect_uri": _callback(),
+        }
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(spec["token"], data=body, headers={"Accept": "application/json"})
+    if not response.is_success:
+        raise HTTPException(status_code=502, detail="The provider rejected the refresh request. Reconnect the account and verify its app configuration.")
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail="The provider returned an invalid refresh response.") from exc
+    if not data.get("access_token"):
+        raise HTTPException(status_code=502, detail="The provider refresh response did not contain an access token.")
     return data
 
 
@@ -578,6 +647,8 @@ async def oauth_callback(
             success=False,
         )
 
+    team_data = token_data.get("team") if isinstance(token_data.get("team"), dict) else {}
+    provider_account_id = token_data.get("team_id") or team_data.get("id") or token_data.get("account_id") or saved.get("account_id") or ""
     stored = {
         "type": "oauth2",
         "provider": provider,
@@ -586,6 +657,7 @@ async def oauth_callback(
         "property_id": discovered_prop,
         "shop": shop_host,
         "repository": saved.get("repository") or "",
+        "account_id": provider_account_id,
     }
     creds = ConnectorCredentials(
         provider=spec["connector"],
@@ -593,8 +665,10 @@ async def oauth_callback(
         api_key=json.dumps(stored),
         access_token=token_data.get("access_token"),
         refresh_token=token_data.get("refresh_token"),
+        account_id=str(provider_account_id) if provider_account_id else None,
         github_token=token_data.get("access_token") if provider == "github" else None,
         repository=saved.get("repository") or None,
+        scopes=(token_data.get("scope", "").replace(",", " ").split() if isinstance(token_data.get("scope", ""), str) else []),
     )
     integration = connector_store.add_integration(
         provider=spec["connector"],
@@ -602,7 +676,7 @@ async def oauth_callback(
         target_url=creds.api_url or target,
         credentials=creds,
         repository=saved.get("repository") or None,
-        settings={"auth_mode": "oauth2", "oauth_provider": provider, "property_id": discovered_prop},
+        settings={"auth_mode": "oauth2", "oauth_provider": provider, "property_id": discovered_prop, "account_id": provider_account_id or None},
         org_id=org_id,
     )
     # Authorization is not the same as a working integration. Verify against the real API.
@@ -699,7 +773,7 @@ async def oauth_callback(
     return _page(
         "Connected",
         f"The {html.escape(spec['label'])} authorization for <strong>{safe_target}</strong> is verified and saved. "
-        "Search, session, and revenue telemetry will stream automatically upon query.",
+        "Use the supported resource-read operations to retrieve live data. Other operations remain unavailable until their capability checks pass.",
         script,
         success=True,
     )

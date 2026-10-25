@@ -133,6 +133,9 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
   const [providerResource, setProviderResource] = useState('');
   const [providerDataset, setProviderDataset] = useState('');
   const [providerApiUrl, setProviderApiUrl] = useState('');
+  const [providerWebhookSecret, setProviderWebhookSecret] = useState('');
+  const [resourcePreview, setResourcePreview] = useState<{ integrationId: string; resource: string; result: any } | null>(null);
+  const [actionDrafts, setActionDrafts] = useState<Record<string, Record<string, string>>>({});
   const [providerRegistry, setProviderRegistry] = useState<Record<string, { implementation_status?: string; connection_status?: string; notes?: string | null }>>({});
 
   const fetchIntegrations = async () => {
@@ -165,6 +168,7 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
     setProviderResource('');
     setProviderDataset('');
     setProviderApiUrl('');
+    setProviderWebhookSecret('');
   }, [activeTab]);
 
   useEffect(() => {
@@ -363,9 +367,11 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
     } else if (['sanity', 'openai_search', 'perplexity', 'claude', 'gemini', 'linkedin', 'x', 'tiktok', 'instagram', 'whatsapp_business', 'telegram', 'slack', 'hubspot', 'salesforce', 'stripe'].includes(activeTab)) {
       payload.api_key = providerToken;
       payload.access_token = providerToken;
+      payload.webhook_secret = providerWebhookSecret || undefined;
       payload.api_url = providerApiUrl || undefined;
       payload.repository = providerResource || undefined;
       payload.branch = providerDataset || undefined;
+      if (activeTab === 'slack' || activeTab === 'instagram') payload.account_id = providerResource || undefined;
       payload.target_url = providerApiUrl || siteUrl || ({
         sanity: 'https://api.sanity.io',
         openai_search: 'https://api.openai.com',
@@ -437,7 +443,7 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
     }
   };
 
-  const handleConnectorAction = async (integrationId: string, action: 'test' | 'reconnect' | 'revoke') => {
+  const handleConnectorAction = async (integrationId: string, action: 'test' | 'reconnect' | 'refresh' | 'revoke') => {
     setLoading(true);
     try {
       const route = action === 'test'
@@ -456,6 +462,62 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
       await fetchProviderRegistry();
     } catch {
       setStatusMessage(`${action} failed: network error.`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReadResource = async (integrationId: string, resource: string) => {
+    setLoading(true);
+    setResourcePreview(null);
+    try {
+      const res = await fetch(`/api/v1/connectors/${integrationId}/resources/${encodeURIComponent(resource)}?limit=5`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setStatusMessage(data.detail || `Could not read ${resource}.`);
+        return;
+      }
+      setResourcePreview({ integrationId, resource, result: data });
+      setStatusMessage(data.status === 'LIVE_DATA' ? `✓ Read ${data.resource_count ?? 0} live ${resource} records.` : (data.message || `Resource status: ${data.status || 'unavailable'}`));
+    } catch {
+      setStatusMessage(`Could not read ${resource}: network error.`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const setActionDraftField = (integrationId: string, field: string, value: string) => {
+    setActionDrafts((current) => ({
+      ...current,
+      [integrationId]: { ...(current[integrationId] || {}), [field]: value },
+    }));
+  };
+
+  const handleProviderAction = async (integrationId: string, action: string, payload: Record<string, string>) => {
+    const approved = window.confirm(`Dristik will send the "${action}" action to the connected provider. Continue?`);
+    if (!approved) return;
+    setLoading(true);
+    try {
+      const key = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const res = await fetch(`/api/v1/connectors/${integrationId}/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, idempotency_key: key, approval_confirmed: true, payload }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const result = data.result || data.detail || data;
+      if (!res.ok) {
+        setStatusMessage(typeof result === 'string' ? result : JSON.stringify(result));
+      } else {
+        setResourcePreview({ integrationId, resource: `action: ${action}`, result });
+        setStatusMessage(result.status === 'SUCCEEDED' ? `✓ Provider accepted ${action}.` : (result.message || `${action}: ${result.status || 'unverified'}`));
+      }
+      await fetchIntegrations();
+      await fetchProviderRegistry();
+    } catch {
+      setStatusMessage(`Action "${action}" failed at the network layer. Check the provider before retrying.`);
     } finally {
       setLoading(false);
     }
@@ -1284,6 +1346,13 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
                       <input type="url" value={providerApiUrl} onChange={(e) => setProviderApiUrl(e.target.value)} placeholder="Only if your provider requires a custom endpoint" className="w-full bg-paper-50 border border-line rounded px-3 py-2 text-sm text-ink" />
                     </div>
                   )}
+                  {activeTab === 'telegram' && (
+                    <div>
+                      <label className="text-xs text-ink-700 font-medium block mb-1">Telegram webhook secret token (optional)</label>
+                      <input type="password" autoComplete="new-password" value={providerWebhookSecret} onChange={(e) => setProviderWebhookSecret(e.target.value)} placeholder="Must match the secret configured in setWebhook" className="w-full bg-paper-50 border border-line rounded px-3 py-2 text-sm text-ink" />
+                      <p className="mt-1 text-[10px] text-ink-500">Dristik validates this token on incoming webhook requests. Register the public webhook URL and the same secret with Telegram.</p>
+                    </div>
+                  )}
                   {activeTab !== 'sanity' && activeTab !== 'whatsapp_business' && (
                     <div>
                       <label className="text-xs text-ink-700 font-medium block mb-1">Optional account or resource ID</label>
@@ -1435,17 +1504,95 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
                         {integ.target_url || integ.repository}
                       </div>
 
+                      {(({
+                        hubspot: ['contacts', 'companies', 'deals'],
+                        salesforce: ['accounts', 'leads', 'opportunities', 'campaigns'],
+                        stripe: ['customers', 'subscriptions', 'payment_intents'],
+                        sanity: ['documents'],
+                      } as Record<string, string[]>)[integ.provider] || []).length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {(({
+                            hubspot: ['contacts', 'companies', 'deals'],
+                            salesforce: ['accounts', 'leads', 'opportunities', 'campaigns'],
+                            stripe: ['customers', 'subscriptions', 'payment_intents'],
+                            sanity: ['documents'],
+                          } as Record<string, string[]>)[integ.provider] || []).map((resource) => (
+                            <button key={resource} type="button" disabled={loading || String(integ.status).toLowerCase() !== 'connected'} onClick={() => handleReadResource(integ.integration_id, resource)} className="rounded border border-line px-2 py-1 text-[10px] text-ink-700 hover:bg-paper-100 disabled:opacity-40">
+                              Read {resource.replace('_', ' ')}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {String(integ.status).toLowerCase() === 'connected' && ['telegram', 'slack', 'x', 'whatsapp_business', 'instagram'].includes(integ.provider) && (
+                        <div className="rounded border border-line bg-paper-50 p-3 space-y-2">
+                          <div className="text-[10px] uppercase tracking-wide font-semibold text-ink-500">Explicitly confirmed provider action</div>
+                          {integ.provider === 'telegram' && (
+                            <>
+                              <input value={actionDrafts[integ.integration_id]?.chat_id || ''} onChange={(e) => setActionDraftField(integ.integration_id, 'chat_id', e.target.value)} placeholder="Telegram chat ID" className="w-full rounded border border-line bg-paper-50 px-2 py-1.5 text-xs text-ink" />
+                              <textarea value={actionDrafts[integ.integration_id]?.text || ''} onChange={(e) => setActionDraftField(integ.integration_id, 'text', e.target.value)} placeholder="Message text" rows={2} className="w-full rounded border border-line bg-paper-50 px-2 py-1.5 text-xs text-ink" />
+                              <button type="button" disabled={loading || !actionDrafts[integ.integration_id]?.chat_id || !actionDrafts[integ.integration_id]?.text} onClick={() => handleProviderAction(integ.integration_id, 'send_message', { chat_id: actionDrafts[integ.integration_id]?.chat_id || '', text: actionDrafts[integ.integration_id]?.text || '' })} className="rounded border border-line px-2 py-1 text-[11px] text-ink-700 disabled:opacity-40">Send Telegram message…</button>
+                            </>
+                          )}
+                          {integ.provider === 'slack' && (
+                            <>
+                              <input value={actionDrafts[integ.integration_id]?.channel || ''} onChange={(e) => setActionDraftField(integ.integration_id, 'channel', e.target.value)} placeholder="Slack channel ID" className="w-full rounded border border-line bg-paper-50 px-2 py-1.5 text-xs text-ink" />
+                              <textarea value={actionDrafts[integ.integration_id]?.text || ''} onChange={(e) => setActionDraftField(integ.integration_id, 'text', e.target.value)} placeholder="Message text" rows={2} className="w-full rounded border border-line bg-paper-50 px-2 py-1.5 text-xs text-ink" />
+                              <button type="button" disabled={loading || !actionDrafts[integ.integration_id]?.channel || !actionDrafts[integ.integration_id]?.text} onClick={() => handleProviderAction(integ.integration_id, 'post_message', { channel: actionDrafts[integ.integration_id]?.channel || '', text: actionDrafts[integ.integration_id]?.text || '' })} className="rounded border border-line px-2 py-1 text-[11px] text-ink-700 disabled:opacity-40">Post Slack message…</button>
+                            </>
+                          )}
+                          {integ.provider === 'x' && (
+                            <>
+                              <textarea value={actionDrafts[integ.integration_id]?.text || ''} onChange={(e) => setActionDraftField(integ.integration_id, 'text', e.target.value)} placeholder="Post text" rows={3} className="w-full rounded border border-line bg-paper-50 px-2 py-1.5 text-xs text-ink" />
+                              <button type="button" disabled={loading || !actionDrafts[integ.integration_id]?.text} onClick={() => handleProviderAction(integ.integration_id, 'publish_post', { text: actionDrafts[integ.integration_id]?.text || '' })} className="rounded border border-line px-2 py-1 text-[11px] text-ink-700 disabled:opacity-40">Publish on X…</button>
+                            </>
+                          )}
+                          {integ.provider === 'whatsapp_business' && (
+                            <>
+                              <input value={actionDrafts[integ.integration_id]?.to || ''} onChange={(e) => setActionDraftField(integ.integration_id, 'to', e.target.value)} placeholder="Recipient phone number (international format)" className="w-full rounded border border-line bg-paper-50 px-2 py-1.5 text-xs text-ink" />
+                              <input value={actionDrafts[integ.integration_id]?.template_name || ''} onChange={(e) => setActionDraftField(integ.integration_id, 'template_name', e.target.value)} placeholder="Approved WhatsApp template name" className="w-full rounded border border-line bg-paper-50 px-2 py-1.5 text-xs text-ink" />
+                              <button type="button" disabled={loading || !actionDrafts[integ.integration_id]?.to || !actionDrafts[integ.integration_id]?.template_name} onClick={() => handleProviderAction(integ.integration_id, 'send_template', { to: actionDrafts[integ.integration_id]?.to || '', template_name: actionDrafts[integ.integration_id]?.template_name || '' })} className="rounded border border-line px-2 py-1 text-[11px] text-ink-700 disabled:opacity-40">Send approved template…</button>
+                            </>
+                          )}
+                          {integ.provider === 'instagram' && (
+                            <>
+                              <input value={actionDrafts[integ.integration_id]?.media_url || ''} onChange={(e) => setActionDraftField(integ.integration_id, 'media_url', e.target.value)} placeholder="Public HTTPS image URL" className="w-full rounded border border-line bg-paper-50 px-2 py-1.5 text-xs text-ink" />
+                              <textarea value={actionDrafts[integ.integration_id]?.caption || ''} onChange={(e) => setActionDraftField(integ.integration_id, 'caption', e.target.value)} placeholder="Caption (optional)" rows={2} className="w-full rounded border border-line bg-paper-50 px-2 py-1.5 text-xs text-ink" />
+                              <button type="button" disabled={loading || !actionDrafts[integ.integration_id]?.media_url?.startsWith('https://')} onClick={() => handleProviderAction(integ.integration_id, 'publish_image', { media_url: actionDrafts[integ.integration_id]?.media_url || '', caption: actionDrafts[integ.integration_id]?.caption || '' })} className="rounded border border-line px-2 py-1 text-[11px] text-ink-700 disabled:opacity-40">Publish image…</button>
+                            </>
+                          )}
+                        </div>
+                      )}
+
                       <div className="flex items-center justify-between pt-2 border-t border-line text-[11px]">
                         <span className={`font-mono uppercase ${String(integ.status).toLowerCase() === 'connected' ? 'text-good' : 'text-ink-500'}`}>{integ.status}</span>
                         <div className="flex flex-wrap justify-end gap-2">
                           <button type="button" disabled={loading} onClick={() => handleConnectorAction(integ.integration_id, 'test')} className="text-ink-700 hover:underline disabled:opacity-50">Test</button>
                           <button type="button" disabled={loading} onClick={() => handleConnectorAction(integ.integration_id, 'reconnect')} className="text-ink-700 hover:underline disabled:opacity-50">Reconnect</button>
+                          {integ.settings?.auth_mode === 'oauth2' && (
+                            <button type="button" disabled={loading} onClick={() => handleConnectorAction(integ.integration_id, 'refresh')} className="text-ink-700 hover:underline disabled:opacity-50">Refresh token</button>
+                          )}
                           <button type="button" disabled={loading} onClick={() => handleConnectorAction(integ.integration_id, 'revoke')} className="text-ink-700 hover:underline disabled:opacity-50">Forget credentials</button>
                           <button type="button" disabled={loading} onClick={() => handleDisconnect(integ.integration_id)} className="text-bad hover:underline disabled:opacity-50">Delete</button>
                         </div>
                       </div>
                     </div>
                   ))
+                )}
+                {resourcePreview && (
+                  <div className="rounded-lg border border-line bg-paper-50 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs font-semibold text-ink">Live resource preview: {resourcePreview.resource}</div>
+                      <button type="button" onClick={() => setResourcePreview(null)} className="text-xs text-ink-500 hover:text-ink">Close</button>
+                    </div>
+                    <div className="text-[10px] font-mono text-ink-500">
+                      {resourcePreview.result.status || 'UNKNOWN'} · {resourcePreview.result.resource_count ?? 'count not reported'} records
+                    </div>
+                    <pre className="max-h-56 overflow-auto rounded bg-paper-100 p-2 text-[10px] leading-relaxed text-ink-700 whitespace-pre-wrap break-words">{JSON.stringify(resourcePreview.result.records || resourcePreview.result, null, 2)}</pre>
+                    {resourcePreview.result.evidence?.response_sha256 && (
+                      <div className="text-[9px] font-mono text-ink-400 break-all">SHA-256: {resourcePreview.result.evidence.response_sha256}</div>
+                    )}
+                  </div>
                 )}
               </div>
             )}
