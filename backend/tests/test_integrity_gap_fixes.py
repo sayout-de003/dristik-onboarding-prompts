@@ -48,13 +48,16 @@ def test_oauth_does_not_issue_mock_codes(monkeypatch):
     client = TestClient(app)
     anonymous = client.get("/api/v1/connectors/google/oauth/authorize?domain=example.com", follow_redirects=False)
     assert anonymous.status_code == 401
+    email = f"oauth_{uuid.uuid4().hex[:8]}@example.com"
     signup = client.post("/api/v1/auth/signup", json={
         "full_name": "OAuth Owner",
-        "email": f"oauth_{uuid.uuid4().hex[:8]}@example.com",
+        "email": email,
         "password": "OwnerPass1",
         "organization_name": "OAuth Org",
     })
     assert signup.status_code == 200, signup.text
+    login = client.post("/api/v1/auth/login", json={"email": email, "password": "OwnerPass1"})
+    assert login.status_code == 200, login.text
     response = client.get("/api/v1/connectors/google/oauth/authorize?domain=example.com", follow_redirects=False)
     assert response.status_code == 503
     assert "mock" not in response.text.lower() or "not issued" in response.text.lower()
