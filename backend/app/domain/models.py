@@ -301,18 +301,19 @@ class ClaimLedgerEntry(BaseModel):
 class ClaimLedger(BaseModel):
     """
     Claim ledger whose certification flag is derived conservatively from its entries.
-    Evidence IDs must still be resolved against the owning audit's evidence store
-    before publication; this model-level check is a minimum gate, not a substitute.
+    Certification requires a trusted verifier to confirm evidence IDs resolve in the
+    owning audit store. This schema cannot perform that lookup itself.
     """
     ledger_id: str
     run_id: str
     entries: List[ClaimLedgerEntry] = Field(default_factory=list)
     certified_zero_fake: bool = False
     rejected_unsupported_count: int = 0
+    evidence_resolution_verified: bool = False
 
     @model_validator(mode="after")
     def derive_certification_state(self) -> "ClaimLedger":
-        entries_are_supported = bool(self.entries) and all(
+        entries_are_supported = self.evidence_resolution_verified and bool(self.entries) and all(
             entry.is_valid_fact
             and bool(entry.evidence_ids)
             and bool(entry.timestamp.strip())
