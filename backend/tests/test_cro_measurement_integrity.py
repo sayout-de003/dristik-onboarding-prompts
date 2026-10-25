@@ -219,3 +219,25 @@ def test_html_report_exposes_sample_coverage_and_execution_limits():
     assert "NOT_EXECUTED" in html
     assert "25.0%" in html
 
+def test_unmeasured_experience_and_funnel_scores_are_not_zero_scores():
+    report = build_cro_intelligence(pages=[])
+    experience = next(item for item in report.dimensions if item.id == "experience")
+    funnel = next(item for item in report.dimensions if item.id == "funnel")
+    assert experience.status == "UNMEASURED"
+    assert experience.score is None
+    assert funnel.status == "UNMEASURED"
+    assert funnel.score is None
+
+
+def test_report_does_not_claim_experiment_winner_or_uplift_without_experiment():
+    report = build_cro_intelligence(
+        pages=[{
+            "url": "https://example.com/",
+            "raw_html": "<html><head><meta name='viewport' content='width=device-width'></head><body><h1>Example</h1></body></html>",
+        }],
+    )
+    html = cro_report_generator.render_html_report(report, domain="example.com")
+    assert "No experiment was registered" in html
+    assert "No winner is declared" in html
+    assert "No implemented change or experiment outcome was supplied" in html
+
