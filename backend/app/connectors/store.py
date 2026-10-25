@@ -95,6 +95,14 @@ class ConnectorStore:
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_connector_audit_org_time ON connector_audit_events(org_id, created_at)")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS connector_oauth_state_nonces (
+                nonce TEXT PRIMARY KEY,
+                expires_at INTEGER NOT NULL,
+                consumed_at TEXT NOT NULL
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_connector_oauth_nonce_expiry ON connector_oauth_state_nonces(expires_at)")
         return conn
 
     def _load(self) -> None:
@@ -140,6 +148,25 @@ class ConnectorStore:
 
     def list_integrations(self, org_id: str = "org_default") -> List[Integration]:
         return [i for i in self._integrations.values() if i.org_id == org_id]
+
+    def consume_oauth_nonce(self, nonce: str, expires_at: int) -> bool:
+        """Atomically consume a signed OAuth state nonce once; reject replay."""
+        if not nonce:
+            return False
+        now = int(datetime.now(timezone.utc).timestamp())
+        if expires_at < now:
+            return False
+        with self._connect() as conn:
+            conn.execute("DELETE FROM connector_oauth_state_nonces WHERE expires_at < ?", (now,))
+            try:
+                conn.execute(
+                    "INSERT INTO connector_oauth_state_nonces (nonce, expires_at, consumed_at) VALUES (?, ?, ?)",
+                    (nonce, expires_at, datetime.now(timezone.utc).isoformat()),
+                )
+                conn.commit()
+                return True
+            except sqlite3.IntegrityError:
+                return False
 
     def get_integration_for_org(self, integration_id: str, org_id: str) -> Optional[Integration]:
         """Resolve an integration only inside its tenant boundary."""
