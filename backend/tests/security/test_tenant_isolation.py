@@ -16,7 +16,7 @@ def test_missing_run_is_not_found(monkeypatch):
     monkeypatch.setattr(access.orchestrator, "runs", {})
     with pytest.raises(HTTPException) as caught:
         require_analysis("run_does_not_exist", owner)
-    assert caught.value.status_code == 404
+    assert caught.value.status_code == 403
 
 
 def test_cross_tenant_run_is_hidden_as_not_found(monkeypatch):
