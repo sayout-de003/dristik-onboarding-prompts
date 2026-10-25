@@ -1836,6 +1836,18 @@ class AnalysisOrchestrator:
                 seal_manifest(run_manifest, snapshots=blackboard.evidence_store.snapshots)
             except Exception as seal_err:
                 logger.exception("Manifest sealing failed for %s", analysis_id)
+                # A report must never remain certified when its evidence manifest could
+                # not be sealed. The report may already have been written, so persist an
+                # explicit downgrade together with the failed terminal state.
+                report.certification_status = "NOT_CERTIFIED"
+                report.quality_gate_results = {
+                    **(report.quality_gate_results or {}),
+                    "manifest_seal": {
+                        "status": "FAILED",
+                        "error_type": type(seal_err).__name__,
+                    },
+                }
+                run.report = report
                 run.status = AnalysisStage.FAILED
                 run.error = "MANIFEST_SEAL_FAILED"
                 run.current_step = "Validated report persisted but manifest sealing failed"
