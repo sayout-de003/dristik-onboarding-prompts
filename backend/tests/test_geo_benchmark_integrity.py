@@ -52,3 +52,18 @@ def test_provider_error_text_is_not_counted_as_a_brand_mention():
     geo = runner()
     assert geo._detect_mention_and_position("API Error: Dristik unavailable", "Dristik", "dristik.example") == (False, None)
     assert geo._detect_mention_and_position("Missing API key for Dristik", "Dristik", "dristik.example") == (False, None)
+
+
+def test_share_of_model_is_unmeasured_without_successful_evaluations():
+    geo = runner()
+    metric = geo.calculate_share_of_model(
+        evaluations=[],
+        target_domain="example.com",
+        brand_name="Example",
+        competitors=["Competitor"],
+    )
+    assert metric.total_evaluated_queries == 0
+    assert metric.share_of_model_pct is None
+    assert metric.funnel_weighted_som_pct is None
+    assert metric.first_party_citation_share_pct is None
+    assert metric.recommendation_rank_score is None
