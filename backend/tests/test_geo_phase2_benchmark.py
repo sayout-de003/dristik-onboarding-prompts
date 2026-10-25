@@ -107,6 +107,7 @@ class MockSuccessAdapter(BaseGeoEngineAdapter):
             citations=["https://alienhouse.ai/services", "https://techcrunch.com/features"],
             status_code=200,
             latency_ms=120.5,
+            is_live=True,
         )
 
 
