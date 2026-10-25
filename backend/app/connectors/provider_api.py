@@ -145,7 +145,7 @@ class ProviderApiConnector(BaseConnector):
         method, url, headers, params, config_error = self._probe(token)
         if config_error:
             return ConnectorHealth(
-                provider=provider, status=ConnectorHealthStatus.ERROR,
+                provider=provider, status=ConnectorHealthStatus.UNAVAILABLE,
                 authenticated=False, message=config_error,
                 permissions_missing=["configured provider API capability"],
             )
@@ -162,15 +162,15 @@ class ProviderApiConnector(BaseConnector):
             except ValueError:
                 self._last_payload = None
             if response.status_code in (401, 403):
-                status = ConnectorHealthStatus.UNAUTHORIZED
+                status = ConnectorHealthStatus.AUTH_REQUIRED
                 authenticated = False
                 message = f"Provider rejected credentials or permissions (HTTP {response.status_code})."
             elif response.status_code == 429:
-                status = ConnectorHealthStatus.ERROR
+                status = ConnectorHealthStatus.DEGRADED
                 authenticated = False
                 message = "Provider rate-limited the connection test; retry after its reset window."
             elif response.status_code >= 500:
-                status = ConnectorHealthStatus.ERROR
+                status = ConnectorHealthStatus.DEGRADED
                 authenticated = False
                 message = f"Provider service returned HTTP {response.status_code}."
             elif response.status_code >= 300:
@@ -184,15 +184,15 @@ class ProviderApiConnector(BaseConnector):
                 except ValueError:
                     pass
                 if provider == ConnectorType.SLACK and isinstance(payload, dict) and payload.get("ok") is False:
-                    status = ConnectorHealthStatus.UNAUTHORIZED
+                    status = ConnectorHealthStatus.AUTH_REQUIRED
                     authenticated = False
                     message = "Slack auth.test rejected the token or required scopes."
                 elif provider == ConnectorType.TELEGRAM and isinstance(payload, dict) and payload.get("ok") is False:
-                    status = ConnectorHealthStatus.UNAUTHORIZED
+                    status = ConnectorHealthStatus.AUTH_REQUIRED
                     authenticated = False
                     message = "Telegram getMe rejected the bot token."
                 elif provider == ConnectorType.TIKTOK and isinstance(payload, dict) and isinstance(payload.get("error"), dict) and payload["error"].get("code") not in (None, "", "ok", "0"):
-                    status = ConnectorHealthStatus.UNAUTHORIZED
+                    status = ConnectorHealthStatus.AUTH_REQUIRED
                     authenticated = False
                     message = "TikTok rejected the access token or required scopes."
                 elif isinstance(payload, dict) and isinstance(payload.get("error"), dict):
@@ -211,14 +211,14 @@ class ProviderApiConnector(BaseConnector):
             )
         except httpx.TimeoutException:
             return ConnectorHealth(
-                provider=provider, status=ConnectorHealthStatus.ERROR,
+                provider=provider, status=ConnectorHealthStatus.DEGRADED,
                 latency_ms=round((time.perf_counter() - started) * 1000, 2),
                 authenticated=False, message="Provider connection timed out after 15 seconds.",
                 permissions_missing=["reachable provider API"],
             )
         except httpx.HTTPError as exc:
             return ConnectorHealth(
-                provider=provider, status=ConnectorHealthStatus.ERROR,
+                provider=provider, status=ConnectorHealthStatus.DEGRADED,
                 latency_ms=round((time.perf_counter() - started) * 1000, 2),
                 authenticated=False, message=f"Provider network error: {type(exc).__name__}.",
                 permissions_missing=["reachable provider API"],
