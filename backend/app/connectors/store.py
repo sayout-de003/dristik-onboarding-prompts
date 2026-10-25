@@ -215,6 +215,16 @@ class ConnectorStore:
         elif integ.provider == ConnectorType.CRUX:
             from app.connectors.crux.connector import CruxConnector
             return CruxConnector(creds)
+        elif integ.provider in (
+            ConnectorType.FRAMER, ConnectorType.WIX, ConnectorType.SANITY,
+            ConnectorType.OPENAI_SEARCH, ConnectorType.PERPLEXITY, ConnectorType.CLAUDE,
+            ConnectorType.GEMINI, ConnectorType.LINKEDIN, ConnectorType.X,
+            ConnectorType.TIKTOK, ConnectorType.INSTAGRAM, ConnectorType.WHATSAPP_BUSINESS,
+            ConnectorType.TELEGRAM, ConnectorType.SLACK, ConnectorType.HUBSPOT,
+            ConnectorType.SALESFORCE, ConnectorType.STRIPE,
+        ):
+            from app.connectors.provider_api import ProviderApiConnector
+            return ProviderApiConnector(creds)
         else:
             return GenericWebsiteConnector(creds)
 
