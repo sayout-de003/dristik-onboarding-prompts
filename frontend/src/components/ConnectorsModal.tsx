@@ -10,13 +10,13 @@ interface ConnectorsModalProps {
   notice?: string | null;
 }
 
-export type ConnectorCategory = 'ALL' | 'ANALYTICS' | 'CRM' | 'GEO' | 'CMS';
+export type ConnectorCategory = 'ALL' | 'ANALYTICS' | 'CRM' | 'GEO' | 'CMS' | 'SOCIAL' | 'MESSAGING' | 'DEVELOPER';
 
 export interface ConnectorDefinition {
   id: ConnectorType;
   label: string;
   icon: string;
-  category: 'ANALYTICS' | 'CRM' | 'GEO' | 'CMS';
+  category: 'ANALYTICS' | 'CRM' | 'GEO' | 'CMS' | 'SOCIAL' | 'MESSAGING' | 'DEVELOPER';
   desc: string;
   tag: string;
 }
@@ -33,6 +33,23 @@ export const ALL_CONNECTORS: ConnectorDefinition[] = [
   { id: 'shopify', label: 'Shopify', icon: 'S', category: 'CMS', desc: 'Liquid Theme', tag: 'Admin GraphQL' },
   { id: 'webflow', label: 'Webflow', icon: 'WF', category: 'CMS', desc: 'Embed Head', tag: 'Webflow Sites' },
   { id: 'generic', label: 'Generic Web', icon: 'URL', category: 'CMS', desc: 'Crawl & Patch Pack', tag: 'Direct Crawl' },
+  { id: 'framer', label: 'Framer', icon: 'FR', category: 'CMS', desc: 'API readiness required', tag: 'Capability gated' },
+  { id: 'wix', label: 'Wix', icon: 'WX', category: 'CMS', desc: 'API readiness required', tag: 'Capability gated' },
+  { id: 'sanity', label: 'Sanity', icon: 'SN', category: 'CMS', desc: 'Project, dataset & documents', tag: 'Sanity HTTP API' },
+  { id: 'openai_search', label: 'OpenAI APIs', icon: 'OA', category: 'GEO', desc: 'Model API, not search visibility', tag: 'OpenAI API' },
+  { id: 'perplexity', label: 'Perplexity', icon: 'PX', category: 'GEO', desc: 'Live answer API handshake', tag: 'Perplexity API' },
+  { id: 'claude', label: 'Claude', icon: 'CL', category: 'GEO', desc: 'Model API, search tool gated', tag: 'Anthropic API' },
+  { id: 'gemini', label: 'Gemini', icon: 'GM', category: 'GEO', desc: 'Model API, grounding gated', tag: 'Gemini API' },
+  { id: 'linkedin', label: 'LinkedIn', icon: 'IN', category: 'SOCIAL', desc: 'OAuth scopes govern publishing', tag: 'LinkedIn API' },
+  { id: 'x', label: 'X', icon: 'X', category: 'SOCIAL', desc: 'OAuth scopes govern publishing', tag: 'X API' },
+  { id: 'tiktok', label: 'TikTok', icon: 'TT', category: 'SOCIAL', desc: 'Approval and scopes required', tag: 'TikTok API' },
+  { id: 'instagram', label: 'Instagram', icon: 'IG', category: 'SOCIAL', desc: 'Professional account required', tag: 'Instagram Graph API' },
+  { id: 'whatsapp_business', label: 'WhatsApp Business', icon: 'WA', category: 'MESSAGING', desc: 'Phone Number ID + Meta token', tag: 'WhatsApp Cloud API' },
+  { id: 'telegram', label: 'Telegram', icon: 'TG', category: 'MESSAGING', desc: 'Bot token handshake', tag: 'Telegram Bot API' },
+  { id: 'slack', label: 'Slack', icon: 'SL', category: 'MESSAGING', desc: 'Bot token + granted scopes', tag: 'Slack API' },
+  { id: 'hubspot', label: 'HubSpot', icon: 'HS', category: 'CRM', desc: 'Contacts API handshake', tag: 'HubSpot CRM API' },
+  { id: 'salesforce', label: 'Salesforce', icon: 'SF', category: 'CRM', desc: 'Instance URL + access token', tag: 'Salesforce REST API' },
+  { id: 'stripe', label: 'Stripe', icon: 'ST', category: 'CRM', desc: 'Account and revenue APIs', tag: 'Stripe API' },
 ];
 
 const GoogleIcon = () => (
@@ -112,6 +129,11 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
   // Live AI Search states
   const [aiEngine, setAiEngine] = useState<'perplexity' | 'openai' | 'claude' | 'gemini'>('perplexity');
   const [aiApiKey, setAiApiKey] = useState('');
+  const [providerToken, setProviderToken] = useState('');
+  const [providerResource, setProviderResource] = useState('');
+  const [providerDataset, setProviderDataset] = useState('');
+  const [providerApiUrl, setProviderApiUrl] = useState('');
+  const [providerRegistry, setProviderRegistry] = useState<Record<string, { implementation_status?: string; connection_status?: string; notes?: string | null }>>({});
 
   const fetchIntegrations = async () => {
     try {
@@ -125,9 +147,23 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
     }
   };
 
+  const fetchProviderRegistry = async () => {
+    try {
+      const res = await fetch('/api/v1/connectors/registry');
+      if (!res.ok) return;
+      const data = await res.json();
+      const next: Record<string, { implementation_status?: string; connection_status?: string; notes?: string | null }> = {};
+      for (const item of data.providers || []) next[item.id] = item;
+      setProviderRegistry(next);
+    } catch {
+      // Keep the directory visible, but do not infer that a provider is configured.
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       fetchIntegrations();
+      fetchProviderRegistry();
       if (targetUrl) {
         setSiteUrl(targetUrl);
         setGscSiteUrl(targetUrl);
@@ -313,6 +349,35 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
       payload.target_url = siteUrl;
       payload.name = `Google CrUX (${siteUrl})`;
       payload.api_key = cruxApiKey;
+    } else if (['framer', 'wix'].includes(activeTab)) {
+      setStatusMessage('This provider is listed for visibility, but its approved API capability is not configured yet. No connection was saved.');
+      setLoading(false);
+      return;
+    } else if (['sanity', 'openai_search', 'perplexity', 'claude', 'gemini', 'linkedin', 'x', 'tiktok', 'instagram', 'whatsapp_business', 'telegram', 'slack', 'hubspot', 'salesforce', 'stripe'].includes(activeTab)) {
+      payload.api_key = providerToken;
+      payload.access_token = providerToken;
+      payload.api_url = providerApiUrl || undefined;
+      payload.repository = providerResource || undefined;
+      payload.branch = providerDataset || undefined;
+      payload.target_url = providerApiUrl || siteUrl || ({
+        sanity: 'https://api.sanity.io',
+        openai_search: 'https://api.openai.com',
+        perplexity: 'https://api.perplexity.ai',
+        claude: 'https://api.anthropic.com',
+        gemini: 'https://generativelanguage.googleapis.com',
+        linkedin: 'https://api.linkedin.com',
+        x: 'https://api.x.com',
+        tiktok: 'https://open.tiktokapis.com',
+        instagram: 'https://graph.facebook.com',
+        whatsapp_business: 'https://graph.facebook.com',
+        telegram: 'https://api.telegram.org',
+        slack: 'https://slack.com',
+        hubspot: 'https://api.hubapi.com',
+        salesforce: providerApiUrl || '',
+        stripe: 'https://api.stripe.com',
+      } as Record<string, string>)[activeTab] || '';
+      payload.name = `${activeTab.toUpperCase()} Integration`;
+      if (activeTab === 'salesforce') payload.api_url = providerApiUrl;
     } else {
       payload.target_url = siteUrl;
     }
@@ -417,6 +482,9 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
                       { id: 'CRM', label: 'Revenue' },
                       { id: 'GEO', label: 'AI Search' },
                       { id: 'CMS', label: 'CMS & Code' },
+                      { id: 'SOCIAL', label: 'Social' },
+                      { id: 'MESSAGING', label: 'Messaging' },
+                      { id: 'DEVELOPER', label: 'Developer' },
                     ] as const
                   ).map((cat) => (
                     <button
