@@ -77,7 +77,7 @@ class ProviderApiConnector(BaseConnector):
             url = "https://generativelanguage.googleapis.com/v1beta/models"
             params["key"] = token
         elif provider == ConnectorType.HUBSPOT:
-            url = "https://api.hubapi.com/crm/v3/objects/contacts"
+            url = "https://api.hubapi.com/crm/objects/2026-09/contacts"
             headers["Authorization"] = f"Bearer {token}"
             params["limit"] = "1"
         elif provider == ConnectorType.STRIPE:
@@ -110,7 +110,7 @@ class ProviderApiConnector(BaseConnector):
         elif provider == ConnectorType.SALESFORCE:
             if not base:
                 return "", "", {}, {}, "Salesforce requires the authorized instance URL."
-            url = f"{base}/services/data/v60.0/"
+            url = f"{base}/services/data/"
             headers["Authorization"] = f"Bearer {token}"
         elif provider == ConnectorType.SANITY:
             project_id = (self.credentials.repository or "").strip()
