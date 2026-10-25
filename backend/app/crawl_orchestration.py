@@ -6,6 +6,8 @@ for a resumable deep crawl. Fetching/rendering is performed by the worker layer.
 """
 from __future__ import annotations
 
+import ipaddress
+import socket
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,6 +45,26 @@ def normalize_url(raw_url: str, base_url: str | None = None) -> str | None:
         return urlunsplit((scheme, netloc, path, urlencode(query, doseq=True), ""))
     except (ValueError, UnicodeError):
         return None
+
+
+def is_public_http_target(url: str) -> bool:
+    """Reject private, loopback, link-local, reserved and unresolved targets.
+
+    Call immediately before every outbound request. This DNS preflight is a
+    defense-in-depth check; production deployments should also enforce egress
+    policy at the network layer to mitigate DNS rebinding between check and use.
+    """
+    try:
+        parts = urlsplit(url)
+        if parts.scheme.lower() not in {"http", "https"} or not parts.hostname:
+            return False
+        addresses = {
+            ipaddress.ip_address(item[4][0].split("%", 1)[0])
+            for item in socket.getaddrinfo(parts.hostname, parts.port or (443 if parts.scheme.lower() == "https" else 80), type=socket.SOCK_STREAM)
+        }
+        return bool(addresses) and all(address.is_global for address in addresses)
+    except (OSError, ValueError, TypeError):
+        return False
 
 
 def is_same_origin(url: str, origin_url: str) -> bool:
