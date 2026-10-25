@@ -1,6 +1,8 @@
 """Regression tests for evidence-safe CRO analytics and metric semantics."""
 from app.cro.engine import _parse_page, _read_analytics, _read_search, build_cro_intelligence
 from app.cro.metrics import experiment_lift, rate
+from app.connectors.google.google_report import _analytics_from_payload, map_analytics
+from app.cro.reporting import cro_report_generator
 
 
 def _metric(report, name):
@@ -179,4 +181,41 @@ def test_finding_evidence_includes_the_observed_page_url():
     assert finding is not None
     assert "https://example.com/landing" in finding.evidence
     assert finding.evidence_state == "SAMPLE_VERIFIED"
+
+def test_ga4_payload_without_conversion_metric_does_not_publish_zero():
+    result = _analytics_from_payload(
+        "properties/123",
+        {
+            "metricHeaders": [{"name": "sessions"}],
+            "totals": [{"metricValues": [{"value": "42"}]}],
+            "rows": [],
+        },
+    )
+    assert result["state"] == "MEASURED"
+    assert result["sessions"] == 42
+    assert "key_events" not in result
+    assert "conversions" not in result
+
+
+def test_legacy_ga4_summary_does_not_default_missing_conversions_to_zero():
+    result = map_analytics({"state": "MEASURED", "sessions": 42, "property_id": "properties/123"})
+    assert result["state"] == "MEASURED"
+    assert result["sessions"] == 42
+    assert "conversions" not in result
+    assert "key_events" not in result
+
+
+def test_html_report_exposes_sample_coverage_and_execution_limits():
+    report = build_cro_intelligence(
+        pages=[{
+            "url": "https://example.com/",
+            "raw_html": "<html><head><meta name='viewport' content='width=device-width'></head><body><h1>Example</h1></body></html>",
+        }],
+        discovered_urls=4,
+    )
+    html = cro_report_generator.render_html_report(report, domain="example.com")
+    assert "Coverage and execution limits" in html
+    assert "NOT_VERIFIED_BY_CRO_ENGINE" in html
+    assert "NOT_EXECUTED" in html
+    assert "25.0%" in html
 
