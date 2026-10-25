@@ -95,6 +95,7 @@ class OpenAISearchAdapter(BaseGeoEngineAdapter):
                         raw_content=content,
                         citations=extracted_citations,
                         status_code=200,
+                        is_live=True,
                         latency_ms=latency,
                     )
                 elif res.status_code in (400, 404) and "openrouter" in self.base_url:
@@ -131,6 +132,7 @@ class OpenAISearchAdapter(BaseGeoEngineAdapter):
                                 raw_content=fb_content,
                                 citations=fb_citations,
                                 status_code=200,
+                                is_live=True,
                                 latency_ms=round((time.perf_counter() - start_time) * 1000, 1),
                             )
 
