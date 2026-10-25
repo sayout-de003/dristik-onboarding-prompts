@@ -2,15 +2,15 @@
 Tests for the 5 specialized copywriting agents and section-wise page copy intelligence.
 """
 import pytest
-from app.agents.runtime.registry import (
+from app.orchestration.runtime.registry import (
     COPYWRITING_AGENTS_V3,
     AGENT_REGISTRY,
     list_copywriting_specialists,
     get_agent_definition,
 )
-from app.agents.runtime.task_cards import ALL_TASK_CARDS, task_card_for
+from app.orchestration.runtime.task_cards import ALL_TASK_CARDS, task_card_for
 from app.domain.models import BusinessProfile, PageEvidence, PageSeoAudit
-from app.agents.page.intelligence import fallback_copy_audit, _fallback_suggested
+from app.crawl.page_intelligence import fallback_copy_audit, _fallback_suggested
 
 
 def test_5_copywriting_agents_registered():
@@ -111,3 +111,20 @@ def test_page_intelligence_generates_sections_and_faqs():
     problem = next(s for s in sug.sections if s.section_id == "problem")
     assert "NOT_IN_EVIDENCE" in problem.suggested_copy or "NOT_IN_EVIDENCE" in (problem.current_preview or "")
     assert sug.primary_cta == "Start Free Trial"
+
+
+
+def test_copywriting_agents_receive_cross_domain_and_trend_policy():
+    """All copy specialists must use evidence-backed trends and page-level change decisions."""
+    for agent_id in COPYWRITING_AGENTS_V3:
+        prompt = task_card_for(agent_id)
+        assert "CROSS-DOMAIN CONTEXT AND KEYWORD FRESHNESS" in prompt
+        assert "NO_CHANGE_NEEDED" in prompt
+        assert "INSUFFICIENT_EVIDENCE" in prompt
+        assert "never invent search volume" in prompt.lower()
+        assert "page-by-page" in prompt.lower()
+
+
+def test_non_copywriting_agents_do_not_receive_copywriting_policy():
+    prompt = task_card_for("business.discovery.v3")
+    assert "CROSS-DOMAIN CONTEXT AND KEYWORD FRESHNESS" not in prompt

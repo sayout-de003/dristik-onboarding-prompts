@@ -145,11 +145,24 @@ export function AeoWorkspaceView({ report, analysisId, onOpenPatchPack }: AeoWor
             : 'No question set stored'
       }
       actions={
-        <SectionExportButtons
-          analysisId={analysisId || report.analysis_id || report.report_id}
-          sectionKey="aeo"
-          sectionLabel="AEO"
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <SectionExportButtons
+            analysisId={analysisId || report.analysis_id || report.report_id}
+            sectionKey="aeo"
+            sectionLabel="AEO"
+          />
+          {(analysisId || report.analysis_id || report.report_id) && (
+            <a
+              href={`/api/v1/reports/${analysisId || report.analysis_id || report.report_id}/aeo-report?format=html`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-line bg-paper-100 hover:bg-paper-200 text-ink transition-colors"
+              title="Open the dedicated AEO master report with its own chapters and appendices"
+            >
+              AEO Master Report
+            </a>
+          )}
+        </div>
       }
       tabs={[
         { id: 'audit', label: 'Full AEO audit' },

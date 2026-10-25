@@ -88,11 +88,35 @@ export function SeoWorkspaceView({
       metaLabel="Issues"
       meta={`${seoFindings.length} flagged`}
       actions={
-        <SectionExportButtons
-          analysisId={analysisId || report.analysis_id || report.report_id}
-          sectionKey="seo"
-          sectionLabel="SEO"
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <SectionExportButtons
+            analysisId={analysisId || report.analysis_id || report.report_id}
+            sectionKey="seo"
+            sectionLabel="SEO"
+          />
+          {(analysisId || report.analysis_id || report.report_id) && (
+            <>
+              <a
+                href={`/api/v1/reports/${analysisId || report.analysis_id || report.report_id}/seo-report?format=pdf&download=true`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-line bg-paper-100 hover:bg-paper-200 text-ink transition-colors"
+                title="Open the dedicated SEO master audit book as a PDF"
+              >
+                SEO Book PDF
+              </a>
+              <a
+                href={`/api/v1/reports/${analysisId || report.analysis_id || report.report_id}/seo-report?format=print`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-line bg-paper-100 hover:bg-paper-200 text-ink transition-colors"
+                title="Open the dedicated SEO master audit book for printing"
+              >
+                SEO Book Print
+              </a>
+            </>
+          )}
+        </div>
       }
       tabs={[
         { id: 'overview', label: 'Executive Overview' },
