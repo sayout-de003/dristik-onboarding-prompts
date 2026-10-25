@@ -99,7 +99,8 @@ class CompleteGeoReportGenerator:
                 "02_audit_scope_and_methodology": {
                     "domain": report.domain,
                     "pages_crawled": len(report.page_reports),
-                    "platforms_queried": list(getattr(v_card, "engines_queried", []) or []) if v_card else [],\n                    "platforms_not_queried": list(getattr(v_card, "surfaces_not_queried", []) or []) if v_card else ["Not assessed"],
+                    "platforms_queried": list(getattr(v_card, "engines_queried", []) or []) if v_card else [],
+                    "platforms_not_queried": list(getattr(v_card, "surfaces_not_queried", []) or []) if v_card else ["Not assessed"],
                     "evaluation_date": report.generated_at,
                     "disclaimer": "Data provenance and measurement status are reported per section. Unavailable, inferred and simulated observations must not be interpreted as live measurements.",
                 },
@@ -109,9 +110,10 @@ class CompleteGeoReportGenerator:
                     "resolved_entity": report.resolved_entity.model_dump() if getattr(report, "resolved_entity", None) else None,
                 },
                 "04_ai_discoverability_and_crawler_access": {
-                    "robots_txt_present": bool(report.crawl_manifest and report.crawl_manifest.robots_txt_checked),
-                    "sitemaps_detected": bool(report.crawl_manifest and report.crawl_manifest.sitemaps_detected),
-                    "ai_bots_audited": ["GPTBot", "OAI-SearchBot", "PerplexityBot", "Google-Extended", "ClaudeBot", "Bytespider"],
+                    "robots_txt_present": getattr(report.crawl_manifest, "robots_txt_found", None) if report.crawl_manifest else None,
+                    "sitemaps_detected": getattr(report.crawl_manifest, "sitemap_found", None) if report.crawl_manifest else None,
+                    "ai_bots_audited": getattr(report, "ai_bots_audited", None),
+                    "ai_bots_audit_status": "ASSESSED" if getattr(report, "ai_bots_audited", None) is not None else "NOT_ASSESSED",
                     "status_code_breakdown": report.http_status_breakdown.model_dump() if report.http_status_breakdown else None,
                 },
                 "05_technical_accessibility_and_content_parity": {
@@ -147,12 +149,14 @@ class CompleteGeoReportGenerator:
                     "citation_rate": citation_rate,
                 },
                 "11_citation_analysis_and_source_attribution": {
-                    "distinct_citations_found": getattr(v_card, "successful_runs", 0) if v_card else 0,
-                    "source_distribution": "First-party domain vs aggregator citations",
+                    "distinct_citations_found": None,
+                    "citation_count_status": "NOT_MEASURED: successful response count is not a distinct citation count.",
+                    "source_distribution": None,
                 },
                 "12_answer_accuracy_and_brand_representation": {
-                    "hallucinations_detected": 0,
-                    "brand_sentiment_context": "Evaluated against ground truth brand baseline.",
+                    "hallucinations_detected": None,
+                    "hallucination_status": "NOT_ASSESSED",
+                    "brand_sentiment_context": "Assessed only when validated live responses and a grounded claim set are available.",
                 },
                 "13_competitive_geo_benchmarking": {
                     "competitor_report": report.competitive_report,
@@ -230,7 +234,11 @@ class CompleteGeoReportGenerator:
         visibility_status = getattr(v_card, "status", "NOT_MEASURED") if v_card else "NOT_MEASURED"
         vis_color = "#10b981" if visibility_status == "MEASURED" else "#64748b"
 
-        citation_rate = getattr(report, "ai_visibility_score", None)
+        citation_rate = (
+            getattr(v_card, "citation_rate_pct", None)
+            if v_card and getattr(v_card, "measurement_kind", "NOT_MEASURED") != "NOT_MEASURED"
+            else None
+        )
         cit_display = f"{int(round(citation_rate * 100))}%" if citation_rate is not None else "Unmeasured"
 
         questions_total = getattr(g, "questions_total", 0) if g else 0
