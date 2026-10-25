@@ -232,6 +232,6 @@ def test_final_run_and_findings_are_saved_as_one_replacement_set(temp_repo):
 
     temp_repo.save_run(run, findings=[final_finding])
 
-    stored = temp_repo.get_findings(analysis_id)
+    stored = temp_repo.get_persisted_findings(analysis_id)
     assert [item.finding_id for item in stored] == ["find_final"]
     assert temp_repo.get_run(analysis_id)["status"] == "executive_synthesis"
