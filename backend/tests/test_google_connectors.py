@@ -104,6 +104,11 @@ def test_google_analytics_connector_alias_and_oauth_routes():
         "organization_name": "GA Org",
     })
     assert signup.status_code == 200
+    login = client.post("/api/v1/auth/login", json={
+        "email": f"ga_{uuid.uuid4().hex[:8]}@example.com",
+        "password": "Password123",
+    })
+    assert login.status_code == 200, login.text
 
     # 1. Authorize routes for google_analytics and google_analytics_4
     with patch.object(settings, "GOOGLE_CLIENT_ID", "mock-client-id"), \
