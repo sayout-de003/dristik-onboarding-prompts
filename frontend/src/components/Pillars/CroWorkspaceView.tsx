@@ -220,7 +220,7 @@ export function CroWorkspaceView({
           </div>
 
           {/* High Priority Friction Alert Banner */}
-          {(ctaData?.passive_generic_count ?? 0) > 0 && (
+          {ctaData && (ctaData.passive_generic_count ?? 0) > 0 && (
             <div className="p-4 rounded-lg bg-warn/5 border border-warn/30 flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-warn shrink-0 mt-0.5" />
               <div className="space-y-1">
@@ -254,10 +254,10 @@ export function CroWorkspaceView({
                 Audits all interactive conversion triggers across the crawl. Identifies primary above-the-fold placement and flags ambiguous button copy.
               </p>
               <div className="flex items-center gap-2 pt-2 border-t border-line font-mono text-[11px] text-ink-500">
-                <span>{ctaData?.high_intent_count ?? 0} High-Intent</span>
+                <span>{ctaData?.high_intent_count ?? 'Not measured'} High-Intent</span>
                 <span>·</span>
-                <span className={(ctaData?.passive_generic_count ?? 0) > 0 ? 'text-warn font-bold' : ''}>
-                  {ctaData?.passive_generic_count ?? 0} Passive
+                <span className={ctaData && (ctaData.passive_generic_count ?? 0) > 0 ? 'text-warn font-bold' : ''}>
+                  {ctaData?.passive_generic_count ?? 'Not measured'} Passive
                 </span>
               </div>
             </Card>
@@ -274,7 +274,7 @@ export function CroWorkspaceView({
                 Evaluates whether arriving visitors grasp what you do, who it is for, and why to care within 5 seconds without reading paragraph blocks.
               </p>
               <div className="flex items-center gap-2 pt-2 border-t border-line font-mono text-[11px] text-ink-500">
-                <span>Headline: {valueProp?.headline_word_count ?? 8} words</span>
+                <span>Headline: {valueProp?.headline_word_count == null ? 'Not measured' : valueProp.headline_word_count} words</span>
                 <span>·</span>
                 <span>Centricity: {valueProp?.customer_centricity_ratio == null ? 'Not measured' : valueProp.customer_centricity_ratio}x</span>
               </div>
@@ -292,11 +292,11 @@ export function CroWorkspaceView({
                 Audits evidence of market validation: client logos, customer testimonials, quantified ROI metrics, and security credentials.
               </p>
               <div className="flex items-center gap-2 pt-2 border-t border-line font-mono text-[11px] text-ink-500">
-                <span>{socialProof?.client_logos_detected ?? 0} Logos</span>
+                <span>{socialProof?.client_logos_detected ?? 'Not measured'} Logos</span>
                 <span>·</span>
-                <span>{socialProof?.total_testimonials ?? 0} Testimonials</span>
+                <span>{socialProof?.total_testimonials ?? 'Not measured'} Testimonials</span>
                 <span>·</span>
-                <span>{socialProof?.quantified_proof_claims.length ?? 0} ROI Claims</span>
+                <span>{socialProof?.quantified_proof_claims?.length ?? 'Not measured'} ROI Claims</span>
               </div>
             </Card>
 
@@ -330,7 +330,7 @@ export function CroWorkspaceView({
                 Analyzes input counts, missing label associations, spam defense traps, and conversion friction across lead generation forms.
               </p>
               <div className="flex items-center gap-2 pt-2 border-t border-line font-mono text-[11px] text-ink-500">
-                <span>{formAudit?.total_forms_detected ?? 0} Forms</span>
+                <span>{formAudit?.total_forms_detected ?? 'Not measured'} Forms</span>
                 <span>·</span>
                 <span>Grade {formAudit?.cro_friction_grade ?? 'A'}</span>
               </div>
@@ -532,7 +532,7 @@ export function CroWorkspaceView({
               <div className="p-3.5 rounded bg-paper-50 border border-line space-y-1">
                 <span className="text-[10px] font-mono uppercase text-ink-500 block">Customer Centricity Ratio</span>
                 <p className="font-sans font-bold text-good text-lg">
-                  {valueProp?.customer_centricity_ratio ?? 1.2}x
+                  {valueProp?.customer_centricity_ratio == null ? 'Not measured' : valueProp.customer_centricity_ratio}x
                 </p>
                 <p className="text-[11px] text-ink-500">Ratio of &quot;you/your&quot; vs &quot;we/our&quot;</p>
               </div>
@@ -601,7 +601,7 @@ export function CroWorkspaceView({
                 Client Logos Detected
               </span>
               <p className="font-sans text-3xl font-bold text-good">
-                {socialProof?.client_logos_detected ?? 0}
+                {socialProof?.client_logos_detected ?? 'Not measured'}
               </p>
               <p className="text-xs text-ink-500">Recognizable customer logo badges</p>
             </Card>
@@ -611,7 +611,7 @@ export function CroWorkspaceView({
                 Customer Testimonials
               </span>
               <p className="font-sans text-3xl font-bold text-ink-700">
-                {socialProof?.total_testimonials ?? 0}
+                {socialProof?.total_testimonials ?? 'Not measured'}
               </p>
               <p className="text-xs text-ink-500">Quotes &amp; review blocks extracted</p>
             </Card>
@@ -621,7 +621,7 @@ export function CroWorkspaceView({
                 Quantified ROI Metrics
               </span>
               <p className="font-sans text-3xl font-bold text-ink">
-                {socialProof?.quantified_proof_claims.length ?? 0}
+                {socialProof?.quantified_proof_claims?.length ?? 'Not measured'}
               </p>
               <p className="text-xs text-ink-500">Specific percentage &amp; dollar outcomes</p>
             </Card>
@@ -713,7 +713,7 @@ export function CroWorkspaceView({
                 Tiers Detected
               </span>
               <p className="font-sans text-3xl font-bold text-ink">
-                {pricingData?.detected_tiers_count ?? 0}
+                {pricingData?.detected_tiers_count ?? 'Not measured'}
               </p>
               <p className="text-xs text-ink-500">Plan packaging structures</p>
             </Card>
@@ -770,7 +770,7 @@ export function CroWorkspaceView({
                 Total Forms Detected
               </span>
               <p className="font-sans text-3xl font-bold text-ink">
-                {formAudit?.total_forms_detected ?? 0}
+                {formAudit?.total_forms_detected ?? 'Not measured'}
               </p>
               <p className="text-xs text-ink-500">Lead capture, demo, contact, or checkout</p>
             </Card>
@@ -789,8 +789,8 @@ export function CroWorkspaceView({
               <span className="text-[10px] font-mono uppercase tracking-[0.04em] text-ink-500 font-semibold block">
                 Missing Input Labels
               </span>
-              <p className={`font-sans text-3xl font-bold ${(formAudit?.forms_with_missing_labels || 0) > 0 ? 'text-warn' : 'text-good'}`}>
-                {formAudit?.forms_with_missing_labels ?? 0}
+              <p className={`font-sans text-3xl font-bold ${formAudit?.forms_with_missing_labels == null ? 'text-ink' : formAudit.forms_with_missing_labels > 0 ? 'text-warn' : 'text-good'}`}>
+                {formAudit?.forms_with_missing_labels ?? 'Not measured'}
               </p>
               <p className="text-xs text-ink-500">WCAG label compliance</p>
             </Card>
@@ -800,7 +800,7 @@ export function CroWorkspaceView({
                 Spam Defense &amp; Bot Filter
               </span>
               <div className="flex items-center gap-1.5 pt-1">
-                {(formAudit?.forms_without_captcha || 0) === 0 ? (
+                {formAudit?.forms_without_captcha != null && formAudit.forms_without_captcha === 0 ? (
                   <span className="font-mono text-sm text-good font-bold flex items-center gap-1">
                     <CheckCircle2 className="w-4 h-4" /> Protected
                   </span>
@@ -914,7 +914,7 @@ export function CroWorkspaceView({
                     {f.impact != null && (
                       <div className="text-right shrink-0">
                         <span className="font-mono text-xs text-ink-500 block">Impact / Effort</span>
-                        <span className="font-mono font-bold text-sm text-ink">{f.impact} / {f.effort ?? 1}</span>
+                        <span className="font-mono font-bold text-sm text-ink">{f.impact ?? 'Not measured'} / {f.effort ?? 'Not rated'}</span>
                       </div>
                     )}
                   </div>
