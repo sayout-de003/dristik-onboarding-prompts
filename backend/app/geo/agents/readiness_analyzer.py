@@ -1,16 +1,19 @@
 """
-GEO Readiness Agent:
-Evaluates overall Generative Engine Optimization readiness, passage extractability,
-and visibility across AI summary engines.
+Compatibility wrapper for the canonical GEO readiness evaluator.
+
+This agent deliberately does not maintain a second, weaker readiness formula.
+It surfaces the canonical report if the orchestration layer supplied one; otherwise
+it reports that readiness is not measured and emits no unsupported factual claim.
 """
-from typing import Dict, Any, List
+from typing import Any, Dict
+
 from app.agents.runtime.base import BaseAgent
 from app.cognition.blackboard import CognitiveBlackboard
-from app.domain.enums import Category, Severity, ClaimType
 
 
 class GeoReadinessAgent(BaseAgent):
-    """Audits site readiness for generative engine extraction, RAG indexability, and citation frequency."""
+    """Expose canonical evidence-backed GEO readiness without proxy scoring."""
+
     def __init__(self, model_router=None):
         super().__init__(
             agent_id="geo.readiness.v3",
@@ -20,35 +23,53 @@ class GeoReadinessAgent(BaseAgent):
 
     async def run(self, blackboard: CognitiveBlackboard) -> Dict[str, Any]:
         pages = getattr(blackboard, "pages", []) or []
-        extractable_count = sum(1 for p in pages if (p.h1 and getattr(p, "word_count", 0) > 300))
+        canonical = (
+            getattr(blackboard, "geo_readiness_report", None)
+            or getattr(blackboard, "geo_readiness", None)
+        )
 
-        observations = {
-            "total_analyzed_pages": len(pages),
-            "extractable_passages_count": extractable_count,
-            "geo_readiness_tier": "HIGH" if extractable_count > 3 else "MEDIUM",
-        }
+        if canonical is not None:
+            if hasattr(canonical, "model_dump"):
+                payload = canonical.model_dump()
+            elif isinstance(canonical, dict):
+                payload = canonical
+            else:
+                payload = {}
+            dimensions = payload.get("dimension_scores", {}) or {}
+            measured = [
+                item for item in dimensions.values()
+                if isinstance(item, dict) and item.get("is_measured") is True
+            ]
+            status = "completed" if measured else "UNMEASURED"
+            observations = {
+                "total_analyzed_pages": len(pages),
+                "readiness_status": status,
+                "canonical_report_available": True,
+                "measured_dimensions": len(measured),
+                "dimension_scores": dimensions,
+                "interpretation_disclaimer": payload.get(
+                    "interpretation_disclaimer",
+                    "Readiness is not a live AI citation or recommendation rank.",
+                ),
+            }
+        else:
+            status = "UNMEASURED"
+            observations = {
+                "total_analyzed_pages": len(pages),
+                "readiness_status": "UNMEASURED",
+                "canonical_report_available": False,
+                "measurement_note": (
+                    "No canonical GEO readiness report was provided to this compatibility "
+                    "agent. Page length and heading presence are not sufficient to infer "
+                    "AI extractability or live AI visibility."
+                ),
+            }
 
-        claims = []
-        if extractable_count == 0 and len(pages) > 0:
-            claim = self.register_claim(
-                blackboard=blackboard,
-                statement="Site lacks concise, definitive answer-first paragraphs suitable for AI search engine quotation.",
-                category=Category.GEO,
-                severity=Severity.HIGH,
-                claim_type=ClaimType.FACT,
-                confidence=0.91,
-                recommendation="Format key informational pages with direct 40-60 word definitive answer summaries directly below H2 questions.",
-                impact=8,
-                effort=3,
-            )
-            claims.append(claim)
-
-        result = {
+        return {
             "agent_id": self.agent_id,
             "domain": "geo",
             "specialty": "geo_readiness",
-            "status": "completed",
+            "status": status,
             "observations": observations,
-            "claims": [c.statement if hasattr(c, "statement") else str(c) for c in claims],
+            "claims": [],
         }
-        return result
