@@ -14,7 +14,7 @@ from datetime import datetime
 
 from app.domain.enums import Category, Severity, VerificationStatus, Materiality, RubricConfidence
 from app.domain.models import Claim, CrawlManifest, Finding, FindingEvidence, PageEvidence
-from app.evidence.models import EvidenceRef
+from app.domain.evidence.models import EvidenceRef
 from app.seo.analyzers.canonical_redirect_consistency import CanonicalRedirectConsistencyAnalyzer
 from app.seo.analyzers.sitemap_orphan_analyzer import SitemapOrphanAnalyzer
 
