@@ -132,7 +132,11 @@ async def execute_continuous_run(profile,run_id,trigger_type):
           status=run.status.value if hasattr(run.status,"value") else str(run.status),page_count=limit)
         store.update_run(run_id,analysis_id=run.analysis_id)
         await orchestrator.execute_analysis_pipeline(run.analysis_id,profile["website_url"],limit,profile.get("niche") or None,
-          "Business model: "+profile.get("business_model","")+"; Target audience: "+profile.get("target_audience",""),
+          "Business model: "+profile.get("business_model","")+"; Target audience: "+profile.get("target_audience","")
+          +"; Audience pain points: "+", ".join(profile.get("audience_pain_points") or [])
+          +"; Target markets: "+", ".join(profile.get("target_markets") or [])
+          +"; Competitors to consider: "+", ".join(profile.get("competitors") or [])
+          +"; Business goals: "+", ".join(profile.get("goals") or []),
           (profile.get("target_markets") or [None])[0],(profile.get("languages") or ["en"])[0],PILLARS)
         completed=orchestrator.runs.get(run.analysis_id); report=getattr(completed,"report",None) if completed else None
         if report is None:
@@ -140,9 +144,32 @@ async def execute_continuous_run(profile,run_id,trigger_type):
             store.update_run(run_id,status="DATA_UNAVAILABLE",completed_at=_now(),result_json=json.dumps(result));return result
         payload=report.model_dump(mode="json") if hasattr(report,"model_dump") else (report if isinstance(report,dict) else {"summary":str(report)})
         findings=payload.get("findings") or payload.get("issues") or []
+        tracked_keywords = []
+        try:
+            from app.intelligence.serp_tracker import serp_tracking_engine
+            tracked_keywords = [
+                {
+                    "keyword": item.keyword,
+                    "target_url": item.target_url,
+                    "intent": item.intent,
+                    "current_position": item.current_position,
+                    "previous_position": item.previous_position,
+                    "position_delta": item.position_delta,
+                    "has_ai_overview": item.has_ai_overview,
+                    "has_featured_snippet": item.has_featured_snippet,
+                    "data_status": "MEASURED_SERP_TRACKING",
+                }
+                for item in serp_tracking_engine.list_keywords(profile["org_id"], active_only=True)
+                if (item.domain or "").lower().removeprefix("www.") == profile["domain"]
+            ]
+        except Exception as keyword_exc:
+            logger.info("Keyword tracking context unavailable for %s: %s", profile["domain"], type(keyword_exc).__name__)
         result={"analysis_id":run.analysis_id,"status":"COMPLETED","pillars_requested":PILLARS,
-          "findings_count":len(findings) if isinstance(findings,list) else None,"report_available":True,"trend_status":"UNAVAILABLE",
-          "trend_note":"Live keyword-trend data is not inferred from an audit. Connect a supported trend/search-data provider for measured trend comparisons.",
+          "findings_count":len(findings) if isinstance(findings,list) else None,"report_available":True,
+          "report_url":f"/api/v1/analyses/{run.analysis_id}/report",
+          "trend_status":"PARTIAL" if tracked_keywords else "UNAVAILABLE",
+          "trend_note":"Tracked SERP observations are included where available. Broader live keyword-demand trends require a connected trend provider; no search-volume or trend-direction values are invented.",
+          "tracked_keyword_observations":tracked_keywords,
           "profile_context_used":{"niche":profile.get("niche") or None,"business_model":profile.get("business_model") or None,
           "target_audience":profile.get("target_audience") or None,"target_markets":profile.get("target_markets") or [],
           "competitors":profile.get("competitors") or [],"goals":profile.get("goals") or []},
