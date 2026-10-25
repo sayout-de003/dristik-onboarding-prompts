@@ -211,6 +211,7 @@ a {{ color: #1c1915; }}
 <h2>02. Executive summary and funnel scorecard</h2>
 <p>These four scores stay separate. None of them is a blended conversion rate.</p>
 {coverage_html}
+{calibration_html}
 <div class="grid">{dimensions}</div>
 <h2>Measurement</h2>
 <ul>{rules}</ul>
