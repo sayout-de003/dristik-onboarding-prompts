@@ -46,7 +46,7 @@ def test_claim_ledger_certification_requires_explicit_supported_entries():
         timestamp="2026-10-25T00:00:00Z",
         evidence_ids=["ev_001"],
     )
-    ledger = ClaimLedger(ledger_id="l3", run_id="r3", entries=[entry])
+    ledger = ClaimLedger(ledger_id="l3", run_id="r3", entries=[entry], evidence_resolution_verified=True)
     assert ledger.certified_zero_fake is True
 
 
