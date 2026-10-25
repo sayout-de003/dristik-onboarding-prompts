@@ -175,6 +175,7 @@ class CroIntelligenceReport(BaseModel):
     model_basis: str
     sample_size: int
     discovered_urls: Optional[int] = None
+    coverage: Dict[str, Any] = Field(default_factory=dict)
     evidence_states: List[str] = Field(default_factory=lambda: list(EVIDENCE_STATES))
     dimensions: List[CroDimensionScore] = Field(default_factory=list)
     metrics: List[CroMetricResult] = Field(default_factory=list)
@@ -3267,6 +3268,30 @@ def build_cro_intelligence(
         model_basis=obs.model_basis,
         sample_size=obs.sample_size,
         discovered_urls=obs.discovered,
+        coverage={
+            "status": (
+                "NO_PAGES" if obs.sample_size == 0
+                else "DISCOVERY_COUNT_UNAVAILABLE" if obs.discovered is None or obs.discovered <= 0
+                else "INCONSISTENT_COUNTS" if obs.sample_size > obs.discovered
+                else "PARTIAL_SAMPLE" if obs.sample_size < obs.discovered
+                else "DISCOVERED_SET_INSPECTED"
+            ),
+            "inspected_pages": obs.sample_size,
+            "discovered_urls": obs.discovered,
+            "sample_coverage_pct": (
+                round(100 * obs.sample_size / obs.discovered, 1)
+                if isinstance(obs.discovered, int) and not isinstance(obs.discovered, bool)
+                and obs.discovered > 0 and obs.sample_size <= obs.discovered
+                else None
+            ),
+            "rendered_dom_status": "NOT_VERIFIED_BY_CRO_ENGINE",
+            "journey_execution_status": "NOT_EXECUTED",
+            "note": (
+                "The percentage compares inspected pages with the supplied discovery total only. "
+                "It does not prove every URL was discovered, that JavaScript-rendered DOM was inspected, "
+                "or that forms, checkout, and multi-step journeys were executed."
+            ),
+        },
         dimensions=_dimensions(resolved, obs),
         metrics=_metrics(obs),
         sections=sections,
