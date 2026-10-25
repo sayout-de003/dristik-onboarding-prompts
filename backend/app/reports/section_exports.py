@@ -621,22 +621,22 @@ class SectionReportGenerator:
         else:
             book_html = ""
             findings_html = (
-                f"<h2>Verified Empirical Findings ({len(findings)})</h2>"
+                f"<h2>Recorded Findings ({len(findings)})</h2>"
                 + (
                     "".join(self._render_finding(f) for f in findings)
                     if findings
-                    else "<p style='color:#64748b;'>No critical defects recorded for this section.</p>"
+                    else "<p style='color:#64748b;'>No findings were recorded for this section; this does not prove that no defects exist.</p>"
                 )
             )
             extra_html = self._render_extra_section_tables(report, section_key, pages)
-            badge = "EVIDENCE-GROUNDED // ZERO-FAKE AUDIT"
+            badge = "AUDIT EVIDENCE SUMMARY"
             assurance_label = "ASSURANCE TIER"
-            assurance_value = "CERTIFIED"
+            assurance_value = getattr(report, "certification_status", None) or "NOT_ASSESSED"
             standard_label = "EVIDENCE STANDARD"
-            standard_value = "ZERO-FAKE AST"
+            standard_value = "Evidence status disclosed"
             score_label = "SECTION HEALTH SCORE"
             score_note = ""
-            footer_mark = "PAGE 1 OF 1 // IMMUTABLE PROVENANCE SEAL"
+            footer_mark = "PAGE 1 OF 1 // EVIDENCE STATUS DISCLOSED"
         if score_val is None:
             score_html = "—"
         else:
@@ -655,7 +655,7 @@ class SectionReportGenerator:
             section_id=sec_id,
             section_title=title,
             section_findings=findings,
-            pages_crawled=len(pages) if pages else 1,
+            pages_crawled=len(pages) if pages else None,
             is_sample_audit=True,
             has_connector=True,
             connector_name="Direct Crawl & DOM Analysis",
