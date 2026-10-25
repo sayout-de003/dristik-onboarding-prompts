@@ -53,19 +53,19 @@ class FindingEvidence(BaseModel):
     value: str = ""
     observed_value: Optional[Any] = None
     expected_condition: Optional[str] = None
-    test_method: Optional[str] = "crawl_dom"
-    response_status: Optional[int] = 200
+    test_method: Optional[str] = None
+    response_status: Optional[int] = None
     collection_timestamp: Optional[str] = None
     selector: Optional[str] = None
     line_number: Optional[int] = None
     snippet: Optional[str] = None
     description: Optional[str] = None
-    source: Optional[str] = "crawl"
+    source: Optional[str] = None
     excerpt: Optional[str] = None
     type: str = "content"
     state: EvidenceState = EvidenceState.OBSERVED
     evidence_class: EvidenceClass = EvidenceClass.OBSERVED
-    evidence_subtype: Optional[str] = "DOM"
+    evidence_subtype: Optional[str] = None
     evidence_ref: Optional[EvidenceRef] = None
     is_decorative: Optional[bool] = None
     image_role: Optional[str] = None
@@ -197,7 +197,7 @@ class RemediationVerificationReport(BaseModel):
     )
     verified_at: str
     evidence_seal: str
-    certified_by: str = "Dristik Continuous Assurance Engine v4"
+    certified_by: Optional[str] = None
     recrawl_status_code: Optional[int] = None
     recrawl_ttfb_ms: Optional[float] = None
     recrawl_content_type: Optional[str] = None
