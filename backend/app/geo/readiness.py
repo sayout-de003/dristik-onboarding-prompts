@@ -362,8 +362,8 @@ def _score_external_authority(entity_res) -> GeoDimensionScore:
         key=GeoDimensionKey.EXTERNAL_AUTHORITY.value,
         label="External authority & backlink signals",
         score=0.0,   # Placeholder value is ignored because is_measured=False
-        band="medium",
-        confidence=0.30,
+        band="low",
+        confidence=0.0,
         summary=(
             "External authority cannot be measured from on-page HTML crawl. "
             "This requires GSC, backlink API, or business directory connector data. "
