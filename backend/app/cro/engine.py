@@ -176,6 +176,7 @@ class CroIntelligenceReport(BaseModel):
     sample_size: int
     discovered_urls: Optional[int] = None
     coverage: Dict[str, Any] = Field(default_factory=dict)
+    scoring_calibration: Dict[str, Any] = Field(default_factory=dict)
     evidence_states: List[str] = Field(default_factory=lambda: list(EVIDENCE_STATES))
     dimensions: List[CroDimensionScore] = Field(default_factory=list)
     metrics: List[CroMetricResult] = Field(default_factory=list)
@@ -3297,6 +3298,13 @@ def build_cro_intelligence(
         model_basis=obs.model_basis,
         sample_size=obs.sample_size,
         discovered_urls=obs.discovered,
+        scoring_calibration={
+            "status": "NOT_BENCHMARK_CALIBRATED",
+            "basis": "Experience quality is a transparent pass/fail ratio over checks observed on this sample, not a predicted conversion rate or industry percentile.",
+            "priority_calibration": "RULE_BASED_NOT_OUTCOME_CALIBRATED",
+            "experiment_outcomes_used": False,
+            "note": "No validated benchmark corpus, historical remediation outcomes, or randomized experiment outcomes were supplied to calibrate score-to-business-impact predictions.",
+        },
         coverage={
             "status": (
                 "NO_PAGES" if obs.sample_size == 0
