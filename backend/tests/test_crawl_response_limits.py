@@ -69,3 +69,21 @@ async def test_oversized_direct_response_does_not_trigger_second_renderer(monkey
     )
     assert result[0] is None
     assert "response exceeds configured" in (result[5] or "")
+
+
+
+@pytest.mark.asyncio
+async def test_dynamic_render_rejects_unsafe_initial_url_before_provider_use(monkeypatch):
+    import app.crawl.crawler as crawler_module
+
+    monkeypatch.setattr(crawler_module.settings, "SSRF_PROTECTION_ENABLED", True)
+    monkeypatch.setattr(crawler_module, "is_safe_url", lambda url: (False, "test private target"))
+
+    def provider_must_not_be_used():
+        raise AssertionError("render provider must not be called for an unsafe URL")
+
+    monkeypatch.setattr(crawler_module.BrowserRenderService, "is_available", provider_must_not_be_used)
+    crawler = CrawlerService()
+    result = await crawler._js_render_page("http://127.0.0.1/", object(), 0.0)
+    assert result[0] is None
+    assert "SSRF blocked render target" in (result[6] or "")
