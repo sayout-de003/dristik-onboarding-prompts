@@ -67,4 +67,5 @@ def test_signed_webhook_ingress_is_declared_only_for_implemented_providers():
     payload = {item["id"]: item for item in MODULE.registry_payload()}
     for provider_id in ("slack", "whatsapp_business", "telegram"):
         assert "webhook_ingress" in payload[provider_id]["operations"]
-        assert payload[provider_id]["operation_status"]["webhooks"] == "NOT_IMPLEMENTED_OR_NOT_VERIFIED" if "webhooks" in payload[provider_id]["operation_status"] else True
+        if "webhooks" in payload[provider_id]["operation_status"]:
+            assert payload[provider_id]["operation_status"]["webhooks"] == "NOT_IMPLEMENTED_OR_NOT_VERIFIED"
