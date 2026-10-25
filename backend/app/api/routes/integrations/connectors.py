@@ -8,7 +8,7 @@ import json
 import urllib.parse
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
 import httpx
 
@@ -21,9 +21,124 @@ from app.core.config import settings
 from app.connectors.store import connector_store
 from app.connectors.oauth_providers import router as oauth_router
 from app.connectors.platform_registry import registry_payload
+from app.connectors.webhook_security import body_sha256, verify_meta_signature, verify_shared_secret, verify_slack_signature, webhook_event_key
 
 router = APIRouter(prefix="/connectors", tags=["Platform Connectors"])
 router.include_router(oauth_router)
+
+@router.get("/webhooks/whatsapp")
+async def verify_whatsapp_webhook(request: Request):
+    """Meta webhook challenge verification; configured verify token is required."""
+    verify_token = settings.META_WEBHOOK_VERIFY_TOKEN or ""
+    if not verify_token:
+        raise HTTPException(status_code=503, detail="META_WEBHOOK_VERIFY_TOKEN is not configured.")
+    mode = request.query_params.get("hub.mode", "")
+    supplied = request.query_params.get("hub.verify_token", "")
+    challenge = request.query_params.get("hub.challenge", "")
+    if mode != "subscribe" or not challenge or not verify_shared_secret(verify_token, supplied):
+        raise HTTPException(status_code=403, detail="Webhook verification challenge rejected.")
+    return PlainTextResponse(challenge)
+
+
+@router.post("/webhooks/slack/{integration_id}")
+async def receive_slack_webhook(integration_id: str, request: Request):
+    """Verify Slack signatures and deduplicate incoming events before acknowledging."""
+    secret = settings.SLACK_SIGNING_SECRET or ""
+    if not secret:
+        raise HTTPException(status_code=503, detail="SLACK_SIGNING_SECRET is not configured.")
+    raw_body = await request.body()
+    timestamp = request.headers.get("x-slack-request-timestamp", "")
+    signature = request.headers.get("x-slack-signature", "")
+    if not verify_slack_signature(secret, timestamp, signature, raw_body):
+        raise HTTPException(status_code=401, detail="Slack signature is invalid or stale.")
+    integration = connector_store.get_integration(integration_id)
+    if not integration or integration.provider != ConnectorType.SLACK:
+        raise HTTPException(status_code=404, detail="Slack integration not found.")
+    try:
+        content_type = request.headers.get("content-type", "")
+        if "application/x-www-form-urlencoded" in content_type:
+            form = urllib.parse.parse_qs(raw_body.decode("utf-8", errors="replace"))
+            raw_payload = (form.get("payload") or ["{}"])[0]
+            payload = json.loads(raw_payload)
+        else:
+            payload = json.loads(raw_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError):
+        raise HTTPException(status_code=400, detail="Slack webhook body is not valid JSON/form payload.")
+    if isinstance(payload, dict) and payload.get("type") == "url_verification" and payload.get("challenge"):
+        return {"challenge": payload["challenge"]}
+    event_type = str(payload.get("type") or (payload.get("event") or {}).get("type") or "unknown") if isinstance(payload, dict) else "unknown"
+    event_key = webhook_event_key("slack", payload, raw_body)
+    digest = body_sha256(raw_body)
+    inserted = connector_store.record_webhook_event(integration.org_id, "slack", integration_id, event_key, event_type, digest)
+    connector_store.record_event(
+        org_id=integration.org_id, action="WEBHOOK_RECEIVED",
+        result="VERIFIED" if inserted else "DUPLICATE",
+        integration_id=integration_id,
+        details={"provider": "slack", "event_type": event_type, "payload_sha256": digest},
+    )
+    return {"ok": True, "verified": True, "duplicate": not inserted}
+
+
+@router.post("/webhooks/whatsapp/{integration_id}")
+async def receive_whatsapp_webhook(integration_id: str, request: Request):
+    """Verify Meta webhook signatures and deduplicate WhatsApp Business events."""
+    secret = settings.META_APP_SECRET or ""
+    if not secret:
+        raise HTTPException(status_code=503, detail="META_APP_SECRET is not configured.")
+    raw_body = await request.body()
+    signature = request.headers.get("x-hub-signature-256", "")
+    if not verify_meta_signature(secret, signature, raw_body):
+        raise HTTPException(status_code=401, detail="Meta webhook signature is invalid.")
+    integration = connector_store.get_integration(integration_id)
+    if not integration or integration.provider != ConnectorType.WHATSAPP_BUSINESS:
+        raise HTTPException(status_code=404, detail="WhatsApp Business integration not found.")
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise HTTPException(status_code=400, detail="Meta webhook body is not valid JSON.")
+    event_type = str(payload.get("object") or "unknown") if isinstance(payload, dict) else "unknown"
+    event_key = webhook_event_key("whatsapp_business", payload, raw_body)
+    digest = body_sha256(raw_body)
+    inserted = connector_store.record_webhook_event(integration.org_id, "whatsapp_business", integration_id, event_key, event_type, digest)
+    connector_store.record_event(
+        org_id=integration.org_id, action="WEBHOOK_RECEIVED",
+        result="VERIFIED" if inserted else "DUPLICATE",
+        integration_id=integration_id,
+        details={"provider": "whatsapp_business", "event_type": event_type, "payload_sha256": digest},
+    )
+    return {"ok": True, "verified": True, "duplicate": not inserted}
+
+
+@router.post("/webhooks/telegram/{integration_id}")
+async def receive_telegram_webhook(integration_id: str, request: Request):
+    """Validate Telegram's configured secret-token header and deduplicate updates."""
+    integration = connector_store.get_integration(integration_id)
+    if not integration or integration.provider != ConnectorType.TELEGRAM:
+        raise HTTPException(status_code=404, detail="Telegram integration not found.")
+    credentials = connector_store.get_credentials(integration_id)
+    expected_secret = credentials.webhook_secret if credentials else None
+    if not expected_secret:
+        raise HTTPException(status_code=503, detail="A Telegram webhook secret has not been configured for this connection.")
+    supplied_secret = request.headers.get("x-telegram-bot-api-secret-token", "")
+    if not verify_shared_secret(expected_secret, supplied_secret):
+        raise HTTPException(status_code=401, detail="Telegram webhook secret token is invalid.")
+    raw_body = await request.body()
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise HTTPException(status_code=400, detail="Telegram webhook body is not valid JSON.")
+    event_type = "callback_query" if isinstance(payload, dict) and payload.get("callback_query") else ("message" if isinstance(payload, dict) and payload.get("message") else "unknown")
+    event_key = webhook_event_key("telegram", payload, raw_body)
+    digest = body_sha256(raw_body)
+    inserted = connector_store.record_webhook_event(integration.org_id, "telegram", integration_id, event_key, event_type, digest)
+    connector_store.record_event(
+        org_id=integration.org_id, action="WEBHOOK_RECEIVED",
+        result="VERIFIED" if inserted else "DUPLICATE",
+        integration_id=integration_id,
+        details={"provider": "telegram", "event_type": event_type, "payload_sha256": digest},
+    )
+    return {"ok": True, "verified": True, "duplicate": not inserted}
+
 
 @router.get("/audit-events")
 async def connector_audit_events(limit: int = 100, user: UserIdentity = Depends(get_current_user)):
