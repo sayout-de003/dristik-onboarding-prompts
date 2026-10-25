@@ -193,7 +193,7 @@ export function Overview({
           <div className="flex items-center gap-4 shrink-0 bg-paper-50 p-4 rounded-xl border border-line">
             <div className="text-right">
               <span className="label text-[10px] text-ink-500 block">Overall Score</span>
-              <span className={`font-sans text-4xl sm:text-5xl font-bold leading-none ${scoreTone(overallScore ?? 0)}`}>
+              <span className={`font-sans text-4xl sm:text-5xl font-bold leading-none ${overallScore != null ? scoreTone(overallScore) : 'text-ink-400'}`}>
                 {overallScore != null ? overallScore.toFixed(1) : '—'}
               </span>
               <span className="text-xs text-ink-400 block mt-0.5">/ 100</span>
