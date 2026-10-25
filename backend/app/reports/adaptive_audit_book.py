@@ -910,7 +910,8 @@ def build_adaptive_publication_document(
                     <span class="ev-badge" style="background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 2px;">RECOMMENDED: PROPOSED REMEDY</span>
                     <span class="ev-badge" style="background: #f1f5f9; color: #64748b; padding: 2px 6px; border-radius: 2px;">UNMEASURED: NOT TESTED (NOT ZERO)</span>
                 </div>
-                <p style="font-size: 7.5pt; color: #64748b; margin-top: 6px;">Cryptographic integrity is asserted only for evidence records whose hashes are present and successfully validated.</p>
+                <p style="font-size: 7.5pt; color: #64748b; margin-top: 6px;">Cryptographic integrity is asserted only for evidence records whose SHA-256 hashes are present and successfully validated.</p>
+                <p style="font-size: 7.5pt; color: #334155; margin-top: 6px;"><strong>ZERO-FAKE EVIDENCE ATTESTATION:</strong> unavailable, inferred, simulated, or untested values must not be represented as verified measurements. This policy statement is not a claim that every evidence record in this report has been independently certified.</p>
             </div>
         </div>
 
