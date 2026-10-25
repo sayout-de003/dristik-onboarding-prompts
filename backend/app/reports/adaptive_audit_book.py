@@ -366,7 +366,7 @@ def _finding_value(finding: Any, key: str, default: Any = None) -> Any:
 
 def _report_findings(report: Any) -> List[Any]:
     """Return one canonical record per repeated finding identity for report assembly."""
-    raw = list(getattr(report, "findings", []) or [])
+    raw = _report_findings(report)
     canonical: List[Any] = []
     seen: set[tuple[str, tuple[str, ...]]] = set()
     seen_ids: set[str] = set()
@@ -444,7 +444,7 @@ def _build_ch_brief(report: Any, manifest: Dict[str, Any]) -> str:
     comp_s = validate_score(getattr(scores, "competitor_score", None))
 
     callout = render_section_business_callout(
-        generate_section_explanation("ch_brief", "Executive Diagnostic Briefing", report, getattr(report, "findings", []))
+        generate_section_explanation("ch_brief", "Executive Diagnostic Briefing", report, _report_findings(report))
     )
 
     return f"""
@@ -548,7 +548,7 @@ def _build_ch_seo(report: Any, manifest: Dict[str, Any]) -> str:
     pages_count = len(pages)
     disc = getattr(manifest_obj, "total_pages_discovered", pages_count) or pages_count
 
-    findings = [f for f in getattr(report, "findings", []) if "SEO" in str(getattr(f, "category", "")).upper() or "TECH" in str(getattr(f, "category", "")).upper()]
+    findings = [f for f in _report_findings(report) if "SEO" in str(getattr(f, "category", "")).upper() or "TECH" in str(getattr(f, "category", "")).upper()]
     callout = render_section_business_callout(
         generate_section_explanation("ch_seo", "Technical SEO & Crawl Architecture", report, findings, {"pages_crawled": pages_count})
     )
@@ -584,7 +584,7 @@ def _build_ch_geo(report: Any, manifest: Dict[str, Any]) -> str:
     score_ext = getattr(geo, "extractability_score", None)
     score_disp = f"{float(score_ext):.1f}" if score_ext is not None else "NOT MEASURED"
 
-    findings = [f for f in getattr(report, "findings", []) if "GEO" in str(getattr(f, "category", "")).upper()]
+    findings = [f for f in _report_findings(report) if "GEO" in str(getattr(f, "category", "")).upper()]
     callout = render_section_business_callout(
         generate_section_explanation("ch_geo", "Generative Engine Optimization (GEO)", report, findings)
     )
@@ -620,7 +620,7 @@ def _build_ch_geo(report: Any, manifest: Dict[str, Any]) -> str:
 def _build_ch_aeo(report: Any, manifest: Dict[str, Any]) -> str:
     card = getattr(report, "ai_visibility_scorecard", None)
     runs = getattr(card, "successful_runs", 0) if card else 0
-    findings = [f for f in getattr(report, "findings", []) if "AEO" in str(getattr(f, "category", "")).upper() or "SEARCH" in str(getattr(f, "category", "")).upper()]
+    findings = [f for f in _report_findings(report) if "AEO" in str(getattr(f, "category", "")).upper() or "SEARCH" in str(getattr(f, "category", "")).upper()]
     callout = render_section_business_callout(
         generate_section_explanation("ch_aeo", "Answer Engine Optimization (AEO) & AI Citations", report, findings)
     )
@@ -652,7 +652,7 @@ def _build_ch_aeo(report: Any, manifest: Dict[str, Any]) -> str:
 
 
 def _build_ch_competitive(report: Any, manifest: Dict[str, Any]) -> str:
-    findings = [f for f in getattr(report, "findings", []) if "COMP" in str(getattr(f, "category", "")).upper()]
+    findings = [f for f in _report_findings(report) if "COMP" in str(getattr(f, "category", "")).upper()]
     callout = render_section_business_callout(
         generate_section_explanation("ch_competitive", "Competitive Digital Visibility", report, findings)
     )
@@ -686,7 +686,7 @@ def _build_ch_competitive(report: Any, manifest: Dict[str, Any]) -> str:
 
 
 def _build_ch_conversion(report: Any, manifest: Dict[str, Any]) -> str:
-    findings = [f for f in getattr(report, "findings", []) if "CONV" in str(getattr(f, "category", "")).upper() or "UX" in str(getattr(f, "category", "")).upper()]
+    findings = [f for f in _report_findings(report) if "CONV" in str(getattr(f, "category", "")).upper() or "UX" in str(getattr(f, "category", "")).upper()]
     callout = render_section_business_callout(
         generate_section_explanation("ch_conversion", "Conversion Rate Optimization (CRO)", report, findings)
     )
@@ -760,7 +760,7 @@ def _build_ch_page_by_page(report: Any, manifest: Dict[str, Any]) -> str:
 
 
 def _build_ch_roadmap(report: Any, manifest: Dict[str, Any]) -> str:
-    findings = list(getattr(report, "findings", []) or [])
+    findings = _report_findings(report)
     callout = render_section_business_callout(
         generate_section_explanation("ch_roadmap", "Prioritized Remediation Plan", report, findings)
     )
@@ -884,7 +884,7 @@ def build_adaptive_publication_document(
     pages = getattr(manifest_obj, "pages", []) or getattr(report, "page_reports", []) or []
     pages_count = len(pages) if pages else None
     manifest["pages_crawled"] = pages_count
-    findings = list(getattr(report, "findings", []) or [])
+    findings = _report_findings(report)
 
     metadata = PublicationMetadata(
         family=family,
