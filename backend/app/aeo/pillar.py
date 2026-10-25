@@ -46,15 +46,21 @@ class AeoPillar:
             if getattr(finding, "pillar", None) == "aeo" or getattr(finding, "category", "") in self.domains
         ]
         count = len(aeo_findings)
-        score = max(0.0, 100.0 - (count * 4.0))
-        grade = "A" if score >= 85 else "B" if score >= 70 else "C" if score >= 50 else "D"
+        # Finding volume is not a quality/readiness measurement: a better detector
+        # can discover more issues and otherwise make the audited site look worse.
+        # Preserve the legacy numeric field for API compatibility, but explicitly
+        # mark the score as unavailable instead of manufacturing a grade.
         return PillarScoreResult(
             pillar_id=self.pillar_id,
-            score=round(score, 1),
-            grade=grade,
-            confidence=1.0,
+            score=0.0,
+            grade="N/A",
+            confidence=0.0,
             measured_findings_count=count,
-            metrics={"findings_count": count},
+            metrics={
+                "findings_count": count,
+                "score_status": "NOT_MEASURED",
+                "score_reason": "AEO readiness must be calculated from the four-pillar measurement scorecard, not finding count.",
+            },
         )
 
 
