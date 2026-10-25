@@ -98,3 +98,27 @@ def test_estimated_claim_requires_limitations():
 def test_score_validation_never_fabricates_or_accepts_invalid_values(value, expected):
     assert validate_score(value) == expected
 
+
+
+def test_publication_cover_does_not_claim_missing_scores_or_certification():
+    from app.reports.publishing_engine import (
+        CoverGenerator,
+        PublicationDocument,
+        PublicationMetadata,
+    )
+
+    metadata = PublicationMetadata(
+        family="SEO",
+        title="SEO audit",
+        subtitle="Scope and findings",
+        domain="example.test",
+        brand_name="Example",
+        audit_date="Timestamp unavailable",
+    )
+    rendered = CoverGenerator.render_cover_html(PublicationDocument(metadata=metadata))
+    assert "NOT MEASURED" in rendered
+    assert "NOT GRADED" in rendered
+    assert "Crawl coverage not recorded" in rendered
+    assert "Finding count not recorded" in rendered
+    assert "ZERO-FAKE AST CERTIFIED" not in rendered
+    assert "SUBJECT ENTITY UNDER ASSURANCE" not in rendered
