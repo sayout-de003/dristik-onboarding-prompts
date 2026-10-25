@@ -12,9 +12,9 @@ from collections import defaultdict, deque
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Set
 
 from app.core.config import settings
-from app.agents.runtime.registry import SPECIALIST_AGENTS_V3, AgentDefinition, get_agent_definition
-from app.agents.runtime.specialist import SpecialistAgent
-from app.agents.runtime.reasoners import (
+from app.orchestration.runtime.registry import SPECIALIST_AGENTS_V3, AgentDefinition, get_agent_definition
+from app.orchestration.runtime.specialist import SpecialistAgent
+from app.orchestration.runtime.reasoners import (
     TechnicalReasonerAgent,
     GeoAeoReasonerAgent,
     CroExperienceReasonerAgent,
@@ -22,8 +22,8 @@ from app.agents.runtime.reasoners import (
     CriticAgent,
     SynthesizerAgent,
 )
-from app.evidence.coverage import EvidenceCoverageCalculator
-from app.cognition.blackboard import CognitiveBlackboard
+from app.domain.evidence.coverage import EvidenceCoverageCalculator
+from app.orchestration.cognition.blackboard import CognitiveBlackboard
 from app.orchestration.agent_contracts import validate_agent_result
 
 logger = logging.getLogger("dristik.agent_pool")
