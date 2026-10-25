@@ -439,7 +439,7 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
     }
   };
 
-  const handleConnectorAction = async (integrationId: string, action: 'test' | 'reconnect' | 'revoke') => {
+  const handleConnectorAction = async (integrationId: string, action: 'test' | 'reconnect' | 'refresh' | 'revoke') => {
     setLoading(true);
     try {
       const route = action === 'test'
@@ -1558,6 +1558,9 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
                         <div className="flex flex-wrap justify-end gap-2">
                           <button type="button" disabled={loading} onClick={() => handleConnectorAction(integ.integration_id, 'test')} className="text-ink-700 hover:underline disabled:opacity-50">Test</button>
                           <button type="button" disabled={loading} onClick={() => handleConnectorAction(integ.integration_id, 'reconnect')} className="text-ink-700 hover:underline disabled:opacity-50">Reconnect</button>
+                          {integ.settings?.auth_mode === 'oauth2' && (
+                            <button type="button" disabled={loading} onClick={() => handleConnectorAction(integ.integration_id, 'refresh')} className="text-ink-700 hover:underline disabled:opacity-50">Refresh token</button>
+                          )}
                           <button type="button" disabled={loading} onClick={() => handleConnectorAction(integ.integration_id, 'revoke')} className="text-ink-700 hover:underline disabled:opacity-50">Forget credentials</button>
                           <button type="button" disabled={loading} onClick={() => handleDisconnect(integ.integration_id)} className="text-bad hover:underline disabled:opacity-50">Delete</button>
                         </div>
