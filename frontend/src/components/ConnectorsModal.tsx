@@ -133,6 +133,7 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
   const [providerResource, setProviderResource] = useState('');
   const [providerDataset, setProviderDataset] = useState('');
   const [providerApiUrl, setProviderApiUrl] = useState('');
+  const [providerWebhookSecret, setProviderWebhookSecret] = useState('');
   const [resourcePreview, setResourcePreview] = useState<{ integrationId: string; resource: string; result: any } | null>(null);
   const [actionDrafts, setActionDrafts] = useState<Record<string, Record<string, string>>>({});
   const [providerRegistry, setProviderRegistry] = useState<Record<string, { implementation_status?: string; connection_status?: string; notes?: string | null }>>({});
@@ -167,6 +168,7 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
     setProviderResource('');
     setProviderDataset('');
     setProviderApiUrl('');
+    setProviderWebhookSecret('');
   }, [activeTab]);
 
   useEffect(() => {
@@ -365,6 +367,7 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
     } else if (['sanity', 'openai_search', 'perplexity', 'claude', 'gemini', 'linkedin', 'x', 'tiktok', 'instagram', 'whatsapp_business', 'telegram', 'slack', 'hubspot', 'salesforce', 'stripe'].includes(activeTab)) {
       payload.api_key = providerToken;
       payload.access_token = providerToken;
+      payload.webhook_secret = providerWebhookSecret || undefined;
       payload.api_url = providerApiUrl || undefined;
       payload.repository = providerResource || undefined;
       payload.branch = providerDataset || undefined;
@@ -1340,6 +1343,13 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
                     <div>
                       <label className="text-xs text-ink-700 font-medium block mb-1">Optional API / account URL</label>
                       <input type="url" value={providerApiUrl} onChange={(e) => setProviderApiUrl(e.target.value)} placeholder="Only if your provider requires a custom endpoint" className="w-full bg-paper-50 border border-line rounded px-3 py-2 text-sm text-ink" />
+                    </div>
+                  )}
+                  {activeTab === 'telegram' && (
+                    <div>
+                      <label className="text-xs text-ink-700 font-medium block mb-1">Telegram webhook secret token (optional)</label>
+                      <input type="password" autoComplete="new-password" value={providerWebhookSecret} onChange={(e) => setProviderWebhookSecret(e.target.value)} placeholder="Must match the secret configured in setWebhook" className="w-full bg-paper-50 border border-line rounded px-3 py-2 text-sm text-ink" />
+                      <p className="mt-1 text-[10px] text-ink-500">Dristik validates this token on incoming webhook requests. Register the public webhook URL and the same secret with Telegram.</p>
                     </div>
                   )}
                   {activeTab !== 'sanity' && activeTab !== 'whatsapp_business' && (
