@@ -153,9 +153,9 @@ def _score_entity_clarity(
         base_score += 10.0
     elif fluff_hits:
         base_score -= 10.0
-    if entity_res and not entity_res.is_fragmented:
+    if entity_res and not entity_res.is_fragmented and (named or specific):
         base_score += 20.0
-    elif entity_res and entity_res.is_fragmented:
+    elif entity_res and entity_res.is_fragmented and (named or specific):
         base_score -= 15.0
 
     score = max(0.0, min(100.0, base_score))
