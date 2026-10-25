@@ -198,6 +198,7 @@ def test_search_console_authorize_uses_registered_google_redirect():
     registered = "https://octaos.org/api/v1/external-authority/oauth/callback"
     with patch.object(settings, "GOOGLE_CLIENT_ID", "mock-google-id"), \
          patch.object(settings, "GOOGLE_CLIENT_SECRET", "mock-google-sec"), \
+         patch.object(settings, "AUTH_SECRET", "test-oauth-state-signing-secret-0123456789abcdef"), \
          patch.object(settings, "GOOGLE_OAUTH_REDIRECT_URI", registered), \
          patch.object(settings, "EXTERNAL_OAUTH_REDIRECT_URI", None), \
          patch.object(settings, "OAUTH_REDIRECT_URI", "https://octaos.org/api/v1/connectors/oauth/callback"):
@@ -303,6 +304,7 @@ def test_ga4_connector_oauth_hosted_redirect_and_connect():
     # 1. Authorize on a hosted domain with X-Forwarded-Host
     with patch.object(settings, "GOOGLE_CLIENT_ID", "mock-ga4-id"), \
          patch.object(settings, "GOOGLE_CLIENT_SECRET", "mock-ga4-sec"), \
+         patch.object(settings, "AUTH_SECRET", "test-oauth-state-signing-secret-0123456789abcdef"), \
          patch.object(settings, "GOOGLE_OAUTH_REDIRECT_URI", None), \
          patch.object(settings, "EXTERNAL_OAUTH_REDIRECT_URI", None), \
          patch.object(settings, "OAUTH_REDIRECT_URI", "http://localhost:8000/api/v1/connectors/oauth/callback"):
