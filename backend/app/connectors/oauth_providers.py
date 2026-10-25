@@ -233,7 +233,10 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
 
 def _sign(payload: Dict[str, str]) -> str:
     raw = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode()
-    secret = (settings.AUTH_SECRET or "dristik").encode()
+    secret_value = settings.AUTH_SECRET or ""
+    if len(secret_value) < 32 or secret_value == "dristik-dev-secret-change-me":
+        raise HTTPException(status_code=503, detail="OAuth state signing requires a configured secret of at least 32 characters.")
+    secret = secret_value.encode()
     sig = hmac.new(secret, raw.encode(), hashlib.sha256).hexdigest()
     return f"{raw}.{sig}"
 
@@ -243,9 +246,10 @@ def _unsign(state: str) -> Dict[str, str]:
         raw, sig = state.split(".", 1)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="OAuth state is invalid.") from exc
-    secret = (settings.AUTH_SECRET or "").encode()
-    if not secret:
-        raise HTTPException(status_code=503, detail="OAuth state signing is not configured.")
+    secret_value = settings.AUTH_SECRET or ""
+    if len(secret_value) < 32 or secret_value == "dristik-dev-secret-change-me":
+        raise HTTPException(status_code=503, detail="OAuth state signing requires a configured secret of at least 32 characters.")
+    secret = secret_value.encode()
     expected = hmac.new(secret, raw.encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, sig):
         raise HTTPException(status_code=400, detail="OAuth state signature does not match.")
