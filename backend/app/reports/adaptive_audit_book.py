@@ -434,35 +434,35 @@ def _build_ch_brief(report: Any, manifest: Dict[str, Any]) -> str:
                         <td><strong>01</strong></td>
                         <td>Technical SEO &amp; Crawlability</td>
                         <td><span style="color:#64748b; font-weight:700;">{ "SCORE RECORDED" if seo_s is not None else "NOT MEASURED" }</span></td>
-                        <td><strong>{f"{seo_s:.1f}" if seo_s is not None else "—"}</strong>{ " / 100" if seo_s is not None else ""}</td>
+                        <td><strong>{format(seo_s, ".1f") if seo_s is not None else "—"}</strong>{ " / 100" if seo_s is not None else ""}</td>
                         <td>W3C / RFC 9110 HTTP Protocol</td>
                     </tr>
                     <tr>
                         <td><strong>02</strong></td>
                         <td>Generative Engine Optimization (GEO)</td>
                         <td><span style="color:#64748b; font-weight:700;">{ "SCORE RECORDED" if geo_s is not None else "NOT MEASURED" }</span></td>
-                        <td><strong>{f"{geo_s:.1f}" if geo_s is not None else "—"}</strong>{ " / 100" if geo_s is not None else ""}</td>
+                        <td><strong>{format(geo_s, ".1f") if geo_s is not None else "—"}</strong>{ " / 100" if geo_s is not None else ""}</td>
                         <td>First-Party AST Extractability</td>
                     </tr>
                     <tr>
                         <td><strong>03</strong></td>
                         <td>Answer Engine Visibility (AEO)</td>
                         <td><span style="color:#64748b; font-weight:700;">{ "SCORE RECORDED" if aeo_s is not None else "NOT MEASURED" }</span></td>
-                        <td><strong>{f"{aeo_s:.1f}" if aeo_s is not None else "—"}</strong>{ " / 100" if aeo_s is not None else ""}</td>
+                        <td><strong>{format(aeo_s, ".1f") if aeo_s is not None else "—"}</strong>{ " / 100" if aeo_s is not None else ""}</td>
                         <td>Live Multi-Model Query Benchmark</td>
                     </tr>
                     <tr>
                         <td><strong>04</strong></td>
                         <td>Conversion Ergonomics (CRO)</td>
                         <td><span style="color:#64748b; font-weight:700;">{ "SCORE RECORDED" if cro_s is not None else "NOT MEASURED" }</span></td>
-                        <td><strong>{f"{cro_s:.1f}" if cro_s is not None else "—"}</strong>{ " / 100" if cro_s is not None else ""}</td>
+                        <td><strong>{format(cro_s, ".1f") if cro_s is not None else "—"}</strong>{ " / 100" if cro_s is not None else ""}</td>
                         <td>CTA Hierarchy &amp; Form Friction</td>
                     </tr>
                     <tr>
                         <td><strong>05</strong></td>
                         <td>Competitive Market Parity</td>
                         <td><span style="color:#64748b; font-weight:700;">{ "SCORE RECORDED" if comp_s is not None else "NOT MEASURED" }</span></td>
-                        <td><strong>{f"{comp_s:.1f}" if comp_s is not None else "—"}</strong>{ " / 100" if comp_s is not None else ""}</td>
+                        <td><strong>{format(comp_s, ".1f") if comp_s is not None else "—"}</strong>{ " / 100" if comp_s is not None else ""}</td>
                         <td>Head-to-Head Inquiry Testing</td>
                     </tr>
                 </tbody>
