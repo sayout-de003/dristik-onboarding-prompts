@@ -117,6 +117,19 @@ class ConnectorStore:
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_connector_action_runs_status ON connector_action_runs(org_id, status, updated_at)")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS connector_webhook_events (
+                org_id TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                integration_id TEXT NOT NULL,
+                event_key TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                payload_sha256 TEXT NOT NULL,
+                received_at TEXT NOT NULL,
+                PRIMARY KEY (provider, integration_id, event_key)
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_connector_webhook_org_time ON connector_webhook_events(org_id, received_at)")
         return conn
 
     def _load(self) -> None:
@@ -229,6 +242,22 @@ class ConnectorStore:
         if integration is None or integration.org_id != org_id:
             return None
         return integration
+
+    def record_webhook_event(
+        self, org_id: str, provider: str, integration_id: str, event_key: str,
+        event_type: str, payload_sha256: str,
+    ) -> bool:
+        """Persist webhook metadata once. Raw payloads and secrets are intentionally not stored."""
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """INSERT OR IGNORE INTO connector_webhook_events
+                (org_id, provider, integration_id, event_key, event_type, payload_sha256, received_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (org_id, provider, integration_id, event_key, event_type[:120], payload_sha256, now),
+            )
+            conn.commit()
+            return cursor.rowcount == 1
 
     def record_event(
         self, org_id: str, action: str, result: str,
