@@ -4,9 +4,9 @@ Standard cognitive contract for all specialist agents.
 """
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
-from app.cognition.blackboard import CognitiveBlackboard
-from app.inference.model_router import ModelRouter
-from app.evidence.retriever import EvidenceRetriever
+from app.orchestration.cognition.blackboard import CognitiveBlackboard
+from app.core.inference.model_router import ModelRouter
+from app.domain.evidence.retriever import EvidenceRetriever
 from app.domain.models import Claim, Observation
 from app.domain.enums import Category, Severity, ClaimType
 
@@ -48,8 +48,8 @@ class BaseAgent(ABC):
             impact=impact,
             effort=effort
         )
-        from app.cognition.ground_truth import apply_ground_truth_to_claim
-        from app.cognition.finding_rubric import apply_rubric_to_claim
+        from app.orchestration.cognition.ground_truth import apply_ground_truth_to_claim
+        from app.orchestration.cognition.finding_rubric import apply_rubric_to_claim
         apply_ground_truth_to_claim(claim, blackboard.evidence_store, blackboard.claim_registry)
         apply_rubric_to_claim(claim, blackboard.evidence_store)
         return claim

@@ -9,12 +9,12 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import defaultdict, deque
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Set
 
 from app.core.config import settings
-from app.agents.runtime.registry import SPECIALIST_AGENTS_V3, AgentDefinition, get_agent_definition
-from app.agents.runtime.specialist import SpecialistAgent
-from app.agents.runtime.reasoners import (
+from app.orchestration.runtime.registry import SPECIALIST_AGENTS_V3, AgentDefinition, get_agent_definition
+from app.orchestration.runtime.specialist import SpecialistAgent
+from app.orchestration.runtime.reasoners import (
     TechnicalReasonerAgent,
     GeoAeoReasonerAgent,
     CroExperienceReasonerAgent,
@@ -22,8 +22,9 @@ from app.agents.runtime.reasoners import (
     CriticAgent,
     SynthesizerAgent,
 )
-from app.evidence.coverage import EvidenceCoverageCalculator
-from app.cognition.blackboard import CognitiveBlackboard
+from app.domain.evidence.coverage import EvidenceCoverageCalculator
+from app.orchestration.cognition.blackboard import CognitiveBlackboard
+from app.orchestration.agent_contracts import validate_agent_result
 
 logger = logging.getLogger("dristik.agent_pool")
 
@@ -119,6 +120,7 @@ class AgentPool:
             "agents_declared": total,
             "agents_ran": 0,
             "completed": 0,
+            "partial": 0,
             "unavailable": 0,
             "skipped": 0,
             "errors": 0,
@@ -168,14 +170,18 @@ class AgentPool:
                     summary["errors"] += 1
                     summary["results"][agent_id] = record
                 else:
-                    status = (payload or {}).get("status")
+                    payload = validate_agent_result(agent_id, payload)
+                    status = payload["status"]
+                    blackboard.blackboard_state.setdefault("agent_results", {})[agent_id] = payload
                     summary["agents_ran"] += 1
                     if status == "unavailable":
                         summary["unavailable"] += 1
                     elif status == "skipped":
                         summary["skipped"] += 1
-                    elif status == "error":
+                    elif status in {"error", "failed"}:
                         summary["errors"] += 1
+                    elif status == "partial":
+                        summary["partial"] += 1
                     else:
                         summary["completed"] += 1
                     summary["results"][agent_id] = payload
@@ -196,7 +202,7 @@ class AgentPool:
                     )
 
         blackboard.blackboard_state["agent_pool_summary"] = {
-            k: summary[k] for k in ("agents_declared", "agents_ran", "completed", "unavailable", "skipped", "errors", "waves")
+            k: summary[k] for k in ("agents_declared", "agents_ran", "completed", "partial", "unavailable", "skipped", "errors", "waves")
         }
         return summary
 

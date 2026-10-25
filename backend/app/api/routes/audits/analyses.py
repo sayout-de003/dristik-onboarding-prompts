@@ -20,9 +20,9 @@ from app.identity.access import require_analysis
 from app.identity.authorizer import Authorizer, UserIdentity
 from app.identity.deps import get_current_user, require_permission
 from app.identity.store import get_store
-from app.payments.store import get_payment_store
+from app.domain.commercial.payments.store import get_payment_store
 from app.orchestration.orchestrator import orchestrator
-from app.scoring.displayed_score import displayed_composite
+from app.domain.scoring.displayed_score import displayed_composite
 from app.remediation.patch_pack import (
     generate_patch_pack_zip,
     generate_notion_block,
@@ -417,7 +417,7 @@ async def simulate_ai_search(
     if not run.report:
         raise HTTPException(status_code=404, detail="Analysis report not ready yet.")
 
-    from app.cognition.blackboard import CognitiveBlackboard
+    from app.orchestration.cognition.blackboard import CognitiveBlackboard
     blackboard = CognitiveBlackboard(run_id=run.analysis_id, website_url=run.website_url)
     blackboard.business_profile = run.report.business_profile
 
@@ -461,8 +461,8 @@ async def generate_audit_dynamic_sandbox(
     Synthesizes and evaluates 100 bespoke business questions across 10 strategic facets
     for this specific audit report using its crawled DOM evidence and active LLM.
     """
-    from app.intelligence.business.entity_resolver import UniversalEntityResolver
-    from app.intelligence.geo.dynamic_sandbox import DynamicQuestionSandboxEngine
+    from app.seo.business.entity_resolver import UniversalEntityResolver
+    from app.geo.dynamic_sandbox import DynamicQuestionSandboxEngine
     from app.domain.models import PageEvidence
 
     run = _get_org_run(analysis_id, user)
@@ -512,7 +512,7 @@ async def generate_audit_dynamic_sandbox(
 
     model_router = getattr(orchestrator, "model_router", None)
     if not model_router:
-        from app.inference.model_router import ModelRouter
+        from app.core.inference.model_router import ModelRouter
         model_router = ModelRouter()
     sandbox_engine = DynamicQuestionSandboxEngine(model_router=model_router)
     evaluations = await sandbox_engine.generate_and_evaluate_100_questions(
@@ -523,8 +523,8 @@ async def generate_audit_dynamic_sandbox(
     )
 
     # ── KIE Phase 6: Rebuild graph, store summary & 5-dimension scorecard ────
-    from app.intelligence.knowledge.website_knowledge_graph import WebsiteKnowledgeGraph
-    from app.intelligence.knowledge.grounded_simulator import AiVisibilityIndexCalculator
+    from app.crawl.knowledge.website_knowledge_graph import WebsiteKnowledgeGraph
+    from app.crawl.knowledge.grounded_simulator import AiVisibilityIndexCalculator
 
     domain = run.report.website_url.split("//")[-1].split("/")[0].replace("www.", "") if run.report.website_url else run.report.domain
     kg = WebsiteKnowledgeGraph(brand=resolved_entity.name, domain=domain)
@@ -533,8 +533,8 @@ async def generate_audit_dynamic_sandbox(
         run.report.kie_graph_summary = kg.summary()
 
         # Build simulations from the evaluations we just produced
-        from app.intelligence.knowledge.primitives import GroundedAnswerSimulation, KieAnswerRisk
-        from app.intelligence.knowledge.primitives import ClaimGroundingResult
+        from app.crawl.knowledge.primitives import GroundedAnswerSimulation, KieAnswerRisk
+        from app.crawl.knowledge.primitives import ClaimGroundingResult
         sim_list = []
         for ev in evaluations:
             grounding = ev.grounding_ratio or 0.0
@@ -544,7 +544,7 @@ async def generate_audit_dynamic_sandbox(
                     risk = KieAnswerRisk(risk)
                 except Exception:
                     risk = KieAnswerRisk.LOW
-            from app.intelligence.knowledge.primitives import GroundedAnswerSimulation
+            from app.crawl.knowledge.primitives import GroundedAnswerSimulation
             sim_obj = GroundedAnswerSimulation(
                 question_id=ev.question_id,
                 candidate_answer=ev.crawled_answer or "",
@@ -600,11 +600,11 @@ async def get_ki_graph(
 
     Cached on report if already computed. Re-builds from page evidence if not.
     """
-    from app.intelligence.knowledge.website_knowledge_graph import WebsiteKnowledgeGraph
-    from app.intelligence.knowledge.grounded_simulator import (
+    from app.crawl.knowledge.website_knowledge_graph import WebsiteKnowledgeGraph
+    from app.crawl.knowledge.grounded_simulator import (
         GroundedAnswerSimulator, AiVisibilityIndexCalculator
     )
-    from app.intelligence.knowledge.primitives import GroundedAnswerSimulation, KieAnswerRisk
+    from app.crawl.knowledge.primitives import GroundedAnswerSimulation, KieAnswerRisk
 
     run = _get_org_run(analysis_id, user)
     if not run.report:
@@ -708,7 +708,7 @@ async def run_patch_requery(
     Executes a real live-model evaluation against the proposed patch context using the active LLM engine.
     Returns updated before -> after citation readiness and genuine model-graded score deltas.
     """
-    from app.intelligence.citations.answer_change import settle_patch_scores
+    from app.geo.citations.answer_change import settle_patch_scores
     from app.workers.simulator_worker import CANONICAL_COMMERCIAL_QUESTIONS
 
     run = _get_org_run(analysis_id, user)
@@ -937,7 +937,7 @@ async def get_evidence_explorer(analysis_id: str, user: UserIdentity = Depends(g
     every Finding -> Claim -> Evidence Item -> Selector -> Snapshot -> Captured Timestamp.
     """
     _get_org_run(analysis_id, user)
-    from app.persistence.repository import get_audit_repository
+    from app.db.repository import get_audit_repository
     repo = get_audit_repository()
     traces = repo.get_evidence_trace(analysis_id)
     return {
@@ -954,7 +954,7 @@ async def get_score_explanation(analysis_id: str, user: UserIdentity = Depends(g
     exact contributing dimensions, specific evidence tokens, and deduction reasons.
     """
     _get_org_run(analysis_id, user)
-    from app.persistence.repository import get_audit_repository
+    from app.db.repository import get_audit_repository
     repo = get_audit_repository()
     expl = repo.get_score_explanation(analysis_id)
     if not expl:
@@ -968,7 +968,7 @@ async def get_analysis_checkpoints(analysis_id: str, user: UserIdentity = Depend
     Returns all durable stage checkpoints for the analysis run.
     """
     _get_org_run(analysis_id, user)
-    from app.persistence.repository import get_audit_repository
+    from app.db.repository import get_audit_repository
     repo = get_audit_repository()
     checkpoints = repo.get_all_checkpoints(analysis_id)
     return {
@@ -1062,7 +1062,7 @@ async def get_agent_workforce_state(analysis_id: str, user: UserIdentity = Depen
     blackboard = orchestrator.blackboards.get(analysis_id)
     agent_results = (blackboard.blackboard_state.get("agent_results") if blackboard else {}) or {}
     
-    from app.agents.runtime.registry import SPECIALIST_AGENTS_V3
+    from app.orchestration.runtime.registry import SPECIALIST_AGENTS_V3
     workforce = []
     for agent_id, defn in SPECIALIST_AGENTS_V3.items():
         res = agent_results.get(agent_id) or {}
@@ -1098,7 +1098,7 @@ async def get_visual_intelligence(analysis_id: str, user: UserIdentity = Depends
     if run.report.visual_intelligence:
         return run.report.visual_intelligence
 
-    from app.intelligence.monitoring.visual_intelligence import visual_intelligence_engine
+    from app.core.monitoring.visual_intelligence import visual_intelligence_engine
     visual_intel = visual_intelligence_engine.synthesize_visual_intelligence(
         domain=run.report.domain,
         business_profile=run.report.business_profile,

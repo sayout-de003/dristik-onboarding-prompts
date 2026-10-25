@@ -74,7 +74,9 @@ def generate_urls_csv(report: ExecutiveReport) -> str:
         title_px = snip.desktop_title_pixel_width if snip else (title_len * 9.8)
         title_trunc = "YES" if (snip and snip.desktop_title_truncated) or (title_len > 60) else "NO"
 
-        desc = getattr(pr, "meta_description", "") or (getattr(pr, "seo", None) and getattr(pr.seo, "meta_status", "")) or ""
+        desc = getattr(pr, "meta_description", None)
+        if desc is None:
+            desc = ""
         desc_len = len(desc)
         desc_px = snip.meta_description_pixel_width if snip else (desc_len * 6.8)
         desc_trunc = "YES" if (snip and snip.meta_description_truncated) or (desc_len > 160) else "NO"
@@ -83,18 +85,28 @@ def generate_urls_csv(report: ExecutiveReport) -> str:
         canon_match = "MATCH" if (canon and canon.strip() == p_url.strip()) else ("MISMATCH" if canon else "MISSING")
 
         depth = depth_map.get(p_url, getattr(pr, "click_depth", 1))
-        status_code = getattr(pr, "status_code", 200)
+        status_code = getattr(pr, "status_code", None)
+        indexability = getattr(pr, "is_indexable", None)
 
-        h1_list = getattr(pr, "h1", None) or getattr(pr, "h1_tags", None) or []
+        h1_raw = getattr(pr, "h1", None)
+        if h1_raw is None:
+            h1_raw = getattr(pr, "h1_tags", None)
+        h1_list = h1_raw if isinstance(h1_raw, list) else None
         primary_h1 = h1_list[0] if h1_list else ""
-        word_count = getattr(pr, "word_count", None) or (getattr(pr, "ux", None) and getattr(pr.ux, "word_count", 0)) or 0
-        ttfb = getattr(pr, "ttfb_ms", None) or (getattr(pr, "ux", None) and getattr(pr.ux, "ttfb_ms", 0.0)) or 0.0
-        schema_types = getattr(pr, "schema_types", []) or []
+        word_count = getattr(pr, "word_count", None)
+        if word_count is None:
+            ux = getattr(pr, "ux", None)
+            word_count = getattr(ux, "word_count", None) if ux is not None else None
+        ttfb = getattr(pr, "ttfb_ms", None)
+        if ttfb is None:
+            ux = getattr(pr, "ux", None)
+            ttfb = getattr(ux, "ttfb_ms", None) if ux is not None else None
+        schema_types = getattr(pr, "schema_types", None)
 
         writer.writerow([
             p_url,
             status_code,
-            "INDEXABLE" if getattr(pr, "is_indexable", True) else "NOINDEX",
+            ("INDEXABLE" if indexability is True else "NOINDEX" if indexability is False else "UNKNOWN"),
             canon,
             canon_match,
             title,
@@ -105,12 +117,12 @@ def generate_urls_csv(report: ExecutiveReport) -> str:
             desc_len,
             int(desc_px),
             desc_trunc,
-            len(h1_list),
+            len(h1_list) if h1_list is not None else "",
             primary_h1,
-            word_count,
+            word_count if word_count is not None else "",
             depth,
-            ttfb,
-            "; ".join(schema_types),
+            ttfb if ttfb is not None else "",
+            "; ".join(schema_types) if isinstance(schema_types, list) else "",
         ])
 
     return output.getvalue()
@@ -169,16 +181,16 @@ def generate_remediation_tracker_csv(report: ExecutiveReport) -> str:
             f.effort,
             f.title,
             f.description.replace("\n", " ").strip(),
-            f.expected_condition or "Remediated according to best practices.",
+            f.expected_condition or "",
             (f.why_it_matters or f.business_impact or "").replace("\n", " ").strip(),
             f.recommendation.replace("\n", " ").strip(),
-            (f.validation_criteria or "Automated re-crawl confirms zero errors.").replace("\n", " ").strip(),
+            (f.validation_criteria or "").replace("\n", " ").strip(),
             f.owner or "Engineering",
             len(aff_urls),
             aff_sample,
             "; ".join(f.dependencies or []),
             f.evidence_class.value if hasattr(f.evidence_class, "value") else str(f.evidence_class),
-            f.confidence_basis or "Machine observation",
+            f.confidence_basis or "",
         ])
 
     return output.getvalue()
@@ -241,16 +253,16 @@ def generate_geo_remediation_csv(report: ExecutiveReport) -> str:
             f.effort,
             f.title,
             f.description.replace("\n", " ").strip(),
-            f.expected_condition or "Structured, verifiable answer present in crawlable DOM.",
-            (f.why_it_matters or f.business_impact or "May prevent AI search engines from extracting or citing page.").replace("\n", " ").strip(),
+            f.expected_condition or "",
+            (f.why_it_matters or f.business_impact or "").replace("\n", " ").strip(),
             f.recommendation.replace("\n", " ").strip(),
-            (f.validation_criteria or "Automated re-crawl confirms passage extractability and zero entity contradiction.").replace("\n", " ").strip(),
+            (f.validation_criteria or "").replace("\n", " ").strip(),
             f.owner or "AI Search & Growth Team",
             len(aff_urls),
             aff_sample,
             "; ".join(f.dependencies or []),
             f.evidence_class.value if hasattr(f.evidence_class, "value") else str(f.evidence_class),
-            f"{int(f.confidence * 100)}% ({f.confidence_basis or 'Machine observation'})",
+            f"{int(f.confidence * 100)}% ({f.confidence_basis})" if f.confidence_basis else "",
         ])
 
     return output.getvalue()

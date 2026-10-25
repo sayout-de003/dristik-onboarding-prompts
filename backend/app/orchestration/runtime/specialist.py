@@ -11,10 +11,10 @@ from typing import Any, Dict, List, Optional
 from app.orchestration.runtime.base import BaseAgent
 from app.orchestration.runtime.registry import AgentDefinition, DOMAIN_CATEGORY
 from app.orchestration.runtime.task_cards import SPECIALIST_OUTPUT_SCHEMA, task_card_for
-from app.cognition.blackboard import CognitiveBlackboard
+from app.orchestration.cognition.blackboard import CognitiveBlackboard
 from app.domain.enums import Category, Severity, VerificationStatus
-from app.evidence.retriever import EvidenceRetriever
-from app.inference.prompt_compiler import load_prompt
+from app.domain.evidence.retriever import EvidenceRetriever
+from app.core.inference.prompt_compiler import load_prompt
 
 
 def _category_for(defn: AgentDefinition) -> Category:
@@ -1375,7 +1375,7 @@ class SpecialistAgent(BaseAgent):
         deps = self.definition.dependencies or []
         lines = []
         if self.agent_id == "strategy.executive.v3":
-            from app.cognition.finding_rubric import executive_eligible_claims
+            from app.orchestration.cognition.finding_rubric import executive_eligible_claims
             eligible = executive_eligible_claims(blackboard.claim_registry.get_all())
             held = [
                 c.id for c in blackboard.claim_registry.get_all()
@@ -1414,7 +1414,7 @@ class SpecialistAgent(BaseAgent):
     def _route_contested_claims(self, blackboard: CognitiveBlackboard) -> None:
         """Arbitrate only by recording DOM vs ext contests. Never pick a winner."""
         from app.domain.enums import SourceIntegrityLabel, VerificationStatus
-        from app.cognition.contradiction import ContradictionDetector
+        from app.orchestration.cognition.contradiction import ContradictionDetector
 
         detector = ContradictionDetector()
         routed = detector.detect_contradictions(blackboard.claim_registry.get_all())
@@ -1450,7 +1450,7 @@ class SpecialistAgent(BaseAgent):
                 claim.verification_status = VerificationStatus.INSUFFICIENT_EVIDENCE
                 claim.verification_notes = "Adversarial specialist: no surviving evidence_refs."
         from app.domain.enums import Materiality, RubricConfidence
-        from app.cognition.finding_rubric import apply_rubric_to_claim, ADVERSARIAL_AGENT_ID
+        from app.orchestration.cognition.finding_rubric import apply_rubric_to_claim, ADVERSARIAL_AGENT_ID
         for claim in blackboard.claim_registry.get_all():
             apply_rubric_to_claim(claim, store)
             if (

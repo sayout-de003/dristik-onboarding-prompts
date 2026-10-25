@@ -16,34 +16,34 @@ from app.core.config import settings
 from app.domain.models import AnalysisRun, ExecutiveReport, CrawlManifest, FindingEvidence
 from app.domain.enums import AnalysisStage, Category, Severity
 from app.domain.capability import CAPABILITY_REGISTRY
-from app.cognition.blackboard import CognitiveBlackboard
-from app.cognition.decision_engine import DecisionEngine
-from app.cognition.hypotheses import HypothesisEngine
-from app.cognition.causal import CausalReasoningEngine
-from app.cognition.confidence import CalibratedConfidenceEngine
-from app.evidence.graph import GraphNodeType, GraphEdgeType
-from app.evidence.validation import EvidenceGapDetector
-from app.intelligence.business.website_twin import WebsiteDigitalTwin
-from app.intelligence.business.intent_graph import SearchIntentGraph
-from app.intelligence.business.opportunity import OpportunityDetector
-from app.intelligence.citations.simulation import AISearchSimulationEngine
-from app.intelligence.monitoring.timeline import WebsiteIntelligenceTimeline
-from app.inference.model_router import ModelRouter
-from app.inference.telemetry import TelemetryTracker
+from app.orchestration.cognition.blackboard import CognitiveBlackboard
+from app.orchestration.cognition.decision_engine import DecisionEngine
+from app.orchestration.cognition.hypotheses import HypothesisEngine
+from app.orchestration.cognition.causal import CausalReasoningEngine
+from app.orchestration.cognition.confidence import CalibratedConfidenceEngine
+from app.domain.evidence.graph import GraphNodeType, GraphEdgeType
+from app.domain.evidence.validation import EvidenceGapDetector
+from app.seo.business.website_twin import WebsiteDigitalTwin
+from app.seo.business.intent_graph import SearchIntentGraph
+from app.seo.business.opportunity import OpportunityDetector
+from app.geo.citations.simulation import AISearchSimulationEngine
+from app.core.monitoring.timeline import WebsiteIntelligenceTimeline
+from app.core.inference.model_router import ModelRouter
+from app.core.inference.telemetry import TelemetryTracker
 from app.crawl.crawler import CrawlerService
 from app.orchestration.mission.director import MissionDirector
 from app.orchestration.team_orchestrator import TeamOrchestrator
 from app.orchestration.agent_pool import AgentPool
-from app.scoring.engine import ScoringEngine
+from app.domain.scoring.engine import ScoringEngine
 from app.remediation.planner import RemediationPlanner
 from app.reports.narrative import NarrativeGenerator
 from app.reports.roadmap import RoadmapBuilder
-from app.agents.page.intelligence import PageIntelligenceAgent
-from app.evidence.site_facts import extract_site_facts
+from app.crawl.page_intelligence import PageIntelligenceAgent
+from app.domain.evidence.site_facts import extract_site_facts
 from app.remediation.patch_pack import generate_character_safe_copy, generate_whatsapp_summary
-from app.intelligence.competitive.bakeoff import CommercialBakeoffEngine
-from app.intelligence.competitive.benchmark import build_competitor_seo_parity_matrix
-from app.intelligence.business.understanding import BusinessUnderstandingOrchestrator
+from app.seo.competitive.bakeoff import CommercialBakeoffEngine
+from app.seo.competitive.benchmark import build_competitor_seo_parity_matrix
+from app.seo.business.understanding import BusinessUnderstandingOrchestrator
 from app.orchestration.integrity_gate import integrity_gate
 from app.orchestration.pipeline_dag import (
     get_pipeline_controller,
@@ -77,7 +77,7 @@ class AnalysisOrchestrator:
         self.bakeoff_engine = CommercialBakeoffEngine()
         self.digital_twins: Dict[str, WebsiteDigitalTwin] = {}
         self.timelines: Dict[str, WebsiteIntelligenceTimeline] = {}
-        from app.persistence.repository import get_audit_repository
+        from app.db.repository import get_audit_repository
         self.repository = get_audit_repository()
         self.model_router = ModelRouter()
 
@@ -371,7 +371,7 @@ class AnalysisOrchestrator:
             )
 
             # Durable Checkpoint 1: Crawl & DOM observations complete
-            from app.persistence.models import StageCheckpoint
+            from app.db.models import StageCheckpoint
             try:
                 self.repository.persist_crawl_pages(analysis_id, manifest.pages)
                 self.repository.persist_evidence_items(analysis_id, blackboard.evidence_store.get_all())
@@ -425,7 +425,7 @@ class AnalysisOrchestrator:
                 blackboard.evidence_store.add_observation("pricing_signals", sf.get("pricing_signals_present", False), source="html", url=website_url)
 
             # Phase 2: Operationalize External Evidence Plane (ext_NNN)
-            from app.evidence.enrichment import ExternalEvidenceEnricher
+            from app.domain.evidence.enrichment import ExternalEvidenceEnricher
             enricher = ExternalEvidenceEnricher()
             controller.mark_node_status("node_dns_ssl_headers", GraphNodeStatus.RUNNING)
             controller.log_activity("node_dns_ssl_headers", "running", "external.enrich", f"Enriching external evidence plane (DNS, SSL/TLS, Security Headers, CruX) for {domain}...")
@@ -486,7 +486,7 @@ class AnalysisOrchestrator:
             controller.mark_node_status("node_entity_resolution", GraphNodeStatus.RUNNING)
             controller.log_activity("node_entity_resolution", "running", "entity.resolve", f"Resolving canonical entity for {domain}...")
 
-            from app.intelligence.business.entity_resolver import UniversalEntityResolver
+            from app.seo.business.entity_resolver import UniversalEntityResolver
             blackboard.resolved_entity = UniversalEntityResolver.resolve_from_evidence(
                 website_url=website_url,
                 pages=manifest.pages,
@@ -543,7 +543,7 @@ class AnalysisOrchestrator:
             # Search Console and SERP rows, when a provider already measured them.
             # Query-level advice stays skipped when this payload is NOT_CONNECTED.
             try:
-                from app.intelligence.search_demand import attach_search_demand
+                from app.seo.search_demand import attach_search_demand
                 demand = attach_search_demand(blackboard, domain)
                 controller.log_activity(
                     "node_specialist_wave_1",
@@ -736,7 +736,7 @@ class AnalysisOrchestrator:
             controller.log_activity("node_integrity_gate", "success", "integrity.complete", "Zero-Fake Evidence integrity gate passed")
 
             from app.domain.enums import Materiality, RubricConfidence
-            from app.cognition.finding_rubric import apply_rubric_to_claim
+            from app.orchestration.cognition.finding_rubric import apply_rubric_to_claim
             for _claim in current_claims:
                 apply_rubric_to_claim(_claim, blackboard.evidence_store)
             held_guesses = [
@@ -856,24 +856,24 @@ class AnalysisOrchestrator:
             await self._emit_event(analysis_id, "scoring", 93, "Deterministic Scoring Engine computing intent-adjusted category scores...")
 
             eval_pages = (manifest.pages if manifest else None) or blackboard.pages or []
-            from app.intelligence.ux.visual_ux_tester import visual_ux_tester
+            from app.cro.visual_ux_tester import visual_ux_tester
             from app.seo.analyzers.canonical_auditor import analyze_canonicals
             from app.seo.analyzers.http_status_auditor import analyze_http_statuses
             from app.seo.analyzers.heading_analyzer import HeadingAnalyzer, analyze_heading_hierarchy
             from app.seo.analyzers.media_asset_analyzer import MediaAssetAnalyzer, analyze_media_assets
             from app.seo.analyzers.link_depth import LinkDepthAnalyzer, analyze_link_depth_and_orphans
             from app.seo.analyzers.meta_rollup import analyze_meta_rollup
-            from app.analyzers.form_analyzer import analyze_forms
-            from app.analyzers.security_analyzer import analyze_security_headers
+            from app.cro.form_analyzer import analyze_forms
+            from app.crawl.analyzers.security_analyzer import analyze_security_headers
             from app.seo.analyzers.schema_validator import analyze_schema_rich_results
             from app.seo.analyzers.local_seo_analyzer import analyze_local_seo
             from app.seo.analyzers.international_seo_analyzer import analyze_international_seo
             from app.seo.analyzers.topical_authority_analyzer import analyze_topical_authority
             from app.seo.analyzers.ecommerce_seo import analyze_ecommerce_seo
             from app.seo.analyzers.serp_appearance import analyze_serp_appearance
-            from app.intelligence.accessibility.wcag_auditor import DeepWcagAuditor
-            from app.intelligence.indexation.classifier import indexation_classifier
-            from app.intelligence.competitive.benchmark import build_competitor_seo_parity_matrix
+            from app.cro.accessibility.wcag_auditor import DeepWcagAuditor
+            from app.crawl.indexation.classifier import indexation_classifier
+            from app.seo.competitive.benchmark import build_competitor_seo_parity_matrix
             from app.seo.analyzers.host_and_redirects import probe_host_and_redirects
             from app.remediation.deduplicator import FindingDeduplicator
             from app.remediation.patch_engine import patch_engine
@@ -971,14 +971,14 @@ class AnalysisOrchestrator:
                         logger.info("Page rendering disparity collection note: %s", rf_err)
 
             # Layer 2 — Deterministic Finding Engine evaluation
-            from app.evidence.deterministic_rules import DeterministicFindingEngine
+            from app.domain.evidence.deterministic_rules import DeterministicFindingEngine
             deterministic_engine = DeterministicFindingEngine()
             layer2_findings = deterministic_engine.evaluate(blackboard.evidence_store, manifest)
             for f in layer2_findings:
                 if not any(x.finding_id == f.finding_id or (x.rule_id and x.rule_id == f.rule_id) for x in raw_findings):
                     raw_findings.append(f)
 
-            from app.intelligence.geo.entity_graph import evaluate_entity_graph
+            from app.geo.entity_graph import evaluate_entity_graph
             profile_name = ""
             if blackboard.business_profile and blackboard.business_profile.business_name:
                 profile_name = blackboard.business_profile.business_name
@@ -998,7 +998,7 @@ class AnalysisOrchestrator:
             # -----------------------------------------------------------------
             model_router.set_active_stage("ai_visibility_monitor", "Live AI Citation & Search Visibility")
 
-            from app.intelligence.geo.readiness import evaluate_geo_readiness
+            from app.geo.readiness import evaluate_geo_readiness
             visibility_measured = False
             visibility_detail = None
             live_citation_score = None
@@ -1010,7 +1010,7 @@ class AnalysisOrchestrator:
             should_run_geo_live = effective_pillars is None or bool(effective_pillars.intersection({"geo", "aeo"}))
             if should_run_geo_live:
                 try:
-                    from app.intelligence.geo.audit_monitor import run_audit_visibility
+                    from app.geo.audit_monitor import run_audit_visibility
                     profile = blackboard.business_profile
                     b_name = getattr(profile, "business_name", None) or domain
                     b_ind = getattr(profile, "industry", None) or getattr(profile, "niche", None) or "Software & Technology"
@@ -1048,7 +1048,7 @@ class AnalysisOrchestrator:
                     geo_bench_report = None
 
                 try:
-                    from app.intelligence.citations.tracker import ai_citation_tracker
+                    from app.geo.citations.tracker import ai_citation_tracker
                     profile = blackboard.business_profile
                     b_name = getattr(profile, "business_name", None) or domain
                     b_ind = getattr(profile, "industry", None) or getattr(profile, "niche", None) or "Software & Technology"
@@ -1082,7 +1082,7 @@ class AnalysisOrchestrator:
                 entity_graph=entity_graph_report,
             )
             try:
-                from app.intelligence.geo.readiness import enrich_geo_readiness_citations
+                from app.geo.readiness import enrich_geo_readiness_citations
                 brand_name = getattr(blackboard.business_profile, "business_name", None) or domain
                 geo_readiness = await enrich_geo_readiness_citations(
                     geo_readiness,
@@ -1096,7 +1096,7 @@ class AnalysisOrchestrator:
             blackboard.geo_readiness = geo_readiness
 
             try:
-                from app.intelligence.geo.agent_readiness import evaluate_agent_readiness
+                from app.geo.agent_readiness import evaluate_agent_readiness
                 agent_readiness = await evaluate_agent_readiness(
                     website_url=website_url,
                     pages=blackboard.pages,
@@ -1107,7 +1107,7 @@ class AnalysisOrchestrator:
                 agent_readiness = None
             blackboard.agent_readiness = agent_readiness
 
-            from app.intelligence.competitive.evidence_graph import competitive_evidence_graph_engine
+            from app.seo.competitive.evidence_graph import competitive_evidence_graph_engine
             comp_graph_res = competitive_evidence_graph_engine.build_graph(
                 target_profile=blackboard.business_profile,
                 target_domain=domain,
@@ -1115,7 +1115,7 @@ class AnalysisOrchestrator:
                 observatory_records=(ai_visibility_scorecard.observatory_records if ai_visibility_scorecard else []),
             )
 
-            from app.intelligence.competitive.engine import competitive_intelligence_engine
+            from app.seo.competitive.engine import competitive_intelligence_engine
             comp_report_obj = competitive_intelligence_engine.build_competitive_report(
                 target_domain=domain,
                 business_profile=blackboard.business_profile,
@@ -1163,7 +1163,7 @@ class AnalysisOrchestrator:
             # (Every finding is scoped PAGE_VERIFIED, SAMPLE_VERIFIED, or SITE_INFERRED)
             # -----------------------------------------------------------------
             final_findings = FindingDeduplicator.deduplicate(raw_findings)
-            from app.evidence.taxonomy import assign_evidence_scope
+            from app.domain.evidence.taxonomy import assign_evidence_scope
             for f in final_findings:
                 assign_evidence_scope(f, sample_size=len(eval_pages))
             blackboard.findings = final_findings
@@ -1317,7 +1317,7 @@ class AnalysisOrchestrator:
             )
 
             try:
-                from app.scoring.displayed_score import align_story_score, displayed_composite
+                from app.domain.scoring.displayed_score import align_story_score, displayed_composite
                 score_payload = {
                     "scores": overall_scores.model_dump(mode="json") if hasattr(overall_scores, "model_dump") else {},
                     "honest_scores": honest_scores.model_dump(mode="json") if hasattr(honest_scores, "model_dump") else {},
@@ -1378,7 +1378,7 @@ class AnalysisOrchestrator:
                                 f.provenance_hash = ev.hash
 
             blackboard.evidence_graph.link_findings_and_claims(final_findings, current_claims)
-            from app.evidence.fusion import multi_plane_fusion
+            from app.domain.evidence.fusion import multi_plane_fusion
             multi_plane_fusion.fuse_all_planes(
                 graph=blackboard.evidence_graph,
                 domain=domain,
@@ -1414,7 +1414,7 @@ class AnalysisOrchestrator:
             run.report_id = report_uuid
             run.is_sealed = False
 
-            from app.intelligence.monitoring.visual_intelligence import visual_intelligence_engine
+            from app.core.monitoring.visual_intelligence import visual_intelligence_engine
             visual_intel = visual_intelligence_engine.synthesize_visual_intelligence(
                 domain=domain,
                 business_profile=blackboard.business_profile,
@@ -1448,7 +1448,7 @@ class AnalysisOrchestrator:
                     }
 
             # Evaluate regressions against historical cryptographic snapshots
-            from app.intelligence.monitoring.regression_detector import regression_detector
+            from app.core.monitoring.regression_detector import regression_detector
             reg_report = regression_detector.evaluate_audit_run(
                 domain=domain,
                 current_scores=overall_scores,
@@ -1460,7 +1460,7 @@ class AnalysisOrchestrator:
             twin.historical_snapshots = reg_report.historical_timeline
 
             # Run Visual UX Inspection across Desktop, Tablet, and Mobile viewports
-            from app.intelligence.ux.visual_ux_tester import visual_ux_tester
+            from app.cro.visual_ux_tester import visual_ux_tester
             visual_ux_rep = visual_ux_tester.inspect_website_visual_ux(
                 domain=domain,
                 website_url=website_url,
@@ -1485,7 +1485,7 @@ class AnalysisOrchestrator:
             )
 
             # Synthesize first-class Evidence Taxonomy & Epistemic Hierarchy report
-            from app.evidence.taxonomy import generate_evidence_taxonomy_report
+            from app.domain.evidence.taxonomy import generate_evidence_taxonomy_report
             evidence_taxonomy_rep = generate_evidence_taxonomy_report(
                 findings=final_findings,
                 evidence_ledger=evidence_ledger_map,
@@ -1493,7 +1493,7 @@ class AnalysisOrchestrator:
             )
 
             # Synthesize per-engine AI evaluations
-            from app.intelligence.geo.per_engine_evaluator import evaluate_per_engine_ai
+            from app.geo.per_engine_evaluator import evaluate_per_engine_ai
             per_engine_geo_rep = evaluate_per_engine_ai(
                 pages=eval_pages,
                 manifest=manifest,
@@ -1502,7 +1502,7 @@ class AnalysisOrchestrator:
             )
 
             # Layer 3 — Derived Intelligence Engine evaluation
-            from app.evidence.derived import DerivedIntelligenceEngine
+            from app.domain.evidence.derived import DerivedIntelligenceEngine
             derived_engine = DerivedIntelligenceEngine()
             derived_intel_metrics = derived_engine.compute_all(blackboard.evidence_store, manifest)
 
@@ -1510,10 +1510,10 @@ class AnalysisOrchestrator:
             kie_summary = None
             five_dim_visibility = None
             try:
-                from app.intelligence.geo.dynamic_sandbox import DynamicQuestionSandboxEngine
-                from app.intelligence.knowledge.website_knowledge_graph import WebsiteKnowledgeGraph
-                from app.intelligence.knowledge.grounded_simulator import AiVisibilityIndexCalculator
-                from app.intelligence.knowledge.primitives import GroundedAnswerSimulation, KieAnswerRisk
+                from app.geo.dynamic_sandbox import DynamicQuestionSandboxEngine
+                from app.crawl.knowledge.website_knowledge_graph import WebsiteKnowledgeGraph
+                from app.crawl.knowledge.grounded_simulator import AiVisibilityIndexCalculator
+                from app.crawl.knowledge.primitives import GroundedAnswerSimulation, KieAnswerRisk
 
                 eval_pages_for_kg = eval_pages or blackboard.pages or []
                 if not getattr(blackboard, "dynamic_sandbox_evaluations", None):
@@ -1554,7 +1554,7 @@ class AnalysisOrchestrator:
                 logger.info("KIE Graph / Sandbox assembly note: %s", kie_err)
 
             try:
-                from app.integrations.google_report import collect_google_performance
+                from app.connectors.google.google_report import collect_google_performance
                 google_performance = collect_google_performance(domain)
             except Exception:
                 logger.info("google performance seal skipped")
@@ -1699,7 +1699,7 @@ class AnalysisOrchestrator:
             )
 
             # Phase 2 — Build Claim Ledger with strict source provenance
-            from app.evidence.claim_ledger import ClaimLedgerBuilder
+            from app.domain.evidence.claim_ledger import ClaimLedgerBuilder
             ledger_builder = ClaimLedgerBuilder(run_id=analysis_id)
             report.claim_ledger = ledger_builder.build_ledger(
                 report=report,
@@ -1711,7 +1711,7 @@ class AnalysisOrchestrator:
             # Stage 4A: Page-Level Dossiers & Assessment Compilation
             # -------------------------------------------------------------
             try:
-                from app.audit.page_analysis import PageLevelAnalysisEngine
+                from app.crawl.audit.page_analysis import PageLevelAnalysisEngine
                 report.page_level_assessments = PageLevelAnalysisEngine.compile_page_assessments(
                     pages=manifest.pages,
                     report=report,
@@ -1724,7 +1724,7 @@ class AnalysisOrchestrator:
             # Stage 4B: Diagnostic Coverage Matrix (20-Chapter Inventory)
             # -------------------------------------------------------------
             try:
-                from app.audit.diagnostic_inventory import DiagnosticInventoryEngine
+                from app.crawl.audit.diagnostic_inventory import DiagnosticInventoryEngine
                 report.diagnostic_inventory = DiagnosticInventoryEngine.build_inventory(
                     report=report,
                     manifest=manifest,
@@ -1737,7 +1737,7 @@ class AnalysisOrchestrator:
             # Stage 4C: Cross-Chapter Consistency Audit & Reconciliation
             # -------------------------------------------------------------
             try:
-                from app.audit.consistency_engine import CrossChapterConsistencyEngine
+                from app.crawl.audit.consistency_engine import CrossChapterConsistencyEngine
                 report, consistency_rep = CrossChapterConsistencyEngine.audit_and_reconcile(report)
                 report.consistency_report = consistency_rep
             except Exception as conc_err:
@@ -1800,28 +1800,63 @@ class AnalysisOrchestrator:
                     "reason": "One or more findings lack linked evidence; these findings must not be treated as verified.",
                 })
 
-            # Seal only after the final report and its exact finding set are validated.
-            seal_manifest(run_manifest, snapshots=blackboard.evidence_store.snapshots)
-            run.is_sealed = True
-            try:
-                from app.intelligence.outcomes.store import get_outcome_store
-                get_outcome_store().schedule(
-                    analysis_id=analysis_id,
-                    website_url=website_url,
-                    org_id=getattr(run, "org_id", None),
-                )
-            except Exception as schedule_err:
-                logger.warning("Outcome monitoring schedule failed for %s: %s", analysis_id, type(schedule_err).__name__)
-
+            # Persist a validated report in a non-terminal state first. Only mark the
+            # audit completed after the manifest is sealed and the terminal state is durable.
             telemetry_data = telemetry_tracker.get_data()
             report.telemetry = telemetry_data
-            run.status = AnalysisStage.COMPLETED
+            run.status = AnalysisStage.EXECUTIVE_SYNTHESIS
+            run.current_step = "Persisting validated report and findings"
             run.report = report
             run.telemetry = telemetry_data
+            final_findings = report.findings or final_findings
 
             try:
-                final_findings = report.findings or final_findings
                 self.repository.persist_findings(analysis_id, final_findings)
+                self.repository.save_run(run)
+            except Exception as pe:
+                logger.exception("Durable report persistence failed for %s", analysis_id)
+                run.status = AnalysisStage.FAILED
+                run.error = "REPORT_PERSISTENCE_FAILED"
+                run.current_step = "Validated report could not be durably persisted"
+                run.is_sealed = False
+                try:
+                    self.repository.save_run(run)
+                except Exception:
+                    logger.exception("Could not persist failure state for %s", analysis_id)
+                await self._emit_event(
+                    analysis_id,
+                    "failed",
+                    100,
+                    "The audit findings were validated but could not be durably saved. This run is not certified as complete.",
+                    {"error_code": "REPORT_PERSISTENCE_FAILED", "error_type": type(pe).__name__},
+                )
+                return
+
+            try:
+                seal_manifest(run_manifest, snapshots=blackboard.evidence_store.snapshots)
+            except Exception as seal_err:
+                logger.exception("Manifest sealing failed for %s", analysis_id)
+                run.status = AnalysisStage.FAILED
+                run.error = "MANIFEST_SEAL_FAILED"
+                run.current_step = "Validated report persisted but manifest sealing failed"
+                run.is_sealed = False
+                try:
+                    self.repository.save_run(run)
+                except Exception:
+                    logger.exception("Could not persist manifest-seal failure state for %s", analysis_id)
+                await self._emit_event(
+                    analysis_id,
+                    "failed",
+                    100,
+                    "The report was saved, but its evidence manifest could not be sealed. This run is not certified as complete.",
+                    {"error_code": "MANIFEST_SEAL_FAILED", "error_type": type(seal_err).__name__},
+                )
+                return
+
+            run.is_sealed = True
+            run.status = AnalysisStage.COMPLETED
+            run.current_step = "Completed"
+            try:
                 self.repository.save_run(run)
                 self.repository.save_checkpoint(StageCheckpoint(
                     analysis_id=analysis_id,
@@ -1829,10 +1864,37 @@ class AnalysisOrchestrator:
                     step_number=5,
                     status="COMPLETED",
                     findings_count=len(final_findings),
-                    state_payload={"overall_score": overall_scores.overall_score}
+                    state_payload={"overall_score": overall_scores.overall_score},
                 ))
             except Exception as pe:
-                logger.warning(f"Persistence error on completion: {pe}")
+                logger.exception("Could not persist terminal completion state for %s", analysis_id)
+                run.status = AnalysisStage.FAILED
+                run.error = "COMPLETION_STATE_PERSISTENCE_FAILED"
+                run.current_step = "Completion state could not be durably saved"
+                # The manifest file was sealed successfully; retain that fact even if
+                # the terminal database state could not be committed.
+                try:
+                    self.repository.save_run(run)
+                except Exception:
+                    logger.exception("Could not persist completion-state failure for %s", analysis_id)
+                await self._emit_event(
+                    analysis_id,
+                    "failed",
+                    100,
+                    "The report was validated, but the terminal completion state could not be durably saved.",
+                    {"error_code": "COMPLETION_STATE_PERSISTENCE_FAILED", "error_type": type(pe).__name__},
+                )
+                return
+
+            try:
+                from app.domain.commercial.store import get_outcome_store
+                get_outcome_store().schedule(
+                    analysis_id=analysis_id,
+                    website_url=website_url,
+                    org_id=getattr(run, "org_id", None),
+                )
+            except Exception as schedule_err:
+                logger.warning("Outcome monitoring schedule failed for %s: %s", analysis_id, type(schedule_err).__name__)
 
             controller.mark_node_status("node_final_report_assembly", GraphNodeStatus.COMPLETED)
             controller.log_activity("node_final_report_assembly", "success", "report.final", f"Multi-page audit completed across {len(manifest.pages)} pages. Overall Score: {overall_scores.overall_score:.0f}/100 ({overall_scores.grade}).")
@@ -2036,7 +2098,7 @@ class AnalysisOrchestrator:
                 domain = urlparse(blackboard.website_url).netloc.replace("www.", "")
                 if not getattr(blackboard, "resolved_entity", None):
                     try:
-                        from app.intelligence.business.entity_resolver import UniversalEntityResolver
+                        from app.seo.business.entity_resolver import UniversalEntityResolver
                         blackboard.resolved_entity = UniversalEntityResolver.resolve_from_evidence(
                             evidence_store=blackboard.evidence_store,
                             website_url=blackboard.website_url,
