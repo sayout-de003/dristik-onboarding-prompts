@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 import secrets
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from app.connectors.authority.analyze import build_report
@@ -22,6 +22,29 @@ logger = logging.getLogger("app.external_authority")
 _TIER_RANK = {"FREE": 0, "STANDARD": 1, "ADVANCED": 2}
 _SERVICE: Optional["ExternalAuthorityService"] = None
 
+
+def _connector_freshness(*, connection_status: str, last_success_at: Optional[str], next_sync_at: Optional[str], now) -> tuple[str, Optional[int]]:
+    """Classify freshness from recorded sync scheduling without inventing an SLA."""
+    if connection_status != "CONNECTED":
+        return "NOT_CONNECTED", None
+    if not last_success_at:
+        return "UNKNOWN", None
+    try:
+        last_success = datetime_from_iso(last_success_at)
+        if last_success.tzinfo is None:
+            last_success = last_success.replace(tzinfo=now.tzinfo)
+        age_seconds = max(0, int((now - last_success).total_seconds()))
+    except (TypeError, ValueError, AttributeError):
+        return "UNKNOWN", None
+    if not next_sync_at:
+        return "UNKNOWN", age_seconds
+    try:
+        next_sync = datetime_from_iso(next_sync_at)
+        if next_sync.tzinfo is None:
+            next_sync = next_sync.replace(tzinfo=now.tzinfo)
+    except (TypeError, ValueError, AttributeError):
+        return "UNKNOWN", age_seconds
+    return ("STALE" if next_sync <= now else "FRESH"), age_seconds
 
 class ExternalAuthorityService:
     def __init__(self, store: Optional[ExternalStore] = None, transport: Any = None, clock=None):
@@ -77,15 +100,25 @@ class ExternalAuthorityService:
                 health = "Not connected"
             else:
                 health = status
+            last_success = (connection or {}).get("last_success_at")
+            next_sync = (connection or {}).get("next_sync_at")
+            freshness_status, freshness_age_seconds = _connector_freshness(
+                connection_status=status,
+                last_success_at=last_success,
+                next_sync_at=next_sync,
+                now=self.now(),
+            )
             rows.append({
                 "provider": provider.display_name,
                 "provider_id": provider.provider_id,
                 "connection_status": status,
                 "account": (connection or {}).get("account_label"),
                 "property": (connection or {}).get("property_label") or (connection or {}).get("property_id"),
-                "last_successful_sync": (connection or {}).get("last_success_at"),
+                "last_successful_sync": last_success,
                 "last_attempted_sync": (connection or {}).get("last_attempt_at"),
-                "next_sync": (connection or {}).get("next_sync_at"),
+                "next_sync": next_sync,
+                "freshness_status": freshness_status,
+                "freshness_age_seconds": freshness_age_seconds,
                 "token_status": token_status,
                 "quota_status": (connection or {}).get("quota_status"),
                 "error_message": (connection or {}).get("last_error"),

@@ -44,9 +44,81 @@ export function Report({
   const scoreBand = honest?.score_band ?? (aiScore != null ? (aiScore >= 75 ? 'Citation Ready' : aiScore >= 50 ? 'Fragile Presence' : 'Low readiness') : 'Pending Verification');
   const evidenceRefs = honest?.evidence_refs || report.findings.slice(0, 6).flatMap((f) => f.evidence_refs || []);
   const uniqueEvRefs = Array.from(new Set(evidenceRefs)).slice(0, 8);
+  const integrityGate = (report.quality_gate_results?.final_report_integrity ?? null) as {
+    status?: string;
+    certified?: boolean;
+    finding_count?: number;
+    evidence_id_count?: number;
+    unsupported_finding_ids?: string[];
+    warnings?: string[];
+  } | null;
+  const crawledPages = Number(report.crawl_summary?.total_pages_crawled ?? 0);
+  const discoveredPages = Number(report.crawl_summary?.total_pages_discovered ?? 0);
+  const evidenceRecordCount = Object.keys(report.evidence_ledger || {}).length;
+  const integrityLabel = integrityGate?.certified
+    ? 'Evidence integrity passed'
+    : report.certification_status === 'NOT_CERTIFIED' || integrityGate?.status === 'PASS_WITH_EVIDENCE_GAPS'
+      ? 'Evidence gaps disclosed'
+      : 'Integrity certification unavailable';
 
   return (
     <article className={printable ? 'space-y-10' : 'space-y-10'}>
+      {!printable && (
+        <section
+          aria-label="Audit evidence and coverage status"
+          className={`rounded-xl border p-4 md:p-5 ${integrityGate?.certified ? 'border-emerald-200 bg-emerald-50/70' : 'border-amber-200 bg-amber-50/70'}`}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-ink-500">Audit integrity</p>
+              <h3 className="mt-1 text-base font-semibold text-ink">{integrityLabel}</h3>
+              <p className="mt-1 max-w-3xl text-sm text-ink-600">
+                {integrityGate?.certified
+                  ? 'The final report passed deterministic identity, score and evidence-link checks.'
+                  : integrityGate?.warnings?.length
+                    ? integrityGate.warnings.join(' ')
+                    : 'This report has no recorded final integrity-gate result. Do not interpret missing measurements as zero or as a passing result.'}
+              </p>
+            </div>
+            <span className="rounded-full border border-line bg-white/80 px-2.5 py-1 text-xs font-semibold text-ink-700">
+              {report.certification_status || 'NOT_ASSESSED'}
+            </span>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div className="rounded-lg border border-line/70 bg-white/80 p-3">
+              <p className="text-xs text-ink-500">Pages inspected</p>
+              <p className="mt-1 text-xl font-semibold text-ink">{crawledPages || '—'}</p>
+            </div>
+            <div className="rounded-lg border border-line/70 bg-white/80 p-3">
+              <p className="text-xs text-ink-500">Pages discovered</p>
+              <p className="mt-1 text-xl font-semibold text-ink">{discoveredPages || '—'}</p>
+            </div>
+            <div className="rounded-lg border border-line/70 bg-white/80 p-3">
+              <p className="text-xs text-ink-500">Evidence records</p>
+              <p className="mt-1 text-xl font-semibold text-ink">{evidenceRecordCount || integrityGate?.evidence_id_count || '—'}</p>
+            </div>
+            <div className="rounded-lg border border-line/70 bg-white/80 p-3">
+              <p className="text-xs text-ink-500">Findings checked</p>
+              <p className="mt-1 text-xl font-semibold text-ink">{integrityGate?.finding_count ?? '—'}</p>
+            </div>
+          </div>
+          {integrityGate?.unsupported_finding_ids?.length ? (
+            <p className="mt-3 text-sm font-medium text-amber-900">
+              {integrityGate.unsupported_finding_ids.length} finding(s) lack linked evidence and must not be treated as verified.
+            </p>
+          ) : null}
+          {discoveredPages > crawledPages && crawledPages > 0 ? (
+            <p className="mt-3 text-sm text-ink-600">
+              Sampled coverage: inspected {crawledPages} of {discoveredPages} discovered pages. Site-wide conclusions must be labeled as inferred unless the full relevant scope was verified.
+            </p>
+          ) : null}
+          {integrityGate?.warnings?.length ? (
+            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-ink-600">
+              {integrityGate.warnings.map((warning, index) => <li key={index}>{warning}</li>)}
+            </ul>
+          ) : null}
+        </section>
+      )}
       {/* Header with Title and Global Action Buttons */}
       <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-6">
         <div className="space-y-1">
