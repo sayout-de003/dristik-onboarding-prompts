@@ -190,6 +190,12 @@ class ConnectorStore:
     def get_integration(self, integration_id: str) -> Optional[Integration]:
         return self._integrations.get(integration_id)
 
+    def get_connector_for_org(self, integration_id: str, org_id: str) -> Optional[BaseConnector]:
+        """Instantiate an adapter only after tenant-scoped integration lookup."""
+        if self.get_integration_for_org(integration_id, org_id) is None:
+            return None
+        return self.get_connector(integration_id)
+
     def add_integration(
         self,
         provider: ConnectorType,
@@ -302,7 +308,8 @@ class ConnectorStore:
         else:
             return GenericWebsiteConnector(creds)
 
-    def get_telemetry_service(self) -> Any:
+    def get_telemetry_service(self, org_id: Optional[str] = None) -> Any:
+        """Build telemetry adapters for one organization; missing scope fails closed."""
         from app.connectors.telemetry_service import ExternalTelemetryService
         from app.connectors.google.connector import GoogleSearchConsoleConnector
         from app.connectors.google.ga4_connector import GoogleAnalytics4Connector
@@ -314,7 +321,13 @@ class ConnectorStore:
         crux = None
         seo = None
 
+        if not org_id:
+            # Never pick another tenant's first connected provider when caller omits scope.
+            return ExternalTelemetryService(gsc=None, ga4=None, crux=None, external_seo=None)
+
         for integ_id, integ in self._integrations.items():
+            if integ.org_id != org_id:
+                continue
             creds = self._credentials.get(integ_id, ConnectorCredentials(provider=integ.provider))
             if integ.provider == ConnectorType.GOOGLE_SEARCH_CONSOLE and not gsc:
                 gsc = GoogleSearchConsoleConnector(creds)
