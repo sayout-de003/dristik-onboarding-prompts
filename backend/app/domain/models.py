@@ -300,13 +300,31 @@ class ClaimLedgerEntry(BaseModel):
 
 class ClaimLedger(BaseModel):
     """
-    Phase 2 — System-wide Claim Ledger for Certified Zero-Fake integrity.
+    Claim ledger whose certification flag is derived conservatively from its entries.
+    Evidence IDs must still be resolved against the owning audit's evidence store
+    before publication; this model-level check is a minimum gate, not a substitute.
     """
     ledger_id: str
     run_id: str
     entries: List[ClaimLedgerEntry] = Field(default_factory=list)
     certified_zero_fake: bool = False
     rejected_unsupported_count: int = 0
+
+    @model_validator(mode="after")
+    def derive_certification_state(self) -> "ClaimLedger":
+        entries_are_supported = bool(self.entries) and all(
+            entry.is_valid_fact
+            and bool(entry.evidence_ids)
+            and bool(entry.timestamp.strip())
+            and entry.scope.strip().lower() not in {"", "unspecified", "site_wide"}
+            and 0 < entry.confidence <= 1
+            for entry in self.entries
+        )
+        # Never trust a caller-provided True flag without passing the minimum gate.
+        self.certified_zero_fake = (
+            entries_are_supported and self.rejected_unsupported_count == 0
+        )
+        return self
 
 
 class Finding(BaseModel):
