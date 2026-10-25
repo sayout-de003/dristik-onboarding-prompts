@@ -92,8 +92,8 @@ class CrawlerService:
                     content = body.decode("utf-8", errors="replace")
                     sitemap_urls.extend(declared_sitemaps(content))
                     return True, content[:2000], sitemap_urls
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.info("robots.txt fetch failed for %s: %s", robots_url, type(exc).__name__)
         return False, None, sitemap_urls
 
     async def _fetch_sitemap_urls(
@@ -870,7 +870,13 @@ class CrawlerService:
         all_discovered = list(discovered_urls or []) if discovered_urls else list(crawled_urls_set)
         untested_urls = [u for u in all_discovered if u not in crawled_urls_set]
         url_cov_pct = round((urls_crawled_cnt / max(urls_discovered_cnt, 1)) * 100.0, 1)
-        samp_status = "FULL_CRAWL" if urls_crawled_cnt >= urls_discovered_cnt else "SAMPLED_AUDIT"
+        # A capped/truncated discovery inventory is never a full-site crawl,
+        # even when every URL discovered before the cap was analyzed.
+        samp_status = (
+            "FULL_CRAWL"
+            if urls_crawled_cnt >= urls_discovered_cnt and not discovery_truncated
+            else "SAMPLED_AUDIT"
+        )
 
         crawl_inventory = {
             "seed_urls": [base_url],
@@ -963,7 +969,7 @@ class CrawlerService:
             "total_pages_discovered": urls_discovered_cnt,
             "discovery_truncated": discovery_truncated,
             "sitemap_status": "Verified" if sitemap_found else "Missing / Inaccessible",
-            "robots_txt_status": "Configured" if robots_txt_found else "Missing",
+            "robots_txt_status": "Configured" if robots_txt_found else "Missing / Inaccessible",
             "duplicate_titles_count": len(duplicate_titles),
             "duplicate_titles": duplicate_titles,
             "duplicate_descriptions_count": len(duplicate_descriptions),
