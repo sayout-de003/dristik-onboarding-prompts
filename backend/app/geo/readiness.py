@@ -134,22 +134,30 @@ def _score_entity_clarity(
 ) -> GeoDimensionScore:
     low = blob.lower()
     fluff_hits = [w for w in _FLUFF if w in low]
-    named = name.lower() in low if name else False
-    specific = bool(profile.industry or profile.niche or profile.products or profile.services)
+    named = bool(name and name.lower() in low)
+    profile_terms = [
+        str(term).strip().lower()
+        for term in (
+            [profile.industry, profile.niche]
+            + list(profile.products or [])
+            + list(profile.services or [])
+        )
+        if term and str(term).strip()
+    ]
+    # Business-profile metadata alone is not proof that the website explains
+    # the entity. Require the category/offer to appear in the crawled content.
+    specific = any(term in low for term in profile_terms)
 
-    base_score = 30.0
+    base_score = 0.0
     if named:
-        base_score += 20.0
+        base_score += 30.0
     if specific:
-        base_score += 20.0
-    if not fluff_hits:
-        base_score += 10.0
-    else:
-        base_score -= 10.0
+        base_score += 30.0
     if entity_res and not entity_res.is_fragmented:
-        base_score += 10.0
+        base_score += 25.0
     elif entity_res and entity_res.is_fragmented:
         base_score -= 15.0
+    base_score -= min(20.0, len(fluff_hits) * 5.0)
 
     score = max(0.0, min(100.0, base_score))
     summary = (
@@ -286,8 +294,20 @@ def _score_retrieval_accessibility(
     website_url: str,
     manifest: Optional[CrawlManifest],
 ) -> GeoDimensionScore:
-    robots = bool(manifest and manifest.robots_txt_found)
-    sitemap = bool(manifest and manifest.sitemap_found)
+    if manifest is None:
+        return GeoDimensionScore(
+            key=GeoDimensionKey.RETRIEVAL_ACCESSIBILITY.value,
+            label="Retrieval accessibility (HTTPS, robots, sitemap)",
+            score=0.0,
+            band="low",
+            confidence=0.0,
+            summary="Retrieval accessibility was not measured because crawl manifest evidence is unavailable.",
+            evidence_notes=["manifest=NOT_AVAILABLE"],
+            is_measured=False,
+            measurement_note="A crawl manifest with recorded robots, sitemap and URL evidence is required.",
+        )
+    robots = bool(manifest.robots_txt_found)
+    sitemap = bool(manifest.sitemap_found)
     https = (website_url or "").startswith("https://")
 
     score = 30.0
@@ -652,8 +672,8 @@ def evaluate_geo_readiness(
         f"{f'; {unsupported} cannot be answered from the crawled site' if unsupported else ''}."
     )
 
-    visibility_status = "MEASURED" if visibility_measured else "NOT_CONFIGURED"
-    if visibility_measured:
+    visibility_status = "MEASURED" if visibility_measured and visibility_score is not None else "NOT_CONFIGURED"
+    if visibility_measured and visibility_score is not None:
         visibility_message = visibility_detail or (
             "Live engine visibility was measured by the citation tracker or GEO pipeline. "
             "This number is not inferred from HTML."
