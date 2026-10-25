@@ -86,6 +86,7 @@ class BrowserRenderService:
 
         context = None
         page = None
+        blocked_unsafe_request = False
         try:
             context = await browser.new_context(
                 user_agent=settings.USER_AGENT,
@@ -96,6 +97,7 @@ class BrowserRenderService:
 
             # Enterprise Optimization: Block heavy media and tracking assets
             async def filter_route(route):
+                nonlocal blocked_unsafe_request
                 req = route.request
                 rtype = req.resource_type
                 if settings.SSRF_PROTECTION_ENABLED:
@@ -103,6 +105,7 @@ class BrowserRenderService:
                     # validating only the starting URL is insufficient for a browser.
                     safe, reason = await asyncio.to_thread(is_safe_url, req.url)
                     if not safe:
+                        blocked_unsafe_request = True
                         logger.warning("Blocked unsafe browser request %s: %s", req.url, reason)
                         await route.abort("blockedbyclient")
                         return
