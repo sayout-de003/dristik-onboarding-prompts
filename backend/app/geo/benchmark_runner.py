@@ -207,11 +207,11 @@ class GeoBenchmarkRunner:
             return False, None
 
         brand_pattern = (
-            re.compile(rf"(?<!\\w){re.escape(low_brand)}(?!\\w)", re.IGNORECASE)
+            re.compile(rf"(?<!\w){re.escape(low_brand)}(?!\w)", re.IGNORECASE)
             if low_brand else None
         )
         domain_pattern = (
-            re.compile(rf"(?:^|[./\\s]){re.escape(low_domain)}(?:$|[/\\s:?#])", re.IGNORECASE)
+            re.compile(rf"(?:^|[./\s]){re.escape(low_domain)}(?:$|[/\s:?#])", re.IGNORECASE)
             if low_domain else None
         )
         has_mention = bool(
