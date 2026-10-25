@@ -43,7 +43,7 @@ from app.crawl.analyzers.security import analyze_security_headers
 from app.crawl.analyzers.dynamic_content import extract_embedded_cms_content, needs_js_render
 from app.crawl.analyzers.visible import extract_visible_page
 from app.crawl.browser import BrowserRenderService
-from app.crawl.response_limits import read_response_limited
+from app.crawl.response_limits import ResponseTooLargeError, read_response_limited
 
 class CrawlerService:
     def __init__(self):
@@ -351,8 +351,13 @@ class CrawlerService:
                         loc = stream_resp.headers.get("location") or stream_resp.headers.get("Location")
                         resp_headers = dict(stream_resp.headers)
                         resp_text = content.decode(stream_resp.encoding or "utf-8", errors="replace")
-                except Exception as e:
+                except ResponseTooLargeError as e:
+                    # Oversized responses are a hard per-URL limit, not a reason to
+                    # fetch the same document through a second renderer/provider.
                     direct_err = str(e)
+                    break
+                except Exception as e:
+                    direct_err = f"{type(e).__name__}: {e}"
                     break
 
                 if 300 <= status_code < 400 and loc:
@@ -388,7 +393,11 @@ class CrawlerService:
                     direct_err = f"HTTP {status_code}"
                     break
 
-            if direct_err and ("Redirect loop" in direct_err or "SSRF blocked" in direct_err):
+            if direct_err and (
+                "Redirect loop" in direct_err
+                or "SSRF blocked" in direct_err
+                or "response exceeds configured" in direct_err
+            ):
                 return None, 0, ttfb_ms, {}, 0, direct_err, None, redirect_chain, final_url, None
 
         html, markdown, status, js_ttfb, headers, nbytes, js_err, js_perf = await self._js_render_page(url, client, start_time)
