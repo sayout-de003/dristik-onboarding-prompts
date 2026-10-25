@@ -438,7 +438,7 @@ class GeoBenchmarkRunner:
             if not st:
                 continue
             st["tested"] += 1
-            if ev.status == "SUCCESS":
+            if ev.status == "SUCCESS" and ev.is_live:
                 st["succeeded"] += 1
                 if ev.latency_ms > 0:
                     st["latencies"].append(ev.latency_ms)
@@ -470,7 +470,7 @@ class GeoBenchmarkRunner:
             c_ci = wilson_score_interval(c_cnt, s_cnt) if s_cnt > 0 else None
 
             # Continuous impression metrics across successful evaluations for this engine
-            eng_successes = [ev for ev in evaluations if ev.engine_id == eid and ev.status == "SUCCESS"]
+            eng_successes = [ev for ev in evaluations if ev.engine_id == eid and ev.status == "SUCCESS" and ev.is_live]
             wc_list = [ev.word_count_impression_pct for ev in eng_successes]
             pwc_list = [ev.position_adjusted_impression_pct for ev in eng_successes]
             dristik_list = [ev.dristik_adjusted_impression_pct for ev in eng_successes]
@@ -517,7 +517,7 @@ class GeoBenchmarkRunner:
         overall_1p_citation_ci = wilson_score_interval(total_1p_citations, total_succeeded) if total_succeeded > 0 else None
 
         # Overall continuous impression metrics across all successes
-        all_successes = [ev for ev in evaluations if ev.status == "SUCCESS"]
+        all_successes = [ev for ev in evaluations if ev.status == "SUCCESS" and ev.is_live]
         all_wc = [ev.word_count_impression_pct for ev in all_successes]
         all_pwc = [ev.position_adjusted_impression_pct for ev in all_successes]
         all_dristik = [ev.dristik_adjusted_impression_pct for ev in all_successes]
@@ -538,7 +538,7 @@ class GeoBenchmarkRunner:
         # Blindspots only when a successful response omitted the brand. Errors are not omissions.
         blindspots: List[str] = []
         for q in suite.queries:
-            success_runs = [e for e in evaluations if e.query_id == q.query_id and e.status == "SUCCESS"]
+            success_runs = [e for e in evaluations if e.query_id == q.query_id and e.status == "SUCCESS" and e.is_live]
             if success_runs and not any(r.was_mentioned for r in success_runs):
                 blindspots.append(f"{q.category_label}: '{q.query_text}'")
 
@@ -889,7 +889,7 @@ def build_visibility_scorecard(
     from app.domain.models import AiVisibilityScorecard
     from app.geo.buyer_surfaces import surfaces_not_queried
 
-    successes = [ev for ev in report.evaluations if ev.status == "SUCCESS"]
+    successes = [ev for ev in report.evaluations if ev.status == "SUCCESS" and ev.is_live]
     failures = [ev for ev in report.evaluations if ev.status != "SUCCESS"]
     engine_names = _queried_engine_names(report, successes)
     missing_surfaces = surfaces_not_queried(engine_names)
