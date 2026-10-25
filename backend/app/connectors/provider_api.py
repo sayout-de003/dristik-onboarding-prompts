@@ -7,6 +7,8 @@ provider directory is available to the connected account.
 from __future__ import annotations
 
 import time
+import hashlib
+import json
 from datetime import datetime, timezone
 from typing import Any, Dict
 from urllib.parse import urlparse
@@ -135,6 +137,13 @@ class ProviderApiConnector(BaseConnector):
             async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0), follow_redirects=False) as client:
                 response = await client.request(method, url, headers=headers, params=params)
             latency = round((time.perf_counter() - started) * 1000, 2)
+            self._last_status_code = response.status_code
+            self._last_endpoint = url
+            self._last_observed_at = datetime.now(timezone.utc).isoformat()
+            try:
+                self._last_payload = response.json()
+            except ValueError:
+                self._last_payload = None
             if response.status_code in (401, 403):
                 status = ConnectorHealthStatus.UNAUTHORIZED
                 authenticated = False
@@ -192,12 +201,59 @@ class ProviderApiConnector(BaseConnector):
 
     async def discover_site_structure(self) -> Dict[str, Any]:
         health = await self.test_connection()
+        payload = getattr(self, "_last_payload", None)
+        provider = self.credentials.provider
+        resources: list[dict[str, Any]] = []
+        if health.authenticated and isinstance(payload, dict):
+            if provider in (ConnectorType.OPENAI_SEARCH, ConnectorType.PERPLEXITY, ConnectorType.CLAUDE):
+                resources = [{"id": row.get("id"), "type": row.get("type")} for row in (payload.get("data") or [])[:100] if isinstance(row, dict)]
+            elif provider == ConnectorType.GEMINI:
+                resources = [{"id": row.get("name"), "supported_methods": row.get("supportedGenerationMethods", [])} for row in (payload.get("models") or [])[:100] if isinstance(row, dict)]
+            elif provider == ConnectorType.HUBSPOT:
+                resources = [{"id": row.get("id"), "available_fields": sorted((row.get("properties") or {}).keys())} for row in (payload.get("results") or [])[:25] if isinstance(row, dict)]
+            elif provider == ConnectorType.SALESFORCE:
+                resources = [{"name": row.get("name"), "label": row.get("label"), "queryable": row.get("queryable")} for row in (payload.get("sobjects") or [])[:100] if isinstance(row, dict)]
+            elif provider == ConnectorType.STRIPE:
+                resources = [{"account_id": payload.get("id"), "country": payload.get("country"), "default_currency": payload.get("default_currency"), "livemode": payload.get("livemode")}] if payload.get("id") else []
+            elif provider == ConnectorType.LINKEDIN:
+                resources = [{"id": payload.get("sub"), "name": payload.get("name"), "locale": payload.get("locale")}] if payload.get("sub") else []
+            elif provider == ConnectorType.X:
+                row = payload.get("data") or {}
+                resources = [{"id": row.get("id"), "username": row.get("username"), "name": row.get("name")}] if row else []
+            elif provider == ConnectorType.TIKTOK:
+                row = (payload.get("data") or {}).get("user") or {}
+                resources = [{"open_id": row.get("open_id"), "display_name": row.get("display_name")}] if row else []
+            elif provider == ConnectorType.INSTAGRAM:
+                resources = [{"id": payload.get("id"), "username": payload.get("username")}] if payload.get("id") else []
+            elif provider == ConnectorType.WHATSAPP_BUSINESS:
+                resources = [{"id": payload.get("id"), "display_phone_number": payload.get("display_phone_number"), "verified_name": payload.get("verified_name")}] if payload.get("id") else []
+            elif provider == ConnectorType.TELEGRAM:
+                row = payload.get("result") or {}
+                resources = [{"id": row.get("id"), "is_bot": row.get("is_bot"), "username": row.get("username")}] if row else []
+            elif provider == ConnectorType.SLACK and payload.get("ok"):
+                resources = [{"team_id": payload.get("team_id"), "team": payload.get("team"), "user_id": payload.get("user_id"), "user": payload.get("user")}]
+            elif provider == ConnectorType.SANITY:
+                rows = payload.get("result")
+                if isinstance(rows, list):
+                    resources = [{"id": row.get("_id"), "type": row.get("_type"), "updated_at": row.get("_updatedAt")} for row in rows[:100] if isinstance(row, dict)]
+                elif isinstance(rows, dict):
+                    resources = [{"id": rows.get("_id"), "type": rows.get("_type")}]
+        raw = json.dumps(payload, sort_keys=True, default=str) if payload is not None else ""
+        evidence = {
+            "source": getattr(self, "_last_endpoint", None),
+            "observed_at": getattr(self, "_last_observed_at", None),
+            "http_status": getattr(self, "_last_status_code", None),
+            "response_sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest() if raw else None,
+            "verification_status": "LIVE_API_RESPONSE" if health.authenticated else "UNVERIFIED",
+        }
         return {
-            "provider": self.credentials.provider.value,
+            "provider": provider.value,
             "discovery_status": "AVAILABLE" if health.authenticated else "UNAVAILABLE",
             "health": health.model_dump(mode="json"),
-            "resources": [],
-            "message": "Handshake only. Resource discovery is not reported until a provider-specific read operation is implemented.",
+            "resources": resources,
+            "resource_count": len(resources),
+            "evidence": evidence,
+            "message": "Resource summaries come from the live provider API response. A successful handshake does not prove unsupported writes or AI-search citation visibility.",
         }
 
     async def preview_patch(self, patch: RemediationPatch) -> Dict[str, Any]:
