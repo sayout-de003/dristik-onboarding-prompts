@@ -342,6 +342,43 @@ async def discover_integration_structure(integration_id: str, user: UserIdentity
     )
     return result
 
+@router.get("/{integration_id}/resources/{resource}")
+async def read_connector_resource(
+    integration_id: str,
+    resource: str,
+    limit: int = 25,
+    user: UserIdentity = Depends(get_current_user),
+):
+    """Read a provider-specific allowlisted resource and record response provenance."""
+    integration = _owned_integration(integration_id, user)
+    connector = connector_store.get_connector_for_org(integration_id, user.org_id)
+    if not connector:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    reader = getattr(connector, "read_resource", None)
+    if not callable(reader):
+        raise HTTPException(
+            status_code=501,
+            detail="This provider has no registered resource-read operation. Its directory presence is not proof of support.",
+        )
+    result = await reader(resource, limit=limit)
+    evidence = result.get("evidence") if isinstance(result, dict) else None
+    status_label = str(result.get("status", "UNAVAILABLE")) if isinstance(result, dict) else "UNAVAILABLE"
+    connector_store.record_event(
+        org_id=integration.org_id, action="RESOURCE_READ",
+        result=status_label, integration_id=integration_id, actor_id=_actor_id(user),
+        details={
+            "provider": integration.provider.value, "resource": resource,
+            "limit": max(1, min(int(limit), 100)),
+            "resource_count": result.get("resource_count") if isinstance(result, dict) else None,
+            "source": evidence.get("source") if isinstance(evidence, dict) else None,
+            "observed_at": evidence.get("observed_at") if isinstance(evidence, dict) else None,
+            "response_sha256": evidence.get("response_sha256") if isinstance(evidence, dict) else None,
+            "verification_status": evidence.get("verification_status") if isinstance(evidence, dict) else "NOT_REPORTED",
+        },
+    )
+    return result
+
+
 @router.delete("/{integration_id}")
 async def delete_integration(integration_id: str, user: UserIdentity = Depends(require_permission("patches:generate"))):
     """Disconnect and remove an integration owned by the caller's organization."""
