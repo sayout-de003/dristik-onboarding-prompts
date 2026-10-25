@@ -51,3 +51,13 @@ def test_specs_have_docs_and_health_operation():
         assert spec.docs_url.startswith("https://")
         assert "health" in spec.operations
         assert spec.auth_methods
+
+
+def test_registered_api_adapter_does_not_claim_publish_operations_are_verified():
+    payload = {item["id"]: item for item in MODULE.registry_payload()}
+    for provider_id in ("linkedin", "x", "tiktok", "instagram", "whatsapp_business", "slack", "telegram", "hubspot", "salesforce", "stripe"):
+        item = payload[provider_id]
+        assert "health" in item["operations"]
+        assert item["verified_operations"] == []
+        assert "publish" not in item["operations"]
+        assert item["operation_status"]
