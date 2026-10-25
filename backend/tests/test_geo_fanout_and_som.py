@@ -208,7 +208,8 @@ def test_api_endpoints_fanout_som_crawler():
     })
     assert resp2.status_code == 200
     data2 = resp2.json()
-    assert data2["share_of_model_pct"] == 50.0\n    assert data2["competitor_shares"]["jira"] == 50.0
+    assert data2["share_of_model_pct"] == 50.0
+    assert data2["competitor_shares"]["jira"] == 50.0
     assert data2["ordinal_distribution"]["rank_1"] == 1
 
     # 3. Crawler log analysis endpoint
