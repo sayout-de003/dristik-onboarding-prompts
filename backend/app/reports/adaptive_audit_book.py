@@ -369,7 +369,11 @@ def _report_findings(report: Any) -> List[Any]:
     raw = list(getattr(report, "findings", []) or [])
     canonical: List[Any] = []
     seen: set[tuple[str, tuple[str, ...]]] = set()
+    seen_ids: set[str] = set()
     for finding in raw:
+        finding_id = str(_finding_value(finding, "finding_id", _finding_value(finding, "id", "")) or "").strip()
+        if finding_id and finding_id in seen_ids:
+            continue
         title = re.sub(r"\s+", " ", str(_finding_value(finding, "title", _finding_value(finding, "name", "")) or "")).strip().casefold()
         urls = _finding_value(finding, "affected_urls", None) or _finding_value(finding, "urls", None) or []
         if isinstance(urls, str):
@@ -387,6 +391,8 @@ def _report_findings(report: Any) -> List[Any]:
         if identity in seen:
             continue
         seen.add(identity)
+        if finding_id:
+            seen_ids.add(finding_id)
         canonical.append(finding)
     return canonical
 
