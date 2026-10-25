@@ -2589,8 +2589,25 @@ export type ConnectorType =
   | 'dataforseo'
   | 'live_ai_search'
   | 'crux'
-  | 'generic';
-export type ConnectorHealthStatus = 'connected' | 'disconnected' | 'error' | 'unauthorized';
+  | 'generic'
+  | 'framer'
+  | 'wix'
+  | 'sanity'
+  | 'openai_search'
+  | 'perplexity'
+  | 'claude'
+  | 'gemini'
+  | 'linkedin'
+  | 'x'
+  | 'tiktok'
+  | 'instagram'
+  | 'whatsapp_business'
+  | 'telegram'
+  | 'slack'
+  | 'hubspot'
+  | 'salesforce'
+  | 'stripe';
+export type ConnectorHealthStatus = 'connected' | 'disconnected' | 'degraded' | 'auth_required' | 'unavailable' | 'error' | 'unauthorized';
 
 export interface RemediationPatch {
   patch_id: string;

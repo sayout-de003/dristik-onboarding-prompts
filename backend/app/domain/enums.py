@@ -510,13 +510,39 @@ class ConnectorType(str, Enum):
     LIVE_AI_SEARCH = "live_ai_search"
     CRUX = "crux"
     GENERIC = "generic"
+    # CMS / publishing providers
+    FRAMER = "framer"
+    WIX = "wix"
+    SANITY = "sanity"
+    # SEO data and AI search provider adapters
+    OPENAI_SEARCH = "openai_search"
+    PERPLEXITY = "perplexity"
+    CLAUDE = "claude"
+    GEMINI = "gemini"
+    # Social distribution
+    LINKEDIN = "linkedin"
+    X = "x"
+    TIKTOK = "tiktok"
+    INSTAGRAM = "instagram"
+    # Messaging and approval channels
+    WHATSAPP_BUSINESS = "whatsapp_business"
+    TELEGRAM = "telegram"
+    SLACK = "slack"
+    # CRM and revenue
+    HUBSPOT = "hubspot"
+    SALESFORCE = "salesforce"
+    STRIPE = "stripe"
+    # Existing provider aliases remain available for backwards compatibility.
 
 
 class ConnectorHealthStatus(str, Enum):
     CONNECTED = "connected"
     DISCONNECTED = "disconnected"
-    ERROR = "error"
-    UNAUTHORIZED = "unauthorized"
+    DEGRADED = "degraded"
+    AUTH_REQUIRED = "auth_required"
+    UNAVAILABLE = "unavailable"
+    ERROR = "error"          # Legacy status retained for compatibility
+    UNAUTHORIZED = "unauthorized"  # Legacy status retained for compatibility
 
 
 class CapabilityStatus(str, Enum):

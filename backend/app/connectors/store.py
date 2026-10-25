@@ -82,6 +82,19 @@ class ConnectorStore:
                 credentials_json TEXT NOT NULL
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS connector_audit_events (
+                event_id TEXT PRIMARY KEY,
+                org_id TEXT NOT NULL,
+                integration_id TEXT,
+                actor_id TEXT,
+                action TEXT NOT NULL,
+                result TEXT NOT NULL,
+                details_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_connector_audit_org_time ON connector_audit_events(org_id, created_at)")
         return conn
 
     def _load(self) -> None:
@@ -128,8 +141,60 @@ class ConnectorStore:
     def list_integrations(self, org_id: str = "org_default") -> List[Integration]:
         return [i for i in self._integrations.values() if i.org_id == org_id]
 
+    def get_integration_for_org(self, integration_id: str, org_id: str) -> Optional[Integration]:
+        """Resolve an integration only inside its tenant boundary."""
+        integration = self._integrations.get(integration_id)
+        if integration is None or integration.org_id != org_id:
+            return None
+        return integration
+
+    def record_event(
+        self, org_id: str, action: str, result: str,
+        integration_id: Optional[str] = None, actor_id: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Persist lifecycle events. Callers must never pass credential values."""
+        event_id = f"cevt_{uuid.uuid4().hex}"
+        created_at = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                """INSERT INTO connector_audit_events
+                (event_id, org_id, integration_id, actor_id, action, result, details_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (event_id, org_id, integration_id, actor_id, action, result,
+                 json.dumps(details or {}, sort_keys=True, default=str), created_at),
+            )
+            conn.commit()
+
+    def list_events(self, org_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+        """Return only audit events scoped to the requesting organization."""
+        bounded_limit = max(1, min(int(limit), 500))
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT event_id, integration_id, actor_id, action, result, details_json, created_at
+                FROM connector_audit_events WHERE org_id = ? ORDER BY created_at DESC LIMIT ?""",
+                (org_id, bounded_limit),
+            ).fetchall()
+        events = []
+        for event_id, integration_id, actor_id, action, result, details_json, created_at in rows:
+            try:
+                details = json.loads(details_json)
+            except (TypeError, ValueError):
+                details = {}
+            events.append({
+                "event_id": event_id, "integration_id": integration_id, "actor_id": actor_id,
+                "action": action, "result": result, "details": details, "created_at": created_at,
+            })
+        return events
+
     def get_integration(self, integration_id: str) -> Optional[Integration]:
         return self._integrations.get(integration_id)
+
+    def get_connector_for_org(self, integration_id: str, org_id: str) -> Optional[BaseConnector]:
+        """Instantiate an adapter only after tenant-scoped integration lookup."""
+        if self.get_integration_for_org(integration_id, org_id) is None:
+            return None
+        return self.get_connector(integration_id)
 
     def add_integration(
         self,
@@ -155,11 +220,11 @@ class ConnectorStore:
             name=name,
             target_url=target_url,
             status=ConnectorHealthStatus.DISCONNECTED,
-            scopes=credentials.scopes or ["read", "write_patches"],
+            scopes=credentials.scopes,
             repository=repository,
             branch=branch,
             created_at=now,
-            last_synced_at=now,
+            last_synced_at=None,
             settings=settings or {}
         )
         self._integrations[integration_id] = integration
@@ -167,22 +232,47 @@ class ConnectorStore:
         try:
             self._write(integration)
         except Exception:
-            pass
+            self._integrations.pop(integration_id, None)
+            self._credentials.pop(integration_id, None)
+            raise
         return integration
 
 
+    def get_credentials(self, integration_id: str) -> Optional[ConnectorCredentials]:
+        """Internal-only credential access for adapter and update operations; never serialize to clients."""
+        return self._credentials.get(integration_id)
+
+    def update_credentials(self, integration_id: str, credentials: ConnectorCredentials) -> Optional[Integration]:
+        """Replace encrypted credentials and roll back in-memory state if persistence fails."""
+        integration = self._integrations.get(integration_id)
+        if integration is None:
+            return None
+        previous_credentials = self._credentials.get(integration_id)
+        previous_status = integration.status
+        self._credentials[integration_id] = credentials
+        integration.status = ConnectorHealthStatus.DISCONNECTED
+        self._integrations[integration_id] = integration
+        try:
+            self._write(integration)
+        except Exception:
+            if previous_credentials is not None:
+                self._credentials[integration_id] = previous_credentials
+            integration.status = previous_status
+            self._integrations[integration_id] = integration
+            raise
+        return integration
+
     def delete_integration(self, integration_id: str) -> bool:
-        if integration_id in self._integrations:
-            del self._integrations[integration_id]
-            self._credentials.pop(integration_id, None)
-            try:
-                with self._connect() as conn:
-                    conn.execute("DELETE FROM connector_integrations WHERE integration_id = ?", (integration_id,))
-                    conn.commit()
-            except Exception:
-                pass
-            return True
-        return False
+        if integration_id not in self._integrations:
+            return False
+        # Commit the durable delete before mutating process memory. Never report success
+        # while encrypted credentials remain persisted.
+        with self._connect() as conn:
+            conn.execute("DELETE FROM connector_integrations WHERE integration_id = ?", (integration_id,))
+            conn.commit()
+        del self._integrations[integration_id]
+        self._credentials.pop(integration_id, None)
+        return True
 
     def get_connector(self, integration_id: str) -> Optional[BaseConnector]:
         integ = self.get_integration(integration_id)
@@ -215,10 +305,21 @@ class ConnectorStore:
         elif integ.provider == ConnectorType.CRUX:
             from app.connectors.crux.connector import CruxConnector
             return CruxConnector(creds)
+        elif integ.provider in (
+            ConnectorType.FRAMER, ConnectorType.WIX, ConnectorType.SANITY,
+            ConnectorType.OPENAI_SEARCH, ConnectorType.PERPLEXITY, ConnectorType.CLAUDE,
+            ConnectorType.GEMINI, ConnectorType.LINKEDIN, ConnectorType.X,
+            ConnectorType.TIKTOK, ConnectorType.INSTAGRAM, ConnectorType.WHATSAPP_BUSINESS,
+            ConnectorType.TELEGRAM, ConnectorType.SLACK, ConnectorType.HUBSPOT,
+            ConnectorType.SALESFORCE, ConnectorType.STRIPE,
+        ):
+            from app.connectors.provider_api import ProviderApiConnector
+            return ProviderApiConnector(creds)
         else:
             return GenericWebsiteConnector(creds)
 
-    def get_telemetry_service(self) -> Any:
+    def get_telemetry_service(self, org_id: Optional[str] = None) -> Any:
+        """Build telemetry adapters for one organization; missing scope fails closed."""
         from app.connectors.telemetry_service import ExternalTelemetryService
         from app.connectors.google.connector import GoogleSearchConsoleConnector
         from app.connectors.google.ga4_connector import GoogleAnalytics4Connector
@@ -230,7 +331,13 @@ class ConnectorStore:
         crux = None
         seo = None
 
+        if not org_id:
+            # Never pick another tenant's first connected provider when caller omits scope.
+            return ExternalTelemetryService(gsc=None, ga4=None, crux=None, external_seo=None)
+
         for integ_id, integ in self._integrations.items():
+            if integ.org_id != org_id:
+                continue
             creds = self._credentials.get(integ_id, ConnectorCredentials(provider=integ.provider))
             if integ.provider == ConnectorType.GOOGLE_SEARCH_CONSOLE and not gsc:
                 gsc = GoogleSearchConsoleConnector(creds)

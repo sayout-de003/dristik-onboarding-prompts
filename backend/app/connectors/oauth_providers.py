@@ -82,12 +82,10 @@ def peek_signed_state(state: str) -> Optional[Dict[str, Any]]:
         raw, sig = state.split(".", 1)
     except ValueError:
         return None
-    secrets = []
     auth_secret = (settings.AUTH_SECRET or "").encode()
-    if auth_secret:
-        secrets.append(auth_secret)
-    secrets.extend((b"dristik-auth-secret", b"dristik"))
-    for secret in secrets:
+    if not auth_secret:
+        return None
+    for secret in (auth_secret,):
         expected = hmac.new(secret, raw.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, sig):
             continue
@@ -160,7 +158,7 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
     },
     "hubspot": {
         "label": "HubSpot",
-        "connector": ConnectorType.CRM,
+        "connector": ConnectorType.HUBSPOT,
         "client_id": "HUBSPOT_CLIENT_ID",
         "client_secret": "HUBSPOT_CLIENT_SECRET",
         "authorize": "https://app.hubspot.com/oauth/authorize",
@@ -169,7 +167,7 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
     },
     "salesforce": {
         "label": "Salesforce",
-        "connector": ConnectorType.CRM,
+        "connector": ConnectorType.SALESFORCE,
         "client_id": "SALESFORCE_CLIENT_ID",
         "client_secret": "SALESFORCE_CLIENT_SECRET",
         "authorize": "https://login.salesforce.com/services/oauth2/authorize",
@@ -178,12 +176,48 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
     },
     "stripe": {
         "label": "Stripe",
-        "connector": ConnectorType.CRM,
+        "connector": ConnectorType.STRIPE,
         "client_id": "STRIPE_CLIENT_ID",
         "client_secret": "STRIPE_CLIENT_SECRET",
         "authorize": "https://connect.stripe.com/oauth/authorize",
         "token": "https://connect.stripe.com/oauth/token",
         "scope": "read_only",
+    },
+    "linkedin": {
+        "label": "LinkedIn",
+        "connector": ConnectorType.LINKEDIN,
+        "client_id": "LINKEDIN_CLIENT_ID",
+        "client_secret": "LINKEDIN_CLIENT_SECRET",
+        "authorize": "https://www.linkedin.com/oauth/v2/authorization",
+        "token": "https://www.linkedin.com/oauth/v2/accessToken",
+        "scope": "openid profile email w_member_social",
+    },
+    "slack": {
+        "label": "Slack",
+        "connector": ConnectorType.SLACK,
+        "client_id": "SLACK_CLIENT_ID",
+        "client_secret": "SLACK_CLIENT_SECRET",
+        "authorize": "https://slack.com/oauth/v2/authorize",
+        "token": "https://slack.com/api/oauth.v2.access",
+        "scope": "chat:write users:read",
+    },
+    "instagram": {
+        "label": "Instagram Professional",
+        "connector": ConnectorType.INSTAGRAM,
+        "client_id": "INSTAGRAM_CLIENT_ID",
+        "client_secret": "INSTAGRAM_CLIENT_SECRET",
+        "authorize": "https://www.facebook.com/v22.0/dialog/oauth",
+        "token": "https://graph.facebook.com/v22.0/oauth/access_token",
+        "scope": "instagram_basic,instagram_content_publish,instagram_manage_insights,pages_show_list,pages_read_engagement",
+    },
+    "whatsapp_business": {
+        "label": "WhatsApp Business Platform",
+        "connector": ConnectorType.WHATSAPP_BUSINESS,
+        "client_id": "WHATSAPP_BUSINESS_CLIENT_ID",
+        "client_secret": "WHATSAPP_BUSINESS_CLIENT_SECRET",
+        "authorize": "https://www.facebook.com/v22.0/dialog/oauth",
+        "token": "https://graph.facebook.com/v22.0/oauth/access_token",
+        "scope": "whatsapp_business_management,whatsapp_business_messaging,business_management",
     },
     "wordpress": {
         "label": "WordPress.com",
@@ -199,7 +233,10 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
 
 def _sign(payload: Dict[str, str]) -> str:
     raw = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode()
-    secret = (settings.AUTH_SECRET or "dristik").encode()
+    secret_value = settings.AUTH_SECRET or ""
+    if len(secret_value) < 32 or secret_value == "dristik-dev-secret-change-me":
+        raise HTTPException(status_code=503, detail="OAuth state signing requires a configured secret of at least 32 characters.")
+    secret = secret_value.encode()
     sig = hmac.new(secret, raw.encode(), hashlib.sha256).hexdigest()
     return f"{raw}.{sig}"
 
@@ -209,7 +246,10 @@ def _unsign(state: str) -> Dict[str, str]:
         raw, sig = state.split(".", 1)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="OAuth state is invalid.") from exc
-    secret = (settings.AUTH_SECRET or "dristik").encode()
+    secret_value = settings.AUTH_SECRET or ""
+    if len(secret_value) < 32 or secret_value == "dristik-dev-secret-change-me":
+        raise HTTPException(status_code=503, detail="OAuth state signing requires a configured secret of at least 32 characters.")
+    secret = secret_value.encode()
     expected = hmac.new(secret, raw.encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, sig):
         raise HTTPException(status_code=400, detail="OAuth state signature does not match.")
@@ -219,8 +259,13 @@ def _unsign(state: str) -> Dict[str, str]:
     return {str(k): str(v) for k, v in data.items()}
 
 
+def _state_signing_ready() -> bool:
+    secret = settings.AUTH_SECRET or ""
+    return len(secret) >= 32 and secret != "dristik-dev-secret-change-me"
+
+
 def _configured(spec: Dict[str, Any]) -> bool:
-    return bool(_setting(spec["client_id"]) and _setting(spec["client_secret"]))
+    return bool(_setting(spec["client_id"]) and _setting(spec["client_secret"]) and _state_signing_ready())
 
 
 def provider_status(request: Optional[Request] = None) -> Dict[str, Any]:
@@ -292,7 +337,11 @@ async def _exchange(provider: str, code: str, shop: str, redirect_uri: Optional[
         }
     headers = {"Accept": "application/json"}
     async with httpx.AsyncClient(timeout=20) as client:
-        response = await client.post(url, data=body, headers=headers)
+        if provider in ("instagram", "whatsapp_business"):
+            # Meta OAuth access-token exchange is a GET with query parameters.
+            response = await client.get(url, params=body, headers=headers)
+        else:
+            response = await client.post(url, data=body, headers=headers)
     if not response.is_success:
         raise HTTPException(status_code=400, detail="The provider rejected the authorization code. No connector was saved.")
     try:
@@ -437,6 +486,8 @@ def oauth_authorize(
     spec = PROVIDERS.get(provider)
     if spec is None:
         raise HTTPException(status_code=404, detail="This connector has no OAuth sign-in.")
+    if not _state_signing_ready():
+        raise HTTPException(status_code=503, detail="OAuth state signing requires a configured secret of at least 32 characters.")
     if not _configured(spec):
         raise HTTPException(
             status_code=503,
@@ -491,7 +542,7 @@ async def oauth_callback(
         token_data = await _exchange(provider, code, shop_host, redirect_uri)
     except HTTPException as exc:
         return _oauth_fail(str(exc.detail))
-    target = saved.get("domain") or shop_host or saved.get("repository") or spec["label"]
+    target = token_data.get("instance_url") or saved.get("domain") or shop_host or saved.get("repository") or spec["label"]
 
     discovered_prop = saved.get("property_id") or ""
     if provider in ("google_analytics_4", "google_analytics") and not discovered_prop:
@@ -540,6 +591,8 @@ async def oauth_callback(
         provider=spec["connector"],
         api_url=target if str(target).startswith("http") else f"https://{target}",
         api_key=json.dumps(stored),
+        access_token=token_data.get("access_token"),
+        refresh_token=token_data.get("refresh_token"),
         github_token=token_data.get("access_token") if provider == "github" else None,
         repository=saved.get("repository") or None,
     )
@@ -552,9 +605,33 @@ async def oauth_callback(
         settings={"auth_mode": "oauth2", "oauth_provider": provider, "property_id": discovered_prop},
         org_id=org_id,
     )
-    # Zero-Fake: Authenticated tokens elevate status to CONNECTED
-    integration.status = ConnectorHealthStatus.CONNECTED
+    # Authorization is not the same as a working integration. Verify against the real API.
+    connector = connector_store.get_connector_for_org(integration.integration_id, org_id)
+    if not connector:
+        integration.status = ConnectorHealthStatus.ERROR
+        connector_store.persist(integration)
+        connector_store.record_event(
+            org_id=org_id, action="OAUTH_CALLBACK", result="ADAPTER_UNAVAILABLE",
+            integration_id=integration.integration_id,
+            details={"provider": provider, "token_received": True, "live_verification": "FAILED"},
+        )
+        return _page("Connection verification failed", "Authorization returned a token, but Dristik could not initialize the provider adapter. The connection was not marked connected.", success=False)
+
+    health = await connector.test_connection()
+    integration.status = health.status
     connector_store.persist(integration)
+    connector_store.record_event(
+        org_id=org_id, action="OAUTH_CALLBACK",
+        result="SUCCESS" if health.authenticated else health.status.value.upper(),
+        integration_id=integration.integration_id,
+        details={"provider": provider, "token_received": True, "live_verification": "PASSED" if health.authenticated else "FAILED"},
+    )
+    if not health.authenticated:
+        return _page(
+            "Connection verification failed",
+            "Authorization returned a token, but the provider API handshake did not pass: " + html.escape(health.message) + ". The connection remains unverified.",
+            success=False,
+        )
 
     # Sync singleton connector references if applicable
     if provider in ("google_analytics_4", "google_analytics"):

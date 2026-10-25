@@ -10,13 +10,13 @@ interface ConnectorsModalProps {
   notice?: string | null;
 }
 
-export type ConnectorCategory = 'ALL' | 'ANALYTICS' | 'CRM' | 'GEO' | 'CMS';
+export type ConnectorCategory = 'ALL' | 'ANALYTICS' | 'CRM' | 'GEO' | 'CMS' | 'SOCIAL' | 'MESSAGING' | 'DEVELOPER';
 
 export interface ConnectorDefinition {
   id: ConnectorType;
   label: string;
   icon: string;
-  category: 'ANALYTICS' | 'CRM' | 'GEO' | 'CMS';
+  category: 'ANALYTICS' | 'CRM' | 'GEO' | 'CMS' | 'SOCIAL' | 'MESSAGING' | 'DEVELOPER';
   desc: string;
   tag: string;
 }
@@ -33,6 +33,23 @@ export const ALL_CONNECTORS: ConnectorDefinition[] = [
   { id: 'shopify', label: 'Shopify', icon: 'S', category: 'CMS', desc: 'Liquid Theme', tag: 'Admin GraphQL' },
   { id: 'webflow', label: 'Webflow', icon: 'WF', category: 'CMS', desc: 'Embed Head', tag: 'Webflow Sites' },
   { id: 'generic', label: 'Generic Web', icon: 'URL', category: 'CMS', desc: 'Crawl & Patch Pack', tag: 'Direct Crawl' },
+  { id: 'framer', label: 'Framer', icon: 'FR', category: 'CMS', desc: 'API readiness required', tag: 'Capability gated' },
+  { id: 'wix', label: 'Wix', icon: 'WX', category: 'CMS', desc: 'API readiness required', tag: 'Capability gated' },
+  { id: 'sanity', label: 'Sanity', icon: 'SN', category: 'CMS', desc: 'Project, dataset & documents', tag: 'Sanity HTTP API' },
+  { id: 'openai_search', label: 'OpenAI APIs', icon: 'OA', category: 'GEO', desc: 'Model API, not search visibility', tag: 'OpenAI API' },
+  { id: 'perplexity', label: 'Perplexity', icon: 'PX', category: 'GEO', desc: 'Live answer API handshake', tag: 'Perplexity API' },
+  { id: 'claude', label: 'Claude', icon: 'CL', category: 'GEO', desc: 'Model API, search tool gated', tag: 'Anthropic API' },
+  { id: 'gemini', label: 'Gemini', icon: 'GM', category: 'GEO', desc: 'Model API, grounding gated', tag: 'Gemini API' },
+  { id: 'linkedin', label: 'LinkedIn', icon: 'IN', category: 'SOCIAL', desc: 'OAuth scopes govern publishing', tag: 'LinkedIn API' },
+  { id: 'x', label: 'X', icon: 'X', category: 'SOCIAL', desc: 'OAuth scopes govern publishing', tag: 'X API' },
+  { id: 'tiktok', label: 'TikTok', icon: 'TT', category: 'SOCIAL', desc: 'Approval and scopes required', tag: 'TikTok API' },
+  { id: 'instagram', label: 'Instagram', icon: 'IG', category: 'SOCIAL', desc: 'Professional account required', tag: 'Instagram Graph API' },
+  { id: 'whatsapp_business', label: 'WhatsApp Business', icon: 'WA', category: 'MESSAGING', desc: 'Phone Number ID + Meta token', tag: 'WhatsApp Cloud API' },
+  { id: 'telegram', label: 'Telegram', icon: 'TG', category: 'MESSAGING', desc: 'Bot token handshake', tag: 'Telegram Bot API' },
+  { id: 'slack', label: 'Slack', icon: 'SL', category: 'MESSAGING', desc: 'Bot token + granted scopes', tag: 'Slack API' },
+  { id: 'hubspot', label: 'HubSpot', icon: 'HS', category: 'CRM', desc: 'Contacts API handshake', tag: 'HubSpot CRM API' },
+  { id: 'salesforce', label: 'Salesforce', icon: 'SF', category: 'CRM', desc: 'Instance URL + access token', tag: 'Salesforce REST API' },
+  { id: 'stripe', label: 'Stripe', icon: 'ST', category: 'CRM', desc: 'Account and revenue APIs', tag: 'Stripe API' },
 ];
 
 const GoogleIcon = () => (
@@ -112,6 +129,11 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
   // Live AI Search states
   const [aiEngine, setAiEngine] = useState<'perplexity' | 'openai' | 'claude' | 'gemini'>('perplexity');
   const [aiApiKey, setAiApiKey] = useState('');
+  const [providerToken, setProviderToken] = useState('');
+  const [providerResource, setProviderResource] = useState('');
+  const [providerDataset, setProviderDataset] = useState('');
+  const [providerApiUrl, setProviderApiUrl] = useState('');
+  const [providerRegistry, setProviderRegistry] = useState<Record<string, { implementation_status?: string; connection_status?: string; notes?: string | null }>>({});
 
   const fetchIntegrations = async () => {
     try {
@@ -125,9 +147,30 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
     }
   };
 
+  const fetchProviderRegistry = async () => {
+    try {
+      const res = await fetch('/api/v1/connectors/registry');
+      if (!res.ok) return;
+      const data = await res.json();
+      const next: Record<string, { implementation_status?: string; connection_status?: string; notes?: string | null }> = {};
+      for (const item of data.providers || []) next[item.id] = item;
+      setProviderRegistry(next);
+    } catch {
+      // Keep the directory visible, but do not infer that a provider is configured.
+    }
+  };
+
+  useEffect(() => {
+    setProviderToken('');
+    setProviderResource('');
+    setProviderDataset('');
+    setProviderApiUrl('');
+  }, [activeTab]);
+
   useEffect(() => {
     if (isOpen) {
       fetchIntegrations();
+      fetchProviderRegistry();
       if (targetUrl) {
         setSiteUrl(targetUrl);
         setGscSiteUrl(targetUrl);
@@ -313,13 +356,50 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
       payload.target_url = siteUrl;
       payload.name = `Google CrUX (${siteUrl})`;
       payload.api_key = cruxApiKey;
+    } else if (['framer', 'wix'].includes(activeTab)) {
+      setStatusMessage('This provider is listed for visibility, but its approved API capability is not configured yet. No connection was saved.');
+      setLoading(false);
+      return;
+    } else if (['sanity', 'openai_search', 'perplexity', 'claude', 'gemini', 'linkedin', 'x', 'tiktok', 'instagram', 'whatsapp_business', 'telegram', 'slack', 'hubspot', 'salesforce', 'stripe'].includes(activeTab)) {
+      payload.api_key = providerToken;
+      payload.access_token = providerToken;
+      payload.api_url = providerApiUrl || undefined;
+      payload.repository = providerResource || undefined;
+      payload.branch = providerDataset || undefined;
+      payload.target_url = providerApiUrl || siteUrl || ({
+        sanity: 'https://api.sanity.io',
+        openai_search: 'https://api.openai.com',
+        perplexity: 'https://api.perplexity.ai',
+        claude: 'https://api.anthropic.com',
+        gemini: 'https://generativelanguage.googleapis.com',
+        linkedin: 'https://api.linkedin.com',
+        x: 'https://api.x.com',
+        tiktok: 'https://open.tiktokapis.com',
+        instagram: 'https://graph.facebook.com',
+        whatsapp_business: 'https://graph.facebook.com',
+        telegram: 'https://api.telegram.org',
+        slack: 'https://slack.com',
+        hubspot: 'https://api.hubapi.com',
+        salesforce: providerApiUrl || '',
+        stripe: 'https://api.stripe.com',
+      } as Record<string, string>)[activeTab] || '';
+      payload.name = `${activeTab.toUpperCase()} Integration`;
+      if (activeTab === 'salesforce') payload.api_url = providerApiUrl;
     } else {
       payload.target_url = siteUrl;
     }
 
     try {
-      const res = await fetch('/api/v1/connectors/connect', {
-        method: 'POST',
+      const existing = integrations.find((integration) =>
+        integration.provider === payload.provider &&
+        (integration.target_url === payload.target_url ||
+          (payload.repository && integration.repository === payload.repository))
+      );
+      const endpoint = existing
+        ? `/api/v1/connectors/${existing.integration_id}/credentials`
+        : '/api/v1/connectors/connect';
+      const res = await fetch(endpoint, {
+        method: existing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
@@ -343,10 +423,41 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
 
   const handleDisconnect = async (integrationId: string) => {
     try {
-      await fetch(`/api/v1/connectors/${integrationId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/v1/connectors/${integrationId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setStatusMessage(data.detail || 'Disconnect failed.');
+        return;
+      }
+      setStatusMessage('Disconnected and removed local connection.');
       await fetchIntegrations();
+      await fetchProviderRegistry();
     } catch (e) {
-      console.error(e);
+      setStatusMessage('Disconnect failed: network error.');
+    }
+  };
+
+  const handleConnectorAction = async (integrationId: string, action: 'test' | 'reconnect' | 'revoke') => {
+    setLoading(true);
+    try {
+      const route = action === 'test'
+        ? `/api/v1/connectors/${integrationId}/health`
+        : `/api/v1/connectors/${integrationId}/${action}`;
+      const res = await fetch(route, { method: action === 'test' ? 'GET' : 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setStatusMessage(data.detail || `${action} failed.`);
+      } else if (action === 'test') {
+        setStatusMessage(data.authenticated ? `✓ Live provider handshake passed: ${data.message || 'authenticated'}` : `Connection check failed: ${data.message || data.status || 'not authenticated'}`);
+      } else {
+        setStatusMessage(data.message || (data.success ? `${action} completed.` : `${action} did not complete.`));
+      }
+      await fetchIntegrations();
+      await fetchProviderRegistry();
+    } catch {
+      setStatusMessage(`${action} failed: network error.`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -383,7 +494,7 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
               <h2 className="text-lg font-sans text-ink tracking-tight flex items-center gap-2">
                 Connectors & Integrations Hub
                 <span className="text-[11px] uppercase px-2 py-0.5 rounded bg-paper-200 text-ink-700 border border-line font-mono font-bold">
-                  {ALL_CONNECTORS.length} Connectors Available
+                  {ALL_CONNECTORS.length} Providers Listed
                 </span>
               </h2>
               <p className="text-xs text-ink-500">
@@ -417,6 +528,9 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
                       { id: 'CRM', label: 'Revenue' },
                       { id: 'GEO', label: 'AI Search' },
                       { id: 'CMS', label: 'CMS & Code' },
+                      { id: 'SOCIAL', label: 'Social' },
+                      { id: 'MESSAGING', label: 'Messaging' },
+                      { id: 'DEVELOPER', label: 'Developer' },
                     ] as const
                   ).map((cat) => (
                     <button
@@ -461,7 +575,9 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
                             ACTIVE
                           </span>
                         ) : (
-                          <span className="text-[9px] font-mono text-ink-400">AVAILABLE</span>
+                          <span className="text-[9px] font-mono text-ink-400">
+                            {providerRegistry[item.id]?.implementation_status === 'adapter_required' ? 'ADAPTER REQUIRED' : 'NOT CONNECTED'}
+                          </span>
                         )}
                       </div>
                       <span className="font-bold leading-tight truncate w-full text-xs text-ink">{item.label}</span>
@@ -1108,6 +1224,75 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
                 </div>
               )}
 
+              {['sanity', 'openai_search', 'perplexity', 'claude', 'gemini', 'linkedin', 'x', 'tiktok', 'instagram', 'whatsapp_business', 'telegram', 'slack', 'hubspot', 'salesforce', 'stripe'].includes(activeTab) && (
+                <div className="space-y-3 rounded-lg border border-line bg-paper-50 p-4">
+                  <div>
+                    <div className="text-sm font-semibold text-ink">Provider API credentials</div>
+                    <p className="mt-1 text-xs text-ink-500">
+                      Credentials are sent to the Dristik API and stored encrypted. The first check is a live authentication handshake; it does not imply publishing, analytics, or search-citation capabilities are enabled.
+                    </p>
+                  </div>
+                  {['linkedin', 'slack', 'instagram', 'whatsapp_business', 'hubspot', 'salesforce', 'stripe'].includes(activeTab) && oauthProviders[activeTab]?.configured && (
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={() => startOauth(activeTab, { domain: providerApiUrl || siteUrl, shop: providerApiUrl || siteUrl, repository: providerResource })}
+                      className="w-full py-2.5 px-4 border border-line rounded text-sm font-semibold text-ink hover:bg-paper-100 disabled:opacity-50"
+                    >
+                      Connect with {activeTab === 'whatsapp_business' ? 'Meta' : activeTab[0].toUpperCase() + activeTab.slice(1)} OAuth
+                    </button>
+                  )}
+                  <div>
+                    <label className="text-xs text-ink-700 font-medium block mb-1">API key / authorized access token</label>
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      value={providerToken}
+                      onChange={(e) => setProviderToken(e.target.value)}
+                      placeholder="Paste provider-issued credential"
+                      className="w-full bg-paper-50 border border-line rounded px-3 py-2 text-sm text-ink placeholder:text-ink-500 focus:outline-none focus:border-pine font-mono"
+                      required
+                    />
+                  </div>
+                  {activeTab === 'sanity' && (
+                    <>
+                      <div>
+                        <label className="text-xs text-ink-700 font-medium block mb-1">Sanity project ID</label>
+                        <input value={providerResource} onChange={(e) => setProviderResource(e.target.value)} placeholder="Project ID" className="w-full bg-paper-50 border border-line rounded px-3 py-2 text-sm text-ink" required />
+                      </div>
+                      <div>
+                        <label className="text-xs text-ink-700 font-medium block mb-1">Dataset</label>
+                        <input value={providerDataset} onChange={(e) => setProviderDataset(e.target.value)} placeholder="production" className="w-full bg-paper-50 border border-line rounded px-3 py-2 text-sm text-ink" required />
+                      </div>
+                    </>
+                  )}
+                  {activeTab === 'whatsapp_business' && (
+                    <div>
+                      <label className="text-xs text-ink-700 font-medium block mb-1">WhatsApp Phone Number ID</label>
+                      <input value={providerResource} onChange={(e) => setProviderResource(e.target.value)} placeholder="Phone Number ID from Meta" className="w-full bg-paper-50 border border-line rounded px-3 py-2 text-sm text-ink" required />
+                    </div>
+                  )}
+                  {activeTab === 'salesforce' && (
+                    <div>
+                      <label className="text-xs text-ink-700 font-medium block mb-1">Salesforce instance URL</label>
+                      <input type="url" value={providerApiUrl} onChange={(e) => setProviderApiUrl(e.target.value)} placeholder="https://your-domain.my.salesforce.com" className="w-full bg-paper-50 border border-line rounded px-3 py-2 text-sm text-ink" required />
+                    </div>
+                  )}
+                  {activeTab !== 'salesforce' && (
+                    <div>
+                      <label className="text-xs text-ink-700 font-medium block mb-1">Optional API / account URL</label>
+                      <input type="url" value={providerApiUrl} onChange={(e) => setProviderApiUrl(e.target.value)} placeholder="Only if your provider requires a custom endpoint" className="w-full bg-paper-50 border border-line rounded px-3 py-2 text-sm text-ink" />
+                    </div>
+                  )}
+                  {activeTab !== 'sanity' && activeTab !== 'whatsapp_business' && (
+                    <div>
+                      <label className="text-xs text-ink-700 font-medium block mb-1">Optional account or resource ID</label>
+                      <input value={providerResource} onChange={(e) => setProviderResource(e.target.value)} placeholder="Required only by some provider APIs" className="w-full bg-paper-50 border border-line rounded px-3 py-2 text-sm text-ink" />
+                    </div>
+                  )}
+                </div>
+              )}
+
               {statusMessage && (
                 <div
                   className={`p-3 rounded text-xs font-mono border ${
@@ -1236,7 +1421,7 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-good"></span>
+                          <span className={`w-2 h-2 rounded-full ${String(integ.status).toLowerCase() === 'connected' ? 'bg-good' : 'bg-paper-300 border border-line'}`}></span>
                           <span className="text-sm font-semibold text-ink truncate max-w-[180px]">
                             {integ.name}
                           </span>
@@ -1251,13 +1436,13 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
                       </div>
 
                       <div className="flex items-center justify-between pt-2 border-t border-line text-[11px]">
-                        <span className="text-good font-mono">● {integ.status}</span>
-                        <button
-                          onClick={() => handleDisconnect(integ.integration_id)}
-                          className="text-bad hover:underline transition font-mono"
-                        >
-                          Disconnect
-                        </button>
+                        <span className={`font-mono uppercase ${String(integ.status).toLowerCase() === 'connected' ? 'text-good' : 'text-ink-500'}`}>{integ.status}</span>
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <button type="button" disabled={loading} onClick={() => handleConnectorAction(integ.integration_id, 'test')} className="text-ink-700 hover:underline disabled:opacity-50">Test</button>
+                          <button type="button" disabled={loading} onClick={() => handleConnectorAction(integ.integration_id, 'reconnect')} className="text-ink-700 hover:underline disabled:opacity-50">Reconnect</button>
+                          <button type="button" disabled={loading} onClick={() => handleConnectorAction(integ.integration_id, 'revoke')} className="text-ink-700 hover:underline disabled:opacity-50">Forget credentials</button>
+                          <button type="button" disabled={loading} onClick={() => handleDisconnect(integ.integration_id)} className="text-bad hover:underline disabled:opacity-50">Delete</button>
+                        </div>
                       </div>
                     </div>
                   ))
