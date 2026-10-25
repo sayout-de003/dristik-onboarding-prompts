@@ -25,6 +25,14 @@ from app.connectors.platform_registry import registry_payload
 router = APIRouter(prefix="/connectors", tags=["Platform Connectors"])
 router.include_router(oauth_router)
 
+@router.get("/audit-events")
+async def connector_audit_events(limit: int = 100, user: UserIdentity = Depends(get_current_user)):
+    """Return connector lifecycle events for the current organization only."""
+    if not Authorizer.can_perform(user, "mission:read"):
+        raise HTTPException(status_code=403, detail="You do not have permission to view connector audit history.")
+    return {"events": connector_store.list_events(user.org_id, limit=limit)}
+
+
 @router.get("/registry")
 async def connector_registry(user: UserIdentity = Depends(get_current_user)):
     """List all planned providers with honest adapter and per-organization connection state."""
@@ -70,6 +78,11 @@ class ConnectPlatformResponse(BaseModel):
     integration: Integration
     health: ConnectorHealth
     message: str
+
+def _actor_id(user: UserIdentity) -> Optional[str]:
+    value = getattr(user, "user_id", None) or getattr(user, "id", None) or getattr(user, "email", None)
+    return str(value) if value is not None else None
+
 
 def _owned_integration(integration_id: str, user: UserIdentity) -> Integration:
     integration = connector_store.get_integration(integration_id)
@@ -143,6 +156,12 @@ async def connect_platform(
     health = await connector.test_connection()
     integration.status = health.status
     connector_store.persist(integration)
+    connector_store.record_event(
+        org_id=user.org_id, action="CONNECT_ATTEMPT",
+        result="SUCCESS" if health.authenticated else health.status.value.upper(),
+        integration_id=integration.integration_id, actor_id=_actor_id(user),
+        details={"provider": req.provider.value, "authenticated": health.authenticated, "http_api_handshake": True},
+    )
 
     if health.authenticated and req.provider in (ConnectorType.GOOGLE_ANALYTICS_4, ConnectorType.GOOGLE_ANALYTICS):
         try:
@@ -171,7 +190,18 @@ async def check_integration_health(integration_id: str, user: UserIdentity = Dep
     connector = connector_store.get_connector(integration_id)
     if not connector:
         raise HTTPException(status_code=404, detail="Integration not found")
-    return await connector.test_connection()
+    health = await connector.test_connection()
+    integration = connector_store.get_integration(integration_id)
+    if integration:
+        integration.status = health.status
+        connector_store.persist(integration)
+        connector_store.record_event(
+            org_id=integration.org_id, action="HEALTH_CHECK",
+            result="SUCCESS" if health.authenticated else health.status.value.upper(),
+            integration_id=integration_id, actor_id=_actor_id(user),
+            details={"provider": integration.provider.value, "authenticated": health.authenticated, "latency_ms": health.latency_ms},
+        )
+    return health
 
 @router.get("/{integration_id}/discover", response_model=Dict[str, Any])
 async def discover_integration_structure(integration_id: str, user: UserIdentity = Depends(get_current_user)):
@@ -185,7 +215,12 @@ async def discover_integration_structure(integration_id: str, user: UserIdentity
 @router.delete("/{integration_id}")
 async def delete_integration(integration_id: str, user: UserIdentity = Depends(require_permission("patches:generate"))):
     """Disconnect and remove an integration owned by the caller's organization."""
-    _owned_integration(integration_id, user)
+    integration = _owned_integration(integration_id, user)
+    connector_store.record_event(
+        org_id=integration.org_id, action="DISCONNECT",
+        result="REQUESTED", integration_id=integration_id, actor_id=_actor_id(user),
+        details={"provider": integration.provider.value},
+    )
     success = connector_store.delete_integration(integration_id)
     if not success:
         raise HTTPException(status_code=404, detail="Integration not found")
