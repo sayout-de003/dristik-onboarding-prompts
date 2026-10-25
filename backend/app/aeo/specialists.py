@@ -269,15 +269,17 @@ class EntityConsistencySpecialist(BaseAeoSpecialist):
 
     def evaluate(self, report: Any) -> SpecialistResult:
         g = getattr(report, "geo_readiness", None)
-        entity_name = getattr(g, "entity_name", getattr(report, "domain", ""))
+        entity_name = getattr(g, "entity_name", None) if g else None
+        # A report/domain name is not independent corroboration of entity identity.
+        # This specialist currently has no source-comparison evidence contract.
         return SpecialistResult(
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.VERIFIED,
-            summary=f"Validated canonical entity '{entity_name}' against schema markup and DOM headings.",
+            status=EvidenceState.NOT_TESTED,
+            summary="Cross-source entity consistency was not tested by this specialist; a first-party name alone is insufficient.",
             findings=[],
-            metadata={"entity_name": entity_name},
+            metadata={"entity_name": entity_name, "measurement_status": "NOT_TESTED"},
         )
 
 
@@ -318,7 +320,8 @@ class TechnicalEligibilitySpecialist(BaseAeoSpecialist):
 
     def evaluate(self, report: Any) -> SpecialistResult:
         pages = getattr(report, "page_reports", []) or []
-        noindex_pages = [p for p in pages if not getattr(p, "is_indexable", True)]
+        # Missing indexability data is unknown, not indexable and not non-indexable.
+        noindex_pages = [p for p in pages if getattr(p, "is_indexable", None) is False]
         findings = []
         if noindex_pages:
             findings.append(AeoFindingRecord(
@@ -326,9 +329,9 @@ class TechnicalEligibilitySpecialist(BaseAeoSpecialist):
                 priority="P0",
                 evidence_state=EvidenceState.VERIFIED,
                 question="Can answer engines access and index all key answer pages?",
-                observed_issue=f"{len(noindex_pages)} potential answer pages are marked noindex or blocked.",
-                evidence_url=noindex_pages[0].url if noindex_pages else "",
-                evidence_excerpt="Robots meta directive: noindex",
+                observed_issue=f"{len(noindex_pages)} analyzed page(s) are explicitly marked non-indexable in the crawl data; the cause requires directive-level confirmation.",
+                evidence_url=getattr(noindex_pages[0], "url", "") if noindex_pages else "",
+                evidence_excerpt=f"Observed is_indexable=False for {getattr(noindex_pages[0], 'url', 'analyzed page')}; inspect meta robots, X-Robots-Tag, and robots.txt before remediation.",
                 collection_timestamp=datetime.now(timezone.utc).isoformat(),
                 scope="Crawl indexability.",
                 why_it_matters="Noindex directives disqualify pages from both traditional search and AI answer retrieval.",
@@ -342,8 +345,15 @@ class TechnicalEligibilitySpecialist(BaseAeoSpecialist):
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.VERIFIED,
-            summary=f"Inspected {len(pages)} URLs for crawlability, indexability, and schema eligibility.",
+            status=(
+                EvidenceState.SAMPLE_VERIFIED
+                if pages and any(getattr(p, "is_indexable", None) is not None or getattr(p, "status_code", None) is not None for p in pages)
+                else EvidenceState.NOT_TESTED
+            ),
+            summary=(
+                f"Inspected {len(pages)} URL record(s); only explicit crawl observations are counted."
+                if pages else "No page records were available for technical eligibility checks."
+            ),
             findings=findings,
             metadata={"pages_audited": len(pages), "noindex_count": len(noindex_pages)},
         )
@@ -355,14 +365,16 @@ class SourceAttributionSpecialist(BaseAeoSpecialist):
     responsibility = "Trace asserted claims to primary documentation, original data, or credible third-party references"
 
     def evaluate(self, report: Any) -> SpecialistResult:
+        # This module does not yet resolve claims to source passages. Do not label
+        # the capability verified until claim-to-source links are actually assessed.
         return SpecialistResult(
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.SAMPLE_VERIFIED,
-            summary="Verified source attribution for technical capabilities and compliance declarations.",
+            status=EvidenceState.NOT_TESTED,
+            summary="Claim-to-source attribution was not tested; no source-to-claim evidence map was produced.",
             findings=[],
-            metadata={},
+            metadata={"measurement_status": "NOT_TESTED"},
         )
 
 
@@ -375,12 +387,18 @@ class LiveBenchmarkSpecialist(BaseAeoSpecialist):
         v_card = getattr(report, "ai_visibility_scorecard", None)
         v_status = getattr(v_card, "status", "NOT_MEASURED") if v_card else "NOT_MEASURED"
 
-        if v_status == "MEASURED":
-            status = EvidenceState.VERIFIED
-            summary = "Direct live benchmark tests recorded across target answer surfaces."
+        raw_responses = (
+            getattr(v_card, "raw_responses", None)
+            or getattr(v_card, "responses", None)
+            or getattr(report, "ai_visibility_responses", None)
+            or []
+        ) if v_card or report else []
+        if v_status == "MEASURED" and raw_responses:
+            status = EvidenceState.SAMPLE_VERIFIED
+            summary = f"Live benchmark status is measured and {len(raw_responses)} response record(s) are available for inspection."
         else:
             status = EvidenceState.NOT_TESTED
-            summary = "External answer engine credentials unconfigured. Zero synthetic or simulated appearances reported."
+            summary = "No inspectable live response records were available; status metadata alone is not proof of an executed benchmark."
 
         return SpecialistResult(
             specialist_id=self.specialist_id,
@@ -401,16 +419,30 @@ class CitationAnalysisSpecialist(BaseAeoSpecialist):
     def evaluate(self, report: Any) -> SpecialistResult:
         v_card = getattr(report, "ai_visibility_scorecard", None)
         v_status = getattr(v_card, "status", "NOT_MEASURED") if v_card else "NOT_MEASURED"
-        status = EvidenceState.VERIFIED if v_status == "MEASURED" else EvidenceState.NOT_TESTED
-
+        raw_responses = (
+            getattr(v_card, "raw_responses", None)
+            or getattr(v_card, "responses", None)
+            or getattr(report, "ai_visibility_responses", None)
+            or []
+        ) if v_card or report else []
+        has_citation_data = any(
+            getattr(response, "citations", None) or
+            (isinstance(response, dict) and response.get("citations"))
+            for response in raw_responses
+        )
+        status = EvidenceState.SAMPLE_VERIFIED if has_citation_data else EvidenceState.NOT_TESTED
         return SpecialistResult(
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
             status=status,
-            summary="Citation distribution analysis ready for live benchmark datasets.",
+            summary=(
+                f"Found citation records in {len(raw_responses)} live response(s); claim-to-source validity still requires evaluation."
+                if has_citation_data else
+                "Citation analysis was not executed because inspectable response citation records are unavailable."
+            ),
             findings=[],
-            metadata={},
+            metadata={"response_count": len(raw_responses), "has_citation_data": bool(has_citation_data)},
         )
 
 
@@ -438,14 +470,16 @@ class BrandAccuracySpecialist(BaseAeoSpecialist):
     responsibility = "Detect incorrect brand facts, outdated pricing, and unsupported recommendations in engine answers"
 
     def evaluate(self, report: Any) -> SpecialistResult:
+        # No engine-answer claims are compared against an authoritative brand-fact
+        # register in this method yet; report the gap honestly.
         return SpecialistResult(
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.SAMPLE_VERIFIED,
-            summary="Audited core brand claims to prevent answer-engine hallucination vectors.",
+            status=EvidenceState.NOT_TESTED,
+            summary="Brand-fact accuracy was not tested because no claim-to-authoritative-fact comparison was performed.",
             findings=[],
-            metadata={},
+            metadata={"measurement_status": "NOT_TESTED"},
         )
 
 
@@ -496,8 +530,8 @@ class VerificationEngineSpecialist(BaseAeoSpecialist):
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.VERIFIED,
-            summary="Verification engine initialized for automated re-crawling and assertion testing.",
+            status=EvidenceState.NOT_TESTED,
+            summary="No remediation recrawl or acceptance-criteria retest was executed by this specialist.",
             findings=[],
             metadata={},
         )
