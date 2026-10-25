@@ -22,7 +22,7 @@ logger = logging.getLogger("dristik.crawler")
 from app.core.config import settings
 from app.domain.models import PageEvidence, CrawlManifest
 from app.core.security.ssrf import is_safe_url
-from app.evidence.store import EvidenceStore
+from app.domain.evidence.store import EvidenceStore
 
 # Deterministic Analyzers
 from app.crawl.analyzers.html import analyze_html_content, distill_semantic_content
