@@ -472,6 +472,32 @@ def evaluate_geo_readiness(
         host = urlparse(website_url or "").netloc.replace("www.", "")
         name = host.split(".")[0].capitalize() if host else "the company"
 
+    # An empty crawl is not evidence that the site's content is poor. Fail closed
+    # before generating unsupported-question findings or heuristic scores.
+    if not pages:
+        return GeoReadinessReport(
+            entity_name=name,
+            visibility_status="MEASURED" if visibility_measured and visibility_score is not None else "NOT_CONFIGURED",
+            visibility_message=(
+                visibility_detail or "Live visibility is measured separately from on-page readiness."
+                if visibility_measured and visibility_score is not None
+                else "No live AI-engine measurement was supplied for this run."
+            ),
+            questions_total=0,
+            questions_supported=0,
+            questions_partial=0,
+            questions_unsupported=0,
+            questions_conflicting=0,
+            headline="GEO readiness unavailable: the crawl produced no analyzed pages. Retry the crawl before interpreting readiness.",
+            questions=[],
+            dimensions=[],
+            dimension_scores={},
+            schema_types=[],
+            extractability_score=None,
+            market_country=(country or "Global").strip() or "Global",
+            market_language=(language or "en").strip() or "en",
+        )
+
     blob = _corpus(pages)
 
     # ------------------------------------------------------------------
