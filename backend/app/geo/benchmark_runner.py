@@ -174,6 +174,17 @@ class GeoBenchmarkRunner:
             return False
         return re.search(r"(?<!\w)" + re.escape(term) + r"(?!\w)", text, flags=re.IGNORECASE) is not None
 
+    @staticmethod
+    def _contains_domain(text: str, domain: str) -> bool:
+        """Match a hostname or its subdomain, but not a deceptive suffix host."""
+        if not text or not domain:
+            return False
+        host = GeoBenchmarkRunner._normalize_hostname(domain)
+        if not host:
+            return False
+        pattern = r"(?<![\w-])(?:[\w-]+\.)*" + re.escape(host) + r"(?![\w.-])"
+        return re.search(pattern, text, flags=re.IGNORECASE) is not None
+
     def _classify_sources(self, citations: List[str], raw_text: str, target_domain: str) -> Tuple[List[str], SourceQuality, bool]:
         extracted_domains = set()
         for citation in citations or []:
@@ -211,13 +222,13 @@ class GeoBenchmarkRunner:
         low_text = text.lower()
         low_brand = (brand or "").strip().lower()
         low_domain = self._normalize_hostname(domain)
-        has_mention = self._contains_term(text, low_brand) or self._contains_term(text, low_domain)
+        has_mention = self._contains_term(text, low_brand) or self._contains_domain(text, low_domain)
         if not has_mention:
             return False, None
 
         position = None
         for line in text.splitlines():
-            if not (self._contains_term(line, low_brand) or self._contains_term(line, low_domain)):
+            if not (self._contains_term(line, low_brand) or self._contains_domain(line, low_domain)):
                 continue
             match = re.search(r"#([0-9]+)", line)
             if match:
