@@ -132,3 +132,43 @@ def test_publication_cover_does_not_claim_missing_scores_or_certification():
     assert "Finding count not recorded" in rendered
     assert "ZERO-FAKE AST CERTIFIED" not in rendered
     assert "SUBJECT ENTITY UNDER ASSURANCE" not in rendered
+
+
+def test_claim_ledger_cannot_certify_empty_or_unsupported_claims():
+    from app.domain.models import ClaimLedger, ClaimLedgerEntry
+
+    empty = ClaimLedger(ledger_id="l1", run_id="r1", certified_zero_fake=True)
+    assert empty.certified_zero_fake is False
+
+    unsupported = ClaimLedgerEntry(
+        claim_id="c1",
+        claim="A metric was measured.",
+        is_valid_fact=True,
+        confidence=0.9,
+        scope="PAGE_VERIFIED",
+        timestamp="2026-10-25T00:00:00Z",
+        evidence_ids=[],
+    )
+    ledger = ClaimLedger(
+        ledger_id="l2",
+        run_id="r2",
+        entries=[unsupported],
+        certified_zero_fake=True,
+    )
+    assert ledger.certified_zero_fake is False
+
+
+def test_claim_ledger_certification_requires_explicit_supported_entries():
+    from app.domain.models import ClaimLedger, ClaimLedgerEntry
+
+    entry = ClaimLedgerEntry(
+        claim_id="c1",
+        claim="The page returned HTTP 404.",
+        is_valid_fact=True,
+        confidence=0.9,
+        scope="PAGE_VERIFIED",
+        timestamp="2026-10-25T00:00:00Z",
+        evidence_ids=["ev_001"],
+    )
+    ledger = ClaimLedger(ledger_id="l3", run_id="r3", entries=[entry])
+    assert ledger.certified_zero_fake is True
