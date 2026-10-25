@@ -216,6 +216,8 @@ async def update_integration_credentials(
     updates = req.model_dump(exclude_unset=True, exclude_none=True)
     if not updates:
         raise HTTPException(status_code=400, detail="Provide at least one field to update.")
+    previous_name = integration.name
+    previous_target_url = integration.target_url
     if "name" in updates:
         integration.name = updates.pop("name")
     if "target_url" in updates:
@@ -227,8 +229,14 @@ async def update_integration_credentials(
     }
     credential_updates = {key: value for key, value in updates.items() if key in credential_fields}
     credentials = existing.model_copy(update=credential_updates)
-    connector_store.update_credentials(integration_id, credentials)
-    connector_store.persist(integration)
+    try:
+        connector_store.update_credentials(integration_id, credentials)
+        connector_store.persist(integration)
+    except Exception as exc:
+        integration.name = previous_name
+        integration.target_url = previous_target_url
+        connector_store.persist(integration)
+        raise HTTPException(status_code=500, detail="Credential update could not be persisted; previous credentials were retained.") from exc
     connector = connector_store.get_connector_for_org(integration_id, user.org_id)
     if not connector:
         raise HTTPException(status_code=500, detail="Could not initialize connector after credential update.")
