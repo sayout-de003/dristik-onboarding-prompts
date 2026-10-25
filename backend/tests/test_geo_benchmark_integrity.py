@@ -67,3 +67,16 @@ def test_share_of_model_is_unmeasured_without_successful_evaluations():
     assert metric.funnel_weighted_som_pct is None
     assert metric.first_party_citation_share_pct is None
     assert metric.recommendation_rank_score is None
+
+
+def test_provider_response_defaults_are_not_live_evidence():
+    from app.geo.adapters.base import EngineRawResponse
+
+    response = EngineRawResponse(
+        engine_id="example",
+        engine_name="Example",
+        model_version="unknown",
+        raw_content="",
+    )
+    assert response.is_live is False
+    assert response.status_code == 0
