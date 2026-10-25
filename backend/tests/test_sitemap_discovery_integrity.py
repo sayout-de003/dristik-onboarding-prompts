@@ -50,7 +50,7 @@ async def test_nested_sitemap_index_is_parsed_with_bounded_reads(monkeypatch):
     )
     assert found is True
     assert sitemap_url == "https://example.com/sitemap.xml"
-    assert urls == ["https://example.com/", "https://example.com/about"]
+    assert urls == ["https://example.com", "https://example.com/about"]
     assert truncated is False
 
 
