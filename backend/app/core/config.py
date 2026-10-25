@@ -71,10 +71,10 @@ class Settings(BaseSettings):
     APP_NAME: str = "Dristik AI"
     APP_VERSION: str = "2.0.0"
     ENVIRONMENT: str = "development"
-    DEBUG: bool = True
+    DEBUG: bool = False
     # Number of reverse proxies whose X-Forwarded-For hops may be trusted.
     # Zero means the socket address is the client. A browser cannot raise this.
-    TRUSTED_PROXY_HOPS: int = 0
+    TRUSTED_PROXY_HOPS: int = Field(default=0, ge=0, le=5)
     PORT: int = 8000
     HOST: str = "0.0.0.0"
     
@@ -240,8 +240,8 @@ class Settings(BaseSettings):
             "enterprise": 500,
         }
     )
-    CRAWL_TIMEOUT_SECONDS: int = 15
-    CRAWL_CONCURRENCY: int = 3
+    CRAWL_TIMEOUT_SECONDS: int = Field(default=15, ge=1, le=120)
+    CRAWL_CONCURRENCY: int = Field(default=3, ge=1, le=20)
     JS_RENDER_THIN_PAGES: bool = True
     FIRECRAWL_WAIT_MS: int = 3000
     PLAYWRIGHT_ENABLED: bool = True
@@ -720,6 +720,18 @@ def validate_production_configuration(settings_obj: Settings) -> None:
         if settings_obj.SYSTEM_ADMIN_PASSWORD == "DristikAdmin1!":
             raise RuntimeError(
                 "CRITICAL SECURITY ERROR: Default SYSTEM_ADMIN_PASSWORD detected in production. Set a secure password."
+            )
+        if not settings_obj.FRONTEND_URL.strip().lower().startswith("https://"):
+            raise RuntimeError(
+                "CRITICAL SECURITY ERROR: FRONTEND_URL must use HTTPS in production."
+            )
+        if not settings_obj.SSRF_PROTECTION_ENABLED:
+            raise RuntimeError(
+                "CRITICAL SECURITY ERROR: SSRF_PROTECTION_ENABLED must be True in production."
+            )
+        if settings_obj.CRAWL_CONCURRENCY < 1 or settings_obj.CRAWL_CONCURRENCY > 20:
+            raise RuntimeError(
+                "CRITICAL RESOURCE LIMIT ERROR: CRAWL_CONCURRENCY must be between 1 and 20."
             )
         if settings_obj.ALLOW_PAYMENT_TEST_MOCKS:
             raise RuntimeError(
