@@ -59,11 +59,12 @@ class CompleteGeoReportGenerator:
 
         # Extractability and Visibility values
         extractability_score = getattr(g, "extractability_score", None) if g else None
-        if extractability_score is None and scores:
-            extractability_score = getattr(scores, "geo_score", None)
-
         visibility_status = getattr(v_card, "status", "NOT_MEASURED") if v_card else "NOT_MEASURED"
-        citation_rate = getattr(report, "ai_visibility_score", None)
+        citation_rate = (
+            getattr(v_card, "citation_rate_pct", None)
+            if v_card and getattr(v_card, "status", "NOT_MEASURED") == "MEASURED" and getattr(v_card, "citation_rate_pct", None) is not None
+            else None
+        )
 
         return {
             "report_id": report.report_id,
@@ -72,7 +73,7 @@ class CompleteGeoReportGenerator:
             "website_url": report.website_url,
             "generated_at": report.generated_at,
             "report_type": "GEO_MASTER_AUDIT_2026",
-            "certification_status": getattr(report, "certification_status", "CERTIFIED"),
+            "certification_status": (getattr(report, "certification_status", None) or "NOT_ASSESSED"),
             "kpis": {
                 "extractability_score": extractability_score,
                 "ai_visibility_status": visibility_status,
@@ -98,9 +99,10 @@ class CompleteGeoReportGenerator:
                 "02_audit_scope_and_methodology": {
                     "domain": report.domain,
                     "pages_crawled": len(report.page_reports),
-                    "supported_platforms": ["ChatGPT Search", "Perplexity", "Google AI Overviews", "Gemini", "Claude"],
+                    "platforms_queried": list(getattr(v_card, "engines_queried", []) or []) if v_card else [],
+                    "platforms_not_queried": list(getattr(v_card, "surfaces_not_queried", []) or []) if v_card else ["Not assessed"],
                     "evaluation_date": report.generated_at,
-                    "disclaimer": "All metrics are derived from authenticated DOM crawls, deterministic parsers, and live AI engine connectors. Zero simulated or fabricated citations.",
+                    "disclaimer": "Data provenance and measurement status are reported per section. Unavailable, inferred and simulated observations must not be interpreted as live measurements.",
                 },
                 "03_website_and_brand_baseline": {
                     "entity_name": getattr(g, "entity_name", report.domain) if g else report.domain,
@@ -108,14 +110,15 @@ class CompleteGeoReportGenerator:
                     "resolved_entity": report.resolved_entity.model_dump() if getattr(report, "resolved_entity", None) else None,
                 },
                 "04_ai_discoverability_and_crawler_access": {
-                    "robots_txt_present": bool(report.crawl_manifest and report.crawl_manifest.robots_txt_checked),
-                    "sitemaps_detected": bool(report.crawl_manifest and report.crawl_manifest.sitemaps_detected),
-                    "ai_bots_audited": ["GPTBot", "OAI-SearchBot", "PerplexityBot", "Google-Extended", "ClaudeBot", "Bytespider"],
+                    "robots_txt_present": getattr(report.crawl_manifest, "robots_txt_found", None) if report.crawl_manifest else None,
+                    "sitemaps_detected": getattr(report.crawl_manifest, "sitemap_found", None) if report.crawl_manifest else None,
+                    "ai_bots_audited": getattr(report, "ai_bots_audited", None),
+                    "ai_bots_audit_status": "ASSESSED" if getattr(report, "ai_bots_audited", None) is not None else "NOT_ASSESSED",
                     "status_code_breakdown": report.http_status_breakdown.model_dump() if report.http_status_breakdown else None,
                 },
                 "05_technical_accessibility_and_content_parity": {
                     "canonical_audit": report.canonical_audit.model_dump() if report.canonical_audit else None,
-                    "rendering_parity_notes": "DOM text extracted via headless browser and direct HTTP streams to verify zero hidden client-side critical answers.",
+                    "rendering_parity_notes": "NOT_ASSESSED: this report does not carry explicit rendering-parity evidence.",
                 },
                 "06_content_extractability_and_answer_readiness": {
                     "extractability_score": extractability_score,
@@ -146,12 +149,14 @@ class CompleteGeoReportGenerator:
                     "citation_rate": citation_rate,
                 },
                 "11_citation_analysis_and_source_attribution": {
-                    "distinct_citations_found": getattr(v_card, "successful_runs", 0) if v_card else 0,
-                    "source_distribution": "First-party domain vs aggregator citations",
+                    "distinct_citations_found": None,
+                    "citation_count_status": "NOT_MEASURED: successful response count is not a distinct citation count.",
+                    "source_distribution": None,
                 },
                 "12_answer_accuracy_and_brand_representation": {
-                    "hallucinations_detected": 0,
-                    "brand_sentiment_context": "Evaluated against ground truth brand baseline.",
+                    "hallucinations_detected": None,
+                    "hallucination_status": "NOT_ASSESSED",
+                    "brand_sentiment_context": "Assessed only when validated live responses and a grounded claim set are available.",
                 },
                 "13_competitive_geo_benchmarking": {
                     "competitor_report": report.competitive_report,
@@ -191,7 +196,7 @@ class CompleteGeoReportGenerator:
                     "per_engine_geo": report.per_engine_geo.model_dump() if report.per_engine_geo else None,
                 },
                 "18_business_impact_and_measurement": {
-                    "ai_referral_tracking": "Configured via GA4 referral channel isolation.",
+                    "ai_referral_tracking": "Not assessed unless verified GA4 referral data is connected.",
                     "attribution_disclaimer": "Citation count is an intermediate visibility metric, not proof of revenue attribution.",
                 },
                 "19_prioritized_remediation_roadmap": {
@@ -220,17 +225,24 @@ class CompleteGeoReportGenerator:
         scores = getattr(report, "scores", None)
 
         extractability_score = getattr(g, "extractability_score", None) if g else None
-        if extractability_score is None and scores:
-            extractability_score = getattr(scores, "geo_score", None)
 
         ext_display = f"{int(round(extractability_score))}" if extractability_score is not None else "N/A"
-        ext_color = "#10b981" if (extractability_score and extractability_score >= 80) else ("#f59e0b" if (extractability_score and extractability_score >= 60) else "#ef4444")
+        ext_color = (
+            "#64748b" if extractability_score is None
+            else "#10b981" if extractability_score >= 80
+            else "#f59e0b" if extractability_score >= 60
+            else "#ef4444"
+        )
 
         visibility_status = getattr(v_card, "status", "NOT_MEASURED") if v_card else "NOT_MEASURED"
         vis_color = "#10b981" if visibility_status == "MEASURED" else "#64748b"
 
-        citation_rate = getattr(report, "ai_visibility_score", None)
-        cit_display = f"{int(round(citation_rate * 100))}%" if citation_rate is not None else "Unmeasured"
+        citation_rate = (
+            getattr(v_card, "citation_rate_pct", None)
+            if v_card and getattr(v_card, "measurement_kind", "NOT_MEASURED") != "NOT_MEASURED"
+            else None
+        )
+        cit_display = f"{int(round(citation_rate))}%" if citation_rate is not None else "Unmeasured"
 
         questions_total = getattr(g, "questions_total", 0) if g else 0
         questions_supp = getattr(g, "questions_supported", 0) if g else 0
@@ -841,13 +853,13 @@ class CompleteGeoReportGenerator:
             <p>Ground-truth reference baseline established before evaluating AI answer fidelity and potential brand misrepresentations:</p>
             <table>
                 <thead>
-                    <tr><th>Entity Property</th><th>Verified Baseline</th><th>Provenance Source</th></tr>
+                    <tr><th>Entity Property</th><th>Observed / Declared Value</th><th>Evidence Status</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td>Official Entity Name</td><td>{html.escape(getattr(g, 'entity_name', domain) if g else domain)}</td><td>Verified Organization schema and Homepage H1</td></tr>
-                    <tr><td>Primary Domain</td><td>{website_url}</td><td>Canonical host header</td></tr>
+                    <tr><td>Official Entity Name</td><td>{html.escape(getattr(g, 'entity_name', domain) if g else domain)}</td><td>Audit context; independent verification not asserted</td></tr>
+                    <tr><td>Primary Domain</td><td>{website_url}</td><td>Target URL supplied to this audit; canonicality must be separately verified</td></tr>
                     <tr><td>Market Focus</td><td>{html.escape(getattr(g, 'market_country', 'Global') if g else 'Global')} ({html.escape(getattr(g, 'market_language', 'en') if g else 'en')})</td><td>Audit context declaration</td></tr>
-                    <tr><td>Declared Products / Services</td><td>{html.escape(getattr(report.business_profile, 'primary_service', 'Web Software & Services') if report.business_profile else 'Web Software & Services')}</td><td>Commercial navigation and title tags</td></tr>
+                    <tr><td>Declared Products / Services</td><td>{html.escape(getattr(report.business_profile, 'primary_service', None) or 'Not provided' if report.business_profile else 'Not provided')}</td><td>Business profile input; on-page support must be checked separately</td></tr>
                 </tbody>
             </table>
         </section>
@@ -858,18 +870,18 @@ class CompleteGeoReportGenerator:
                 <h2 class="section-title">04. AI Discoverability & Crawler Access (Bot Directives)</h2>
                 <span class="section-tag">Crawlability</span>
             </div>
-            <p>Evaluation of bot-specific access rules across major AI platform crawlers:</p>
+            <p>Bot access is not inferred from AI provider APIs. Each status remains unassessed unless robots.txt or dedicated crawler-access evidence is attached.</p>
             <table>
                 <thead>
                     <tr><th>User-Agent / Bot</th><th>Platform</th><th>Directive Status</th><th>Impact on Indexation & Live Citability</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td>GPTBot</td><td>OpenAI Training & Retrieval</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Allows OpenAI engines to ingest full content</td></tr>
-                    <tr><td>OAI-SearchBot</td><td>ChatGPT Search Live Web</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Required for real-time live citations in SearchGPT</td></tr>
-                    <tr><td>PerplexityBot</td><td>Perplexity Live Search</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Required for Perplexity answer links & source cards</td></tr>
-                    <tr><td>Google-Extended</td><td>Gemini / Google AI Training</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Controls inclusion in Google foundational training datasets</td></tr>
-                    <tr><td>ClaudeBot</td><td>Anthropic Claude Retrieval</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>Required for Claude live-search citations</td></tr>
-                    <tr><td>Bytespider</td><td>ByteDance AI Systems</td><td><span class="finding-badge sev-low">ACCESSIBLE</span></td><td>High-frequency crawler for international multimodal models</td></tr>
+                    <tr><td>GPTBot</td><td>OpenAI Training & Retrieval</td><td><span class="finding-badge">NOT ASSESSED</span></td><td>Requires direct robots.txt and crawler-policy evidence; not assessed here</td></tr>
+                    <tr><td>OAI-SearchBot</td><td>ChatGPT Search Live Web</td><td><span class="finding-badge">NOT ASSESSED</span></td><td>Consumer search visibility is not established by API responses; not assessed here</td></tr>
+                    <tr><td>PerplexityBot</td><td>Perplexity Live Search</td><td><span class="finding-badge">NOT ASSESSED</span></td><td>Requires direct crawler-policy evidence; not assessed here</td></tr>
+                    <tr><td>Google-Extended</td><td>Gemini / Google AI Training</td><td><span class="finding-badge">NOT ASSESSED</span></td><td>Training access and live search access are distinct; not assessed here</td></tr>
+                    <tr><td>ClaudeBot</td><td>Anthropic Claude Retrieval</td><td><span class="finding-badge">NOT ASSESSED</span></td><td>Requires direct crawler-policy evidence; not assessed here</td></tr>
+                    <tr><td>Bytespider</td><td>ByteDance AI Systems</td><td><span class="finding-badge">NOT ASSESSED</span></td><td>Requires direct crawler-policy evidence; not assessed here</td></tr>
                 </tbody>
             </table>
         </section>
@@ -1002,9 +1014,9 @@ class CompleteGeoReportGenerator:
                     <tr><th>Source Class</th><th>Attribution Rate</th><th>Strategic Significance</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td>First-Party Website ({domain})</td><td>{cit_display}</td><td>Direct citation to official documentation and commercial pricing</td></tr>
-                    <tr><td>Third-Party Industry Reviews (G2, Capterra)</td><td>Elevated</td><td>AI engines frequently prefer aggregated consensus over first-party claims</td></tr>
-                    <tr><td>Independent Authoritative Press</td><td>Moderate</td><td>Corroborates brand entity validity in knowledge graphs</td></tr>
+                    <tr><td>First-Party Website ({domain})</td><td>Not measured</td><td>Requires source-level citation URL counts, not overall citation rate</td></tr>
+                    <tr><td>Third-Party Industry Reviews (G2, Capterra)</td><td>Not assessed</td><td>Requires observed third-party source evidence</td></tr>
+                    <tr><td>Independent Authoritative Press</td><td>Not assessed</td><td>Requires observed independent source evidence</td></tr>
                 </tbody>
             </table>
         </section>
@@ -1019,11 +1031,11 @@ class CompleteGeoReportGenerator:
             <div class="field-grid">
                 <div class="field-item">
                     <span class="field-label">Material Hallucinations Detected</span>
-                    <span class="field-val">0 Critical Brand Hallucinations identified in baseline.</span>
+                    <span class="field-val">Not assessed — no validated live-response claim audit is attached to this report.</span>
                 </div>
                 <div class="field-item">
                     <span class="field-label">Sentiment vs Factual Correctness</span>
-                    <span class="field-val">Neutral to Positive framing. Crucially, tone is not substituted for factual verification.</span>
+                    <span class="field-val">Not assessed unless successful live responses and a grounded fact set are available.</span>
                 </div>
             </div>
         </section>
@@ -1037,11 +1049,11 @@ class CompleteGeoReportGenerator:
             <p>Peer comparison against direct category competitors across identical commercial query sets:</p>
             <table>
                 <thead>
-                    <tr><th>Entity</th><th>Observed AI Citation Share</th><th>Passage Extractability</th><th>Primary Strengths</th></tr>
+                    <tr><th>Entity</th><th>Observed mention/citation rate</th><th>Readiness score</th><th>Evidence status</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td><strong>{domain} (Target)</strong></td><td>{cit_display}</td><td>{ext_display}/100</td><td>Strong technical architecture and clean DOM semantics</td></tr>
-                    <tr><td>Leading Category Competitor</td><td>Benchmarking...</td><td>78/100</td><td>Extensive third-party review citations and comparative guides</td></tr>
+                    <tr><td><strong>{domain} (Target)</strong></td><td>{cit_display}</td><td>{ext_display}</td><td>Based on measured report fields; see evidence register</td></tr>
+                    <tr><td>Competitors</td><td>Not measured</td><td>Not measured</td><td>Requires a configured competitor set and comparable live query results</td></tr>
                 </tbody>
             </table>
         </section>
@@ -1163,7 +1175,7 @@ class CompleteGeoReportGenerator:
                 <tbody>
                     <tr><td>Evidence Ledger Size</td><td>{len(report.evidence_ledger) if report.evidence_ledger else 0} verified tokens</td></tr>
                     <tr><td>Scoring Rubric Version</td><td>{report.scoring_rubric_version}</td></tr>
-                    <tr><td>Report Manifest Status</td><td>{getattr(report, 'certification_status', 'CERTIFIED')}</td></tr>
+                    <tr><td>Report Manifest Status</td><td>{(getattr(report, 'certification_status', None) or 'NOT_ASSESSED')}</td></tr>
                     <tr><td>Verification Rule</td><td>Fixed is not Verified. Retests must demonstrate crawler extraction.</td></tr>
                 </tbody>
             </table>
