@@ -59,11 +59,12 @@ class CompleteGeoReportGenerator:
 
         # Extractability and Visibility values
         extractability_score = getattr(g, "extractability_score", None) if g else None
-        if extractability_score is None and scores:
-            extractability_score = getattr(scores, "geo_score", None)
-
         visibility_status = getattr(v_card, "status", "NOT_MEASURED") if v_card else "NOT_MEASURED"
-        citation_rate = getattr(report, "ai_visibility_score", None)
+        citation_rate = (
+            getattr(v_card, "citation_rate_pct", None)
+            if v_card and getattr(v_card, "measurement_kind", "NOT_MEASURED") != "NOT_MEASURED"
+            else None
+        )
 
         return {
             "report_id": report.report_id,
@@ -72,7 +73,7 @@ class CompleteGeoReportGenerator:
             "website_url": report.website_url,
             "generated_at": report.generated_at,
             "report_type": "GEO_MASTER_AUDIT_2026",
-            "certification_status": getattr(report, "certification_status", "CERTIFIED"),
+            "certification_status": getattr(report, "certification_status", "NOT_ASSESSED"),
             "kpis": {
                 "extractability_score": extractability_score,
                 "ai_visibility_status": visibility_status,
@@ -98,9 +99,9 @@ class CompleteGeoReportGenerator:
                 "02_audit_scope_and_methodology": {
                     "domain": report.domain,
                     "pages_crawled": len(report.page_reports),
-                    "supported_platforms": ["ChatGPT Search", "Perplexity", "Google AI Overviews", "Gemini", "Claude"],
+                    "platforms_queried": list(getattr(v_card, "engines_queried", []) or []) if v_card else [],\n                    "platforms_not_queried": list(getattr(v_card, "surfaces_not_queried", []) or []) if v_card else ["Not assessed"],
                     "evaluation_date": report.generated_at,
-                    "disclaimer": "All metrics are derived from authenticated DOM crawls, deterministic parsers, and live AI engine connectors. Zero simulated or fabricated citations.",
+                    "disclaimer": "Data provenance and measurement status are reported per section. Unavailable, inferred and simulated observations must not be interpreted as live measurements.",
                 },
                 "03_website_and_brand_baseline": {
                     "entity_name": getattr(g, "entity_name", report.domain) if g else report.domain,
@@ -115,7 +116,7 @@ class CompleteGeoReportGenerator:
                 },
                 "05_technical_accessibility_and_content_parity": {
                     "canonical_audit": report.canonical_audit.model_dump() if report.canonical_audit else None,
-                    "rendering_parity_notes": "DOM text extracted via headless browser and direct HTTP streams to verify zero hidden client-side critical answers.",
+                    "rendering_parity_notes": "NOT_ASSESSED: this report does not carry explicit rendering-parity evidence.",
                 },
                 "06_content_extractability_and_answer_readiness": {
                     "extractability_score": extractability_score,
@@ -1163,7 +1164,7 @@ class CompleteGeoReportGenerator:
                 <tbody>
                     <tr><td>Evidence Ledger Size</td><td>{len(report.evidence_ledger) if report.evidence_ledger else 0} verified tokens</td></tr>
                     <tr><td>Scoring Rubric Version</td><td>{report.scoring_rubric_version}</td></tr>
-                    <tr><td>Report Manifest Status</td><td>{getattr(report, 'certification_status', 'CERTIFIED')}</td></tr>
+                    <tr><td>Report Manifest Status</td><td>{getattr(report, 'certification_status', 'NOT_ASSESSED')}</td></tr>
                     <tr><td>Verification Rule</td><td>Fixed is not Verified. Retests must demonstrate crawler extraction.</td></tr>
                 </tbody>
             </table>
