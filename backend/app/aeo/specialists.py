@@ -100,18 +100,19 @@ class QuestionDiscoverySpecialist(BaseAeoSpecialist):
         questions = getattr(g, "questions", []) if g else []
         total = len(questions)
 
+        pages = getattr(report, "page_reports", []) or []
         findings = []
-        if total == 0:
+        if total == 0 and pages:
             findings.append(AeoFindingRecord(
                 finding_id="AEO-QDISC-001",
                 priority="P1",
                 evidence_state=EvidenceState.SAMPLE_VERIFIED,
                 question="What core customer questions does the brand solve?",
-                observed_issue="Zero explicit customer question headings or FAQ sections detected in page crawl.",
+                observed_issue="No customer questions were present in the generated question inventory for the available crawl sample.",
                 evidence_url=getattr(report, "website_url", ""),
-                evidence_excerpt="No H2/H3 question structures found.",
+                evidence_excerpt="Question inventory returned zero entries; this does not establish that the site has no answers.",
                 collection_timestamp=datetime.now(timezone.utc).isoformat(),
-                scope="Site-wide homepage & priority landing pages.",
+                scope="Available crawled page sample; consult the audit's URL coverage before generalizing.",
                 why_it_matters="Search engines and AI answer systems require clear question anchors to associate queries with brand answers.",
                 recommended_fix="Implement question-led H2 subheadings addressing core buyer intent.",
                 validation="Re-crawl confirms at least 5 explicit H2 question blocks.",
@@ -123,8 +124,18 @@ class QuestionDiscoverySpecialist(BaseAeoSpecialist):
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.SAMPLE_VERIFIED if total > 0 else EvidenceState.VERIFIED,
-            summary=f"Discovered {total} customer queries across analyzed page corpus.",
+            status=(
+                EvidenceState.SAMPLE_VERIFIED if total > 0
+                else EvidenceState.SAMPLE_VERIFIED if pages
+                else EvidenceState.NOT_TESTED
+            ),
+            summary=(
+                f"Discovered {total} customer queries across analyzed page corpus."
+                if total else
+                "No question inventory was available; no site-wide absence claim was made."
+                if not pages else
+                "No explicit customer questions were found in the available crawl sample."
+            ),
             findings=findings,
             metadata={"questions_count": total},
         )
@@ -156,8 +167,11 @@ class IntentClassificationSpecialist(BaseAeoSpecialist):
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.VERIFIED,
-            summary=f"Classified questions across {len(intents_found)} distinct intent dimensions.",
+            status=EvidenceState.SAMPLE_VERIFIED if questions else EvidenceState.NOT_TESTED,
+            summary=(
+                f"Applied keyword-based intent heuristics to {len(questions)} questions across {len(intents_found)} intent labels."
+                if questions else "No questions were available for intent classification."
+            ),
             findings=[],
             metadata={"intent_breakdown": intents_found},
         )
@@ -180,8 +194,11 @@ class QuestionClusteringSpecialist(BaseAeoSpecialist):
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.SAMPLE_VERIFIED,
-            summary=f"Organized inquiries into {len(clusters)} semantic topic clusters.",
+            status=EvidenceState.SAMPLE_VERIFIED if questions else EvidenceState.NOT_TESTED,
+            summary=(
+                f"Grouped {len(questions)} questions by existing category labels into {len(clusters)} groups; this is not semantic clustering."
+                if questions else "No questions were available for clustering."
+            ),
             findings=[],
             metadata={"cluster_count": len(clusters)},
         )
@@ -218,8 +235,16 @@ class AnswerQualitySpecialist(BaseAeoSpecialist):
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.SAMPLE_VERIFIED,
-            summary="Evaluated answer directness and conciseness across primary landing pages.",
+            status=(
+                EvidenceState.SAMPLE_VERIFIED
+                if getattr(g, "questions_total", 0) > 0
+                else EvidenceState.NOT_TESTED
+            ),
+            summary=(
+                "Reviewed answer-support counts from the available question evaluation; passage-level quality evidence is not attached by this specialist."
+                if getattr(g, "questions_total", 0) > 0
+                else "Answer quality was not tested because no assessed question inventory is available."
+            ),
             findings=findings,
             metadata={"unsupported_count": unsupp},
         )
@@ -255,8 +280,12 @@ class FactualVerificationSpecialist(BaseAeoSpecialist):
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.VERIFIED if not contradictions else EvidenceState.SAMPLE_VERIFIED,
-            summary=f"Detected {len(contradictions)} cross-page factual contradictions.",
+            status=EvidenceState.SAMPLE_VERIFIED if contradictions else EvidenceState.NOT_TESTED,
+            summary=(
+                f"Recorded {len(contradictions)} contradiction record(s); underlying claims still require source review."
+                if contradictions else
+                "No contradiction records were supplied; this does not establish that all factual claims were verified."
+            ),
             findings=findings,
             metadata={"contradiction_count": len(contradictions)},
         )
@@ -269,15 +298,17 @@ class EntityConsistencySpecialist(BaseAeoSpecialist):
 
     def evaluate(self, report: Any) -> SpecialistResult:
         g = getattr(report, "geo_readiness", None)
-        entity_name = getattr(g, "entity_name", getattr(report, "domain", ""))
+        entity_name = getattr(g, "entity_name", None) if g else None
+        # A report/domain name is not independent corroboration of entity identity.
+        # This specialist currently has no source-comparison evidence contract.
         return SpecialistResult(
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.VERIFIED,
-            summary=f"Validated canonical entity '{entity_name}' against schema markup and DOM headings.",
+            status=EvidenceState.NOT_TESTED,
+            summary="Cross-source entity consistency was not tested by this specialist; a first-party name alone is insufficient.",
             findings=[],
-            metadata={"entity_name": entity_name},
+            metadata={"entity_name": entity_name, "measurement_status": "NOT_TESTED"},
         )
 
 
@@ -288,15 +319,26 @@ class PassageAnalysisSpecialist(BaseAeoSpecialist):
 
     def evaluate(self, report: Any) -> SpecialistResult:
         g = getattr(report, "geo_readiness", None)
-        extract_score = getattr(g, "extractability_score", 80.0) if g else 80.0
+        extract_score = getattr(g, "extractability_score", None) if g else None
+        if not isinstance(extract_score, (int, float)):
+            return SpecialistResult(
+                specialist_id=self.specialist_id,
+                specialist_name=self.specialist_name,
+                responsibility=self.responsibility,
+                status=EvidenceState.NOT_TESTED,
+                summary="Passage extractability was not measured; no default score was substituted.",
+                findings=[],
+                metadata={"extractability_score": None, "measurement_status": "NOT_TESTED"},
+            )
+        extract_score = max(0.0, min(100.0, float(extract_score)))
         return SpecialistResult(
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
             status=EvidenceState.SAMPLE_VERIFIED,
-            summary=f"Passage extractability baseline assessed at {extract_score}%.",
+            summary=f"Passage extractability measured at {extract_score:.1f}/100.",
             findings=[],
-            metadata={"extractability_score": extract_score},
+            metadata={"extractability_score": extract_score, "measurement_status": "MEASURED"},
         )
 
 
@@ -307,20 +349,21 @@ class TechnicalEligibilitySpecialist(BaseAeoSpecialist):
 
     def evaluate(self, report: Any) -> SpecialistResult:
         pages = getattr(report, "page_reports", []) or []
-        noindex_pages = [p for p in pages if not getattr(p, "is_indexable", True)]
+        # Missing indexability data is unknown, not indexable and not non-indexable.
+        noindex_pages = [p for p in pages if getattr(p, "is_indexable", None) is False]
         findings = []
         if noindex_pages:
             findings.append(AeoFindingRecord(
                 finding_id="AEO-TECH-001",
                 priority="P0",
-                evidence_state=EvidenceState.VERIFIED,
+                evidence_state=EvidenceState.SAMPLE_VERIFIED,
                 question="Can answer engines access and index all key answer pages?",
-                observed_issue=f"{len(noindex_pages)} potential answer pages are marked noindex or blocked.",
-                evidence_url=noindex_pages[0].url if noindex_pages else "",
-                evidence_excerpt="Robots meta directive: noindex",
+                observed_issue=f"{len(noindex_pages)} analyzed page(s) are explicitly marked non-indexable in the crawl data; the cause requires directive-level confirmation.",
+                evidence_url=getattr(noindex_pages[0], "url", "") if noindex_pages else "",
+                evidence_excerpt=f"Observed is_indexable=False for {getattr(noindex_pages[0], 'url', 'analyzed page')}; inspect meta robots, X-Robots-Tag, and robots.txt before remediation.",
                 collection_timestamp=datetime.now(timezone.utc).isoformat(),
                 scope="Crawl indexability.",
-                why_it_matters="Noindex directives disqualify pages from both traditional search and AI answer retrieval.",
+                why_it_matters="A confirmed exclusion directive can prevent search indexing; this observation alone does not prove the underlying cause or guarantee how an answer engine retrieves the page.",
                 recommended_fix="Remove accidental noindex tags from public question and documentation pages.",
                 validation="HTTP headers and meta robots show 'index, follow'.",
                 success_metrics="Indexability score = 100%.",
@@ -331,8 +374,15 @@ class TechnicalEligibilitySpecialist(BaseAeoSpecialist):
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.VERIFIED,
-            summary=f"Inspected {len(pages)} URLs for crawlability, indexability, and schema eligibility.",
+            status=(
+                EvidenceState.SAMPLE_VERIFIED
+                if pages and any(getattr(p, "is_indexable", None) is not None or getattr(p, "status_code", None) is not None for p in pages)
+                else EvidenceState.NOT_TESTED
+            ),
+            summary=(
+                f"Inspected {len(pages)} URL record(s); only explicit crawl observations are counted."
+                if pages else "No page records were available for technical eligibility checks."
+            ),
             findings=findings,
             metadata={"pages_audited": len(pages), "noindex_count": len(noindex_pages)},
         )
@@ -344,14 +394,16 @@ class SourceAttributionSpecialist(BaseAeoSpecialist):
     responsibility = "Trace asserted claims to primary documentation, original data, or credible third-party references"
 
     def evaluate(self, report: Any) -> SpecialistResult:
+        # This module does not yet resolve claims to source passages. Do not label
+        # the capability verified until claim-to-source links are actually assessed.
         return SpecialistResult(
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.SAMPLE_VERIFIED,
-            summary="Verified source attribution for technical capabilities and compliance declarations.",
+            status=EvidenceState.NOT_TESTED,
+            summary="Claim-to-source attribution was not tested; no source-to-claim evidence map was produced.",
             findings=[],
-            metadata={},
+            metadata={"measurement_status": "NOT_TESTED"},
         )
 
 
@@ -364,12 +416,18 @@ class LiveBenchmarkSpecialist(BaseAeoSpecialist):
         v_card = getattr(report, "ai_visibility_scorecard", None)
         v_status = getattr(v_card, "status", "NOT_MEASURED") if v_card else "NOT_MEASURED"
 
-        if v_status == "MEASURED":
-            status = EvidenceState.VERIFIED
-            summary = "Direct live benchmark tests recorded across target answer surfaces."
+        raw_responses = (
+            getattr(v_card, "raw_responses", None)
+            or getattr(v_card, "responses", None)
+            or getattr(report, "ai_visibility_responses", None)
+            or []
+        ) if v_card or report else []
+        if v_status == "MEASURED" and raw_responses:
+            status = EvidenceState.SAMPLE_VERIFIED
+            summary = f"Live benchmark status is measured and {len(raw_responses)} response record(s) are available for inspection."
         else:
             status = EvidenceState.NOT_TESTED
-            summary = "External answer engine credentials unconfigured. Zero synthetic or simulated appearances reported."
+            summary = "No inspectable live response records were available; status metadata alone is not proof of an executed benchmark."
 
         return SpecialistResult(
             specialist_id=self.specialist_id,
@@ -390,16 +448,30 @@ class CitationAnalysisSpecialist(BaseAeoSpecialist):
     def evaluate(self, report: Any) -> SpecialistResult:
         v_card = getattr(report, "ai_visibility_scorecard", None)
         v_status = getattr(v_card, "status", "NOT_MEASURED") if v_card else "NOT_MEASURED"
-        status = EvidenceState.VERIFIED if v_status == "MEASURED" else EvidenceState.NOT_TESTED
-
+        raw_responses = (
+            getattr(v_card, "raw_responses", None)
+            or getattr(v_card, "responses", None)
+            or getattr(report, "ai_visibility_responses", None)
+            or []
+        ) if v_card or report else []
+        has_citation_data = any(
+            getattr(response, "citations", None) or
+            (isinstance(response, dict) and response.get("citations"))
+            for response in raw_responses
+        )
+        status = EvidenceState.SAMPLE_VERIFIED if has_citation_data else EvidenceState.NOT_TESTED
         return SpecialistResult(
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
             status=status,
-            summary="Citation distribution analysis ready for live benchmark datasets.",
+            summary=(
+                f"Found citation records in {len(raw_responses)} live response(s); claim-to-source validity still requires evaluation."
+                if has_citation_data else
+                "Citation analysis was not executed because inspectable response citation records are unavailable."
+            ),
             findings=[],
-            metadata={},
+            metadata={"response_count": len(raw_responses), "has_citation_data": bool(has_citation_data)},
         )
 
 
@@ -415,7 +487,10 @@ class CompetitiveIntelligenceSpecialist(BaseAeoSpecialist):
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
             status=EvidenceState.SAMPLE_VERIFIED if comp else EvidenceState.NOT_TESTED,
-            summary="Evaluated competitor answer presence and comparison content gaps.",
+            summary=(
+                "Competitor report data is present; comparability of engines, queries, regions, and run windows has not been independently established here."
+                if comp else "No competitor answer dataset was available for comparison."
+            ),
             findings=[],
             metadata={"has_competitor_data": bool(comp)},
         )
@@ -427,14 +502,16 @@ class BrandAccuracySpecialist(BaseAeoSpecialist):
     responsibility = "Detect incorrect brand facts, outdated pricing, and unsupported recommendations in engine answers"
 
     def evaluate(self, report: Any) -> SpecialistResult:
+        # No engine-answer claims are compared against an authoritative brand-fact
+        # register in this method yet; report the gap honestly.
         return SpecialistResult(
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.SAMPLE_VERIFIED,
-            summary="Audited core brand claims to prevent answer-engine hallucination vectors.",
+            status=EvidenceState.NOT_TESTED,
+            summary="Brand-fact accuracy was not tested because no claim-to-authoritative-fact comparison was performed.",
             findings=[],
-            metadata={},
+            metadata={"measurement_status": "NOT_TESTED"},
         )
 
 
@@ -468,8 +545,11 @@ class RemediationPlannerSpecialist(BaseAeoSpecialist):
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.VERIFIED,
-            summary=f"Synthesized remediation plan covering {len(findings)} findings ({p0} P0 critical, {p1} P1 high).",
+            status=EvidenceState.SAMPLE_VERIFIED if findings else EvidenceState.NOT_TESTED,
+            summary=(
+                f"Counted {len(findings)} existing findings ({p0} P0 critical, {p1} P1 high); root-cause ranking and evidence validation are not performed by this specialist."
+                if findings else "No findings were available to plan remediation against."
+            ),
             findings=[],
             metadata={"p0": p0, "p1": p1, "total": len(findings)},
         )
@@ -485,8 +565,8 @@ class VerificationEngineSpecialist(BaseAeoSpecialist):
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.VERIFIED,
-            summary="Verification engine initialized for automated re-crawling and assertion testing.",
+            status=EvidenceState.NOT_TESTED,
+            summary="No remediation recrawl or acceptance-criteria retest was executed by this specialist.",
             findings=[],
             metadata={},
         )

@@ -177,24 +177,36 @@ class AeoMetricsCalculator:
         else:
             ans_comp_pct = None
 
+        # Do not substitute question coverage for extractability: they are different
+        # measurements. Missing metrics remain unavailable rather than becoming defaults.
         extract_score = getattr(g, "extractability_score", None) if g else None
-        if extract_score is None and q_cov_pct is not None:
-            extract_score = q_cov_pct
 
-        # Factual support: claims without contradiction
+        # Factual support requires an explicit assessed-claims denominator. A list of
+        # contradictions alone cannot establish a factual-accuracy percentage.
         contradictions = getattr(report, "contradictions", []) or []
-        if q_total > 0:
-            fact_support_pct = max(0.0, round(100.0 - (len(contradictions) * 15.0), 1))
+        claims_assessed = getattr(report, "claims_assessed", None)
+        supported_claims = getattr(report, "supported_claims", None)
+        if (
+            isinstance(claims_assessed, int) and claims_assessed > 0
+            and isinstance(supported_claims, int) and 0 <= supported_claims <= claims_assessed
+        ):
+            fact_support_pct = round((supported_claims / claims_assessed) * 100.0, 1)
         else:
-            fact_support_pct = 85.0 if not contradictions else 50.0
+            fact_support_pct = None
 
-        freshness_score = 90.0 if not any(
-            "outdated" in f.title.lower() or "stale" in f.title.lower() for f in findings
-        ) else 65.0
+        # Freshness is not inferable from the absence of a "stale" finding. Require
+        # a value explicitly produced by a freshness evaluator.
+        freshness_score = getattr(g, "freshness_consistency_score", None) if g else None
 
+        # A composite is published only when every declared component is measured.
+        # This avoids silently changing weights based on which data happened to exist.
         comp_readiness = None
-        if q_cov_pct is not None and extract_score is not None:
-            comp_readiness = round((q_cov_pct * 0.4) + (extract_score * 0.4) + (fact_support_pct * 0.2), 1)
+        readiness_components = (q_cov_pct, ans_comp_pct, extract_score, fact_support_pct)
+        if all(isinstance(v, (int, float)) for v in readiness_components):
+            comp_readiness = round(
+                (q_cov_pct * 0.30) + (ans_comp_pct * 0.20)
+                + (extract_score * 0.30) + (fact_support_pct * 0.20), 1
+            )
 
         pillar_a = ContentReadinessPillar(
             question_coverage_pct=q_cov_pct,
@@ -212,18 +224,50 @@ class AeoMetricsCalculator:
         # -------------------------------------------------------------
         n_pages = len(page_reports)
         if n_pages > 0:
-            indexable_count = sum(1 for p in page_reports if getattr(p, "is_indexable", True))
-            status_200_count = sum(1 for p in page_reports if getattr(p, "status_code", 200) == 200)
-            schema_count = sum(1 for p in page_reports if getattr(p, "schema_types", []))
+            # Only calculate a dimension when its underlying observations are present.
+            known_statuses = [getattr(p, "status_code", None) for p in page_reports]
+            known_indexability = [getattr(p, "is_indexable", None) for p in page_reports]
+            known_schema_validity = [getattr(p, "schema_valid", None) for p in page_reports]
+            known_discovery = [getattr(p, "internal_discovery_verified", None) for p in page_reports]
+            known_url_stability = [getattr(p, "url_stability_verified", None) for p in page_reports]
 
-            crawl_score = round((status_200_count / n_pages) * 100.0, 1)
-            index_score = round((indexable_count / n_pages) * 100.0, 1)
-            schema_score = round((schema_count / n_pages) * 100.0, 1)
-            internal_disc_score = 88.0  # Default verified crawl crawl-depth
-            url_stab_score = 92.0
+            crawl_score = (
+                round(sum(1 for code in known_statuses if isinstance(code, int) and 200 <= code < 400)
+                      / sum(1 for code in known_statuses if isinstance(code, int)) * 100.0, 1)
+                if any(isinstance(code, int) for code in known_statuses) else None
+            )
+            index_score = (
+                round(sum(1 for value in known_indexability if value is True)
+                      / sum(1 for value in known_indexability if isinstance(value, bool)) * 100.0, 1)
+                if any(isinstance(value, bool) for value in known_indexability) else None
+            )
+            schema_score = (
+                round(sum(1 for value in known_schema_validity if value is True)
+                      / sum(1 for value in known_schema_validity if isinstance(value, bool)) * 100.0, 1)
+                if any(isinstance(value, bool) for value in known_schema_validity) else None
+            )
+            internal_disc_score = (
+                round(sum(1 for value in known_discovery if value is True)
+                      / sum(1 for value in known_discovery if isinstance(value, bool)) * 100.0, 1)
+                if any(isinstance(value, bool) for value in known_discovery) else None
+            )
+            url_stab_score = (
+                round(sum(1 for value in known_url_stability if value is True)
+                      / sum(1 for value in known_url_stability if isinstance(value, bool)) * 100.0, 1)
+                if any(isinstance(value, bool) for value in known_url_stability) else None
+            )
 
-            comp_eligibility = round(
-                (crawl_score * 0.3) + (index_score * 0.3) + (schema_score * 0.2) + (internal_disc_score * 0.2), 1
+            eligibility_components = (crawl_score, index_score, schema_score, internal_disc_score, url_stab_score)
+            comp_eligibility = None
+            if all(isinstance(value, (int, float)) for value in eligibility_components):
+                comp_eligibility = round(
+                    crawl_score * 0.25 + index_score * 0.25 + schema_score * 0.20
+                    + internal_disc_score * 0.15 + url_stab_score * 0.15, 1
+                )
+            technical_state = (
+                EvidenceState.VERIFIED if comp_eligibility is not None
+                else EvidenceState.SAMPLE_VERIFIED if any(value is not None for value in eligibility_components)
+                else EvidenceState.DATA_UNAVAILABLE
             )
             pillar_b = TechnicalEligibilityPillar(
                 crawlability_score=crawl_score,
@@ -232,8 +276,8 @@ class AeoMetricsCalculator:
                 structured_data_validity_score=schema_score,
                 url_stability_score=url_stab_score,
                 composite_eligibility_score=comp_eligibility,
-                state=EvidenceState.VERIFIED,
-                notes="Technical crawl and schema extraction verified across analyzed URLs.",
+                state=technical_state,
+                notes="Metrics are computed only from explicit page-level observations; missing dimensions remain unavailable.",
             )
         else:
             pillar_b = TechnicalEligibilityPillar(
@@ -252,17 +296,27 @@ class AeoMetricsCalculator:
         measured_cit_rate = getattr(report, "ai_visibility_score", None)
 
         if v_status == "MEASURED" and engines_measured > 0:
-            mention_rate = getattr(v_card, "mention_rate_pct", 65.0)
-            rec_rate = getattr(v_card, "recommendation_rate_pct", 45.0)
-            cit_rate = measured_cit_rate * 100.0 if measured_cit_rate is not None else 50.0
-            cit_share = getattr(v_card, "citation_share_pct", 32.0)
-            cit_acc = getattr(v_card, "citation_accuracy_pct", 88.0)
-            fact_acc = getattr(v_card, "brand_fact_accuracy_pct", 91.0)
-            bm_cov = 100.0
-            consistency = getattr(v_card, "repeat_consistency_pct", 82.0)
-            c_state = EvidenceState.VERIFIED
-            c_notes = f"Empirically recorded across {engines_measured} answer platforms."
-            engines_list = getattr(v_card, "platforms", ["ChatGPT Search", "Perplexity", "Google AI Overviews"])
+            # MEASURED is not sufficient by itself: never invent values for fields
+            # absent from the actual scorecard or response ledger.
+            mention_rate = getattr(v_card, "mention_rate_pct", None)
+            rec_rate = getattr(v_card, "recommendation_rate_pct", None)
+            cit_rate = measured_cit_rate * 100.0 if measured_cit_rate is not None else getattr(v_card, "citation_rate_pct", None)
+            cit_share = getattr(v_card, "citation_share_pct", None)
+            cit_acc = getattr(v_card, "citation_accuracy_pct", None)
+            fact_acc = getattr(v_card, "brand_fact_accuracy_pct", None)
+            bm_cov = getattr(v_card, "benchmark_coverage_pct", None)
+            consistency = getattr(v_card, "repeat_consistency_pct", None)
+            engines_list = getattr(v_card, "platforms", []) or []
+            has_any_measurement = any(
+                isinstance(value, (int, float))
+                for value in (mention_rate, rec_rate, cit_rate, cit_share, cit_acc, fact_acc, bm_cov, consistency)
+            )
+            c_state = EvidenceState.SAMPLE_VERIFIED if has_any_measurement else EvidenceState.DATA_UNAVAILABLE
+            c_notes = (
+                f"Partial measurements recorded for {engines_measured} answer platforms; unmeasured metrics are omitted."
+                if has_any_measurement
+                else "The visibility run is marked measured but contains no numeric metric values."
+            )
         else:
             mention_rate = None
             rec_rate = None
@@ -315,7 +369,7 @@ class AeoMetricsCalculator:
                 code="AEO-MET-01",
                 value=q_cov_pct,
                 unit="%",
-                numerator=q_supp + int(0.5 * q_part) if q_total > 0 else None,
+                numerator=round(q_supp + (0.5 * q_part)) if q_total > 0 else None,
                 denominator=q_total if q_total > 0 else None,
                 formula="Relevant questions with a usable, verified answer ÷ relevant questions assessed",
                 state=q_cov_state,

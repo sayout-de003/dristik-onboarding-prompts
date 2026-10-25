@@ -311,7 +311,7 @@ class CompleteAeoReportGenerator:
             "website_url": report.website_url,
             "generated_at": report.generated_at,
             "report_type": "AEO_MASTER_AUDIT_2026",
-            "certification_status": getattr(report, "certification_status", "CERTIFIED"),
+            "certification_status": getattr(report, "certification_status", "NOT_CERTIFIED"),
             "kpis": {
                 "answer_readiness_score": answer_readiness_score,
                 "observed_visibility_status": visibility_status,
@@ -460,6 +460,18 @@ class CompleteAeoReportGenerator:
             cat_name = html.escape(f.category.value if hasattr(f.category, "value") else str(f.category))
             subcat = html.escape(f.subcategory or cat_name)
             stat = html.escape(f.status.value if hasattr(f.status, "value") else str(f.status))
+            # Never present every finding as DOM-verified. Use the finding's
+            # declared scope/evidence class, or explicitly show that it is absent.
+            evidence_scope = (
+                getattr(f, "scope_classification", None)
+                or getattr(f, "evidence_scope", None)
+                or getattr(f, "scope", None)
+                or getattr(f, "evidence_class", None)
+                or "EVIDENCE_UNSPECIFIED"
+            )
+            if hasattr(evidence_scope, "value"):
+                evidence_scope = evidence_scope.value
+            evidence_badge = html.escape(str(evidence_scope).upper())
             owner = html.escape(f.owner or "Answer Content & SEO Engineering")
             title_esc = html.escape(f.title)
             desc_esc = html.escape(f.description)
@@ -475,7 +487,7 @@ class CompleteAeoReportGenerator:
                     <div class="finding-title-row">
                         <span class="finding-badge sev-{sev_class}">{sev_class.upper()}</span>
                         <span class="finding-badge status-{stat.lower()}">{stat}</span>
-                        <span class="finding-badge badge-verified">VERIFIED_DOM</span>
+                        <span class="finding-badge evidence-scope">{evidence_badge}</span>
                         <span class="finding-id">{fid}</span>
                         <h4 class="finding-title">{title_esc}</h4>
                     </div>
