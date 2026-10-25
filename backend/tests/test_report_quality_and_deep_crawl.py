@@ -107,7 +107,7 @@ def test_deep_crawl_rejects_loopback_targets():
 
 def test_report_assembly_deduplicates_canonical_finding_ids():
     from types import SimpleNamespace
-    from app.reports.adaptive_audit_book import _report_findings
+    from app.report_finding_registry import canonicalize_report_findings as _report_findings
 
     first = SimpleNamespace(
         finding_id="find_001", title="Missing homepage H1",
@@ -130,7 +130,7 @@ def test_report_assembly_deduplicates_canonical_finding_ids():
 
 def test_report_assembly_deduplicates_same_title_and_url_but_not_distinct_pages():
     from types import SimpleNamespace
-    from app.reports.adaptive_audit_book import _report_findings
+    from app.report_finding_registry import canonicalize_report_findings as _report_findings
 
     report = SimpleNamespace(findings=[
         {"finding_id": "f1", "title": "Missing title tag", "url": "https://example.com/"},
