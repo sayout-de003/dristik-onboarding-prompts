@@ -47,3 +47,10 @@ def test_webhook_event_key_prefers_provider_event_ids_and_falls_back_to_hash():
     second = MODULE.webhook_event_key("slack", {"type": "event_callback"}, b"raw")
     assert first == second
     assert len(first) == 64
+
+
+def test_meta_batch_deduplication_uses_full_delivery_body():
+    payload = {"entry": [{"changes": [{"value": {"messages": [{"id": "m1"}, {"id": "m2"}]}}]}]}
+    first = MODULE.webhook_event_key("whatsapp_business", payload, b"batch-one")
+    second = MODULE.webhook_event_key("whatsapp_business", payload, b"batch-two")
+    assert first != second
