@@ -75,6 +75,7 @@ class GeminiAdapter(BaseGeoEngineAdapter):
                         raw_content=content,
                         citations=citations,
                         status_code=200,
+                        is_live=True,
                         latency_ms=latency,
                     )
                 else:
