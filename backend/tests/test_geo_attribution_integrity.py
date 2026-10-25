@@ -64,7 +64,7 @@ def test_attribution_reports_observed_change_without_causal_claim_or_som():
         target_domain="example.com",
         brand_name="Example",
     )
-    assert report.status == "COMPARABLE_OBSERVATIONS"
+    assert report.status == "MEASURED"
     assert report.mention_rate_delta_pct == 100.0
     assert report.citation_rate_delta_pct == 100.0
     assert report.som_delta_pct is None
