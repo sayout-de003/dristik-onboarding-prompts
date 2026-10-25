@@ -92,6 +92,14 @@ class RemediationVerificationService:
         now = datetime.now(timezone.utc).isoformat()
         base_domain = website_url.rstrip("/")
         finding_text = f"{finding.title} {finding.finding} {finding.description or ''} {finding.recommendation or ''}".lower()
+        # The verification request has no captured pre-fix DOM by default.
+        # Label the original finding as context rather than misrepresenting it as
+        # a measured before snapshot.
+        original_context = finding.finding or finding.description or finding.title
+        before_state = (
+            "No captured pre-remediation snapshot was supplied. Original finding context: "
+            + str(original_context)
+        )
 
         # ── Stage 2: RECRAWL ──────────────────────────────────────────
         crawled_html = live_html
@@ -119,7 +127,7 @@ class RemediationVerificationService:
                     now=now,
                     stage="RECRAWL",
                     status="FAILED_RECRAWL",
-                    before_state=finding.finding or finding.description or finding.title,
+                    before_state=before_state,
                     after_state="Server unreachable — cannot verify. Recrawl failed.",
                     checks=[],
                     analysis_id=analysis_id,
