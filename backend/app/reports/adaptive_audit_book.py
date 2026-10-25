@@ -433,36 +433,36 @@ def _build_ch_brief(report: Any, manifest: Dict[str, Any]) -> str:
                     <tr>
                         <td><strong>01</strong></td>
                         <td>Technical SEO &amp; Crawlability</td>
-                        <td><span style="color:#64748b; font-weight:700;">{ "SCORE RECORDED" if seo_s is not None else "NOT MEASURED" }</span></td>
-                        <td><strong>{format(seo_s, ".1f") if seo_s is not None else "—"}</strong>{ " / 100" if seo_s is not None else ""}</td>
+                        <td><span style="color:#64748b; font-weight:700;">{ 'SCORE RECORDED' if seo_s is not None else 'NOT MEASURED' }</span></td>
+                        <td><strong>{format(seo_s, '.1f') if seo_s is not None else '—'}</strong>{ ' / 100' if seo_s is not None else ''}</td>
                         <td>Technical crawl and HTTP checks</td>
                     </tr>
                     <tr>
                         <td><strong>02</strong></td>
                         <td>Generative Engine Optimization (GEO)</td>
-                        <td><span style="color:#64748b; font-weight:700;">{ "SCORE RECORDED" if geo_s is not None else "NOT MEASURED" }</span></td>
-                        <td><strong>{format(geo_s, ".1f") if geo_s is not None else "—"}</strong>{ " / 100" if geo_s is not None else ""}</td>
+                        <td><span style="color:#64748b; font-weight:700;">{ 'SCORE RECORDED' if geo_s is not None else 'NOT MEASURED' }</span></td>
+                        <td><strong>{format(geo_s, '.1f') if geo_s is not None else '—'}</strong>{ ' / 100' if geo_s is not None else ''}</td>
                         <td>On-page extractability; visibility measured separately</td>
                     </tr>
                     <tr>
                         <td><strong>03</strong></td>
                         <td>Answer Engine Visibility (AEO)</td>
-                        <td><span style="color:#64748b; font-weight:700;">{ "SCORE RECORDED" if aeo_s is not None else "NOT MEASURED" }</span></td>
-                        <td><strong>{format(aeo_s, ".1f") if aeo_s is not None else "—"}</strong>{ " / 100" if aeo_s is not None else ""}</td>
+                        <td><span style="color:#64748b; font-weight:700;">{ 'SCORE RECORDED' if aeo_s is not None else 'NOT MEASURED' }</span></td>
+                        <td><strong>{format(aeo_s, '.1f') if aeo_s is not None else '—'}</strong>{ ' / 100' if aeo_s is not None else ''}</td>
                         <td>Answer content and platform evidence where available</td>
                     </tr>
                     <tr>
                         <td><strong>04</strong></td>
                         <td>Conversion Ergonomics (CRO)</td>
-                        <td><span style="color:#64748b; font-weight:700;">{ "SCORE RECORDED" if cro_s is not None else "NOT MEASURED" }</span></td>
-                        <td><strong>{format(cro_s, ".1f") if cro_s is not None else "—"}</strong>{ " / 100" if cro_s is not None else ""}</td>
+                        <td><span style="color:#64748b; font-weight:700;">{ 'SCORE RECORDED' if cro_s is not None else 'NOT MEASURED' }</span></td>
+                        <td><strong>{format(cro_s, '.1f') if cro_s is not None else '—'}</strong>{ ' / 100' if cro_s is not None else ''}</td>
                         <td>UX heuristics and analytics where available</td>
                     </tr>
                     <tr>
                         <td><strong>05</strong></td>
                         <td>Competitive Market Parity</td>
-                        <td><span style="color:#64748b; font-weight:700;">{ "SCORE RECORDED" if comp_s is not None else "NOT MEASURED" }</span></td>
-                        <td><strong>{format(comp_s, ".1f") if comp_s is not None else "—"}</strong>{ " / 100" if comp_s is not None else ""}</td>
+                        <td><span style="color:#64748b; font-weight:700;">{ 'SCORE RECORDED' if comp_s is not None else 'NOT MEASURED' }</span></td>
+                        <td><strong>{format(comp_s, '.1f') if comp_s is not None else '—'}</strong>{ ' / 100' if comp_s is not None else ''}</td>
                         <td>Comparable recorded competitor observations</td>
                     </tr>
                 </tbody>
@@ -917,6 +917,7 @@ def build_adaptive_publication_document(
     """
 
     # Back matter HTML
+    evidence_status = _esc(getattr(report, 'certification_status', None) or 'NOT_ASSESSED')
     back_matter = f"""
     <div class="chapter-start back-matter-page" style="padding: 0 4mm; border-bottom: 4px solid #0f172a;">
         <div class="running-header">
@@ -932,7 +933,7 @@ def build_adaptive_publication_document(
             <div class="card" style="margin-bottom: 16px; border-left: 3.5px solid #64748b;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                     <span class="mono" style="font-size: 8pt; font-weight: 700;">EVIDENCE STATUS</span>
-                    <span class="mono" style="font-size: 7pt; font-weight: 700; background: #f1f5f9; color: #334155; padding: 2px 6px; border-radius: 2px;">{_esc(getattr(report, "certification_status", None) or "NOT_ASSESSED")}</span>
+                    <span class="mono" style="font-size: 7pt; font-weight: 700; background: #f1f5f9; color: #334155; padding: 2px 6px; border-radius: 2px;">{evidence_status}</span>
                 </div>
                 <p style="font-size: 8.5pt; color: #334155; margin: 0;">
                     This report reflects the evidence and integrations recorded for the run. Inferred, estimated, simulated, unavailable, and untested items must not be interpreted as live measurements.
