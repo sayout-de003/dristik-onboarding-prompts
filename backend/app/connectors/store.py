@@ -230,6 +230,17 @@ class ConnectorStore:
         return integration
 
 
+    def update_credentials(self, integration_id: str, credentials: ConnectorCredentials) -> Optional[Integration]:
+        """Replace encrypted credentials for an existing integration and persist atomically."""
+        integration = self._integrations.get(integration_id)
+        if integration is None:
+            return None
+        self._credentials[integration_id] = credentials
+        integration.status = ConnectorHealthStatus.DISCONNECTED
+        self._integrations[integration_id] = integration
+        self._write(integration)
+        return integration
+
     def delete_integration(self, integration_id: str) -> bool:
         if integration_id in self._integrations:
             del self._integrations[integration_id]
