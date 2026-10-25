@@ -53,6 +53,23 @@ async def connector_registry(user: UserIdentity = Depends(get_current_user)):
     return {"providers": items, "total": len(items)}
 
 
+class ConnectorCredentialUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    target_url: Optional[str] = None
+    api_url: Optional[str] = None
+    username: Optional[str] = None
+    app_password: Optional[str] = None
+    api_key: Optional[str] = None
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    account_id: Optional[str] = None
+    project_id: Optional[str] = None
+    github_token: Optional[str] = None
+    repository: Optional[str] = None
+    branch: Optional[str] = None
+    scopes: Optional[List[str]] = None
+
+
 class ConnectPlatformRequest(BaseModel):
     provider: ConnectorType
     name: str = Field(..., description="Friendly name for integration")
@@ -182,6 +199,94 @@ async def connect_platform(
         health=health,
         message=f"Connected to {req.provider.value.title()}: {health.message}"
     )
+
+@router.put("/{integration_id}/credentials")
+async def update_integration_credentials(
+    integration_id: str,
+    req: ConnectorCredentialUpdateRequest,
+    user: UserIdentity = Depends(require_permission("patches:generate")),
+):
+    """Update encrypted credentials and immediately re-test the live provider API."""
+    integration = _owned_integration(integration_id, user)
+    existing = connector_store.get_credentials(integration_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Integration credentials not found")
+    updates = req.model_dump(exclude_unset=True, exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="Provide at least one field to update.")
+    if "name" in updates:
+        integration.name = updates.pop("name")
+    if "target_url" in updates:
+        integration.target_url = updates.pop("target_url")
+    credential_fields = {
+        "api_url", "username", "app_password", "api_key", "access_token",
+        "refresh_token", "account_id", "project_id", "github_token",
+        "repository", "branch", "scopes",
+    }
+    credential_updates = {key: value for key, value in updates.items() if key in credential_fields}
+    credentials = existing.model_copy(update=credential_updates)
+    connector_store.update_credentials(integration_id, credentials)
+    connector_store.persist(integration)
+    connector = connector_store.get_connector(integration_id)
+    if not connector:
+        raise HTTPException(status_code=500, detail="Could not initialize connector after credential update.")
+    health = await connector.test_connection()
+    integration.status = health.status
+    connector_store.persist(integration)
+    connector_store.record_event(
+        org_id=integration.org_id, action="UPDATE_CREDENTIALS",
+        result="SUCCESS" if health.authenticated else health.status.value.upper(),
+        integration_id=integration_id, actor_id=_actor_id(user),
+        details={"provider": integration.provider.value, "authenticated": health.authenticated},
+    )
+    return {"success": health.authenticated, "integration": integration, "health": health}
+
+
+@router.post("/{integration_id}/reconnect")
+async def reconnect_integration(
+    integration_id: str,
+    user: UserIdentity = Depends(require_permission("patches:generate")),
+):
+    """Run a fresh live provider handshake; never assume reconnect succeeded."""
+    integration = _owned_integration(integration_id, user)
+    connector = connector_store.get_connector(integration_id)
+    if not connector:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    health = await connector.test_connection()
+    integration.status = health.status
+    connector_store.persist(integration)
+    connector_store.record_event(
+        org_id=integration.org_id, action="RECONNECT",
+        result="SUCCESS" if health.authenticated else health.status.value.upper(),
+        integration_id=integration_id, actor_id=_actor_id(user),
+        details={"provider": integration.provider.value, "authenticated": health.authenticated},
+    )
+    return {"success": health.authenticated, "integration": integration, "health": health}
+
+
+@router.post("/{integration_id}/revoke")
+async def revoke_integration_credentials(
+    integration_id: str,
+    user: UserIdentity = Depends(require_permission("patches:generate")),
+):
+    """Remove local credentials; external token revocation depends on provider support."""
+    integration = _owned_integration(integration_id, user)
+    empty = ConnectorCredentials(provider=integration.provider, api_url=integration.target_url)
+    connector_store.update_credentials(integration_id, empty)
+    integration.status = ConnectorHealthStatus.DISCONNECTED
+    connector_store.persist(integration)
+    connector_store.record_event(
+        org_id=integration.org_id, action="REVOKE_LOCAL_CREDENTIALS",
+        result="SUCCESS", integration_id=integration_id, actor_id=_actor_id(user),
+        details={"provider": integration.provider.value, "remote_revocation": "not_attempted"},
+    )
+    return {
+        "success": True,
+        "status": "DISCONNECTED",
+        "message": "Local credentials removed. Revoke provider-issued OAuth/API credentials in the provider console unless a provider-specific remote revocation flow is documented.",
+        "remote_revocation": "NOT_ATTEMPTED",
+    }
+
 
 @router.get("/{integration_id}/health", response_model=ConnectorHealth)
 async def check_integration_health(integration_id: str, user: UserIdentity = Depends(get_current_user)):
