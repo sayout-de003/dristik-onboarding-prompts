@@ -53,19 +53,19 @@ class FindingEvidence(BaseModel):
     value: str = ""
     observed_value: Optional[Any] = None
     expected_condition: Optional[str] = None
-    test_method: Optional[str] = "crawl_dom"
-    response_status: Optional[int] = 200
+    test_method: Optional[str] = None
+    response_status: Optional[int] = None
     collection_timestamp: Optional[str] = None
     selector: Optional[str] = None
     line_number: Optional[int] = None
     snippet: Optional[str] = None
     description: Optional[str] = None
-    source: Optional[str] = "crawl"
+    source: Optional[str] = None
     excerpt: Optional[str] = None
     type: str = "content"
     state: EvidenceState = EvidenceState.OBSERVED
     evidence_class: EvidenceClass = EvidenceClass.OBSERVED
-    evidence_subtype: Optional[str] = "DOM"
+    evidence_subtype: Optional[str] = None
     evidence_ref: Optional[EvidenceRef] = None
     is_decorative: Optional[bool] = None
     image_role: Optional[str] = None
@@ -197,7 +197,7 @@ class RemediationVerificationReport(BaseModel):
     )
     verified_at: str
     evidence_seal: str
-    certified_by: str = "Dristik Continuous Assurance Engine v4"
+    certified_by: Optional[str] = None
     recrawl_status_code: Optional[int] = None
     recrawl_ttfb_ms: Optional[float] = None
     recrawl_content_type: Optional[str] = None
@@ -290,23 +290,42 @@ class ClaimLedgerEntry(BaseModel):
     claim: str
     source_type: ClaimSourceType = ClaimSourceType.OBSERVED
     evidence_ids: List[str] = Field(default_factory=list)
-    confidence: float = 1.0
-    scope: str = "site_wide"
+    confidence: float = 0.0
+    scope: str = "unspecified"
     created_by: str = "system"
     timestamp: str = ""
-    is_valid_fact: bool = True
+    is_valid_fact: bool = False
     rejection_reason: Optional[str] = None
 
 
 class ClaimLedger(BaseModel):
     """
-    Phase 2 — System-wide Claim Ledger for Certified Zero-Fake integrity.
+    Claim ledger whose certification flag is derived conservatively from its entries.
+    Certification requires a trusted verifier to confirm evidence IDs resolve in the
+    owning audit store. This schema cannot perform that lookup itself.
     """
     ledger_id: str
     run_id: str
     entries: List[ClaimLedgerEntry] = Field(default_factory=list)
-    certified_zero_fake: bool = True
+    certified_zero_fake: bool = False
     rejected_unsupported_count: int = 0
+    evidence_resolution_verified: bool = False
+
+    @model_validator(mode="after")
+    def derive_certification_state(self) -> "ClaimLedger":
+        entries_are_supported = self.evidence_resolution_verified and bool(self.entries) and all(
+            entry.is_valid_fact
+            and bool(entry.evidence_ids)
+            and bool(entry.timestamp.strip())
+            and entry.scope.strip().lower() not in {"", "unspecified", "site_wide"}
+            and 0 < entry.confidence <= 1
+            for entry in self.entries
+        )
+        # Never trust a caller-provided True flag without passing the minimum gate.
+        self.certified_zero_fake = (
+            entries_are_supported and self.rejected_unsupported_count == 0
+        )
+        return self
 
 
 class Finding(BaseModel):
@@ -2640,7 +2659,7 @@ class ExecutiveReport(BaseModel):
     visual_intelligence: Optional[VisualIntelligencePayload] = None
     evidence_ledger: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     integrity_repairs_log: List[Dict[str, Any]] = Field(default_factory=list)
-    certification_status: str = "CERTIFIED"  # "CERTIFIED" | "DEGRADED_SECTIONS_WITHHELD"
+    certification_status: str = "NOT_ASSESSED"  # Set to CERTIFIED only after the configured integrity gate passes.
     withheld_sections: List[Dict[str, str]] = Field(default_factory=list)
     meta_rollup: Optional[MetaBucketRollup] = None
     heading_hierarchy: Optional[HeadingHierarchyRollup] = None

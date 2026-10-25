@@ -173,8 +173,8 @@ export function Overview({
               <span className="text-[10px] font-mono uppercase tracking-[0.04em] text-ink-700 font-bold">
                 Enterprise Executive Scorecard
               </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-good/10 text-good font-semibold">
-                Certified
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-paper-50 border border-line text-ink-500 font-semibold">
+                {report ? 'Report snapshot' : 'Awaiting report'}
               </span>
             </div>
             <h1 className="font-sans text-3xl sm:text-4xl text-ink font-semibold tracking-tight">
@@ -193,7 +193,7 @@ export function Overview({
           <div className="flex items-center gap-4 shrink-0 bg-paper-50 p-4 rounded-xl border border-line">
             <div className="text-right">
               <span className="label text-[10px] text-ink-500 block">Overall Score</span>
-              <span className={`font-sans text-4xl sm:text-5xl font-bold leading-none ${scoreTone(overallScore ?? 0)}`}>
+              <span className={`font-sans text-4xl sm:text-5xl font-bold leading-none ${overallScore != null ? scoreTone(overallScore) : 'text-ink-400'}`}>
                 {overallScore != null ? overallScore.toFixed(1) : '—'}
               </span>
               <span className="text-xs text-ink-400 block mt-0.5">/ 100</span>
@@ -328,8 +328,17 @@ export function Overview({
             return (
               <div
                 key={disc.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`Open ${disc.name} assessment`}
                 onClick={() => onNavigate?.(disc.id)}
-                className="card p-5 hover:border-ink hover:shadow-md transition-all cursor-pointer space-y-3 flex flex-col justify-between group"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onNavigate?.(disc.id);
+                  }
+                }}
+                className="card p-5 hover:border-ink hover:shadow-md transition-all cursor-pointer space-y-3 flex flex-col justify-between group focus-visible:outline-2 focus-visible:outline-offset-2"
               >
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -338,11 +347,11 @@ export function Overview({
                       <span className="font-semibold text-ink text-sm">{disc.shortName}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className={`font-mono text-sm font-bold ${scoreTone(disc.score ?? 0)}`}>
+                      <span className={`font-mono text-sm font-bold ${disc.score != null ? scoreTone(disc.score) : "text-ink-400"}`}>
                         {disc.score != null ? Math.round(disc.score) : '—'}
                       </span>
                       <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-paper-200 text-ink-600">
-                        {disc.grade}
+                        {disc.score != null ? disc.grade : "Not measured"}
                       </span>
                     </div>
                   </div>

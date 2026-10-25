@@ -4,6 +4,8 @@ Generates multi-page vector-styled presentation decks for C-level executives.
 """
 from typing import Dict, Any, Optional
 import logging
+
+from app.domain.evidence.integrity import validate_score
 from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app.identity.access import require_analysis
@@ -21,14 +23,15 @@ class ExecutiveDeckGenerator:
 
     def render_executive_deck_html(self, run_data: Dict[str, Any]) -> str:
         domain = run_data.get("domain") or "unspecified"
-        dossier_score = run_data.get("dossier_score")
+        dossier_score = validate_score(run_data.get("dossier_score"))
         if dossier_score is not None:
-            grade = run_data.get("dossier_grade") or "—"
-            score_display = f"{float(dossier_score):.1f}/100 [GRADE {grade}]"
+            grade = run_data.get("dossier_grade")
+            grade_text = f" [GRADE {grade}]" if grade and grade not in {"—", "-", "N/A"} else ""
+            score_display = f"{dossier_score:.1f}/100{grade_text}"
         else:
-            score_display = "UNMEASURED"
+            score_display = "NOT MEASURED"
 
-        created_at = run_data.get("created_at") or "Measured on audit execution"
+        created_at = run_data.get("created_at") or "Timestamp unavailable"
         human_perspective = run_data.get("human_visitor_perspective") or "No visitor-perspective note was sealed for this run."
         search_perspective = run_data.get("search_engine_perspective") or "No search-engine perspective was sealed for this run."
         ai_perspective = run_data.get("ai_answer_engine_perspective") or "No answer-engine perspective was sealed for this run."
@@ -272,19 +275,19 @@ class ExecutiveDeckGenerator:
             <div class="hero-title">NOW / NEXT / ONGOING Milestones</div>
             <div class="grid-3" style="margin-top: 24px;">
                 <div class="card">
-                    <div class="card-kicker">PHASE 1 // NOW (DAYS 1–7)</div>
-                    <div class="card-title">Technical Blockers</div>
-                    <p>Deploy canonical 301 consolidation rules, eliminate redirect loops, and publish /llms.txt AI-bot permissions manifesto.</p>
+                    <div class="card-kicker">PHASE 1 // NOW</div>
+                    <div class="card-title">Validate priority findings</div>
+                    <p>Start with high-severity findings that have direct evidence, confirmed scope, and a reproducible acceptance test.</p>
                 </div>
                 <div class="card">
-                    <div class="card-kicker">PHASE 2 // NEXT (DAYS 8–30)</div>
-                    <div class="card-title">Entity Signals</div>
-                    <p>Inject machine-readable Schema.org Organization schemas and character-safe title/meta tags across primary routes.</p>
+                    <div class="card-kicker">PHASE 2 // NEXT</div>
+                    <div class="card-title">Implement approved fixes</div>
+                    <p>Sequence changes by dependency, implementation risk, and business priority. Require approval for production-impacting changes.</p>
                 </div>
                 <div class="card">
-                    <div class="card-kicker">PHASE 3 // ONGOING (DAYS 31–90)</div>
-                    <div class="card-title">Continuous Assurance</div>
-                    <p>Closed-loop verification against AST, multi-model query regression tracking, and monthly citation index re-evaluations.</p>
+                    <div class="card-kicker">PHASE 3 // ONGOING</div>
+                    <div class="card-title">Verify and monitor</div>
+                    <p>Re-run the relevant checks after implementation and report a fix as verified only when fresh evidence confirms the intended outcome.</p>
                 </div>
             </div>
         </div>
@@ -297,23 +300,23 @@ class ExecutiveDeckGenerator:
     <!-- SLIDE 5: METHODOLOGY & SIGN-OFF -->
     <div class="slide">
         <div class="header">
-            <div class="header-brand">04 // ASSURANCE STANDARDS &amp; SEAL</div>
+            <div class="header-brand">04 // METHODOLOGY &amp; LIMITATIONS</div>
             <div>{domain}</div>
         </div>
         <div>
             <div class="hero-subtitle">Governance Protocol</div>
-            <div class="hero-title">Certified Zero-Fake Ground Truth</div>
+            <div class="hero-title">Evidence and measurement limitations</div>
             <div class="lead-narrative">
-                Every metric, finding, and recommendation generated in this dossier originates from deterministic AST DOM parsing and live answer-engine telemetry. Speculative, simulated, or placeholder data is strictly excluded under Dristik's evidence governance protocol.
+                Only measurements supported by the underlying audit data should be treated as observed results. Inferred, estimated, simulated, unavailable, and untested items must be labelled explicitly; the report does not imply that every provider or engine was queried.
             </div>
             <div class="grid-2" style="margin-top: 25px;">
                 <div class="card">
                     <div class="card-kicker">EVIDENCE LEDGER INTEGRITY</div>
-                    <p>All extracted statements are hashed with SHA-256 and stamped with DOM selectors for independent auditability.</p>
+                    <p>Evidence references and source details should be inspected in the report ledger. Cryptographic integrity is claimed only where hashes are present and validated.</p>
                 </div>
                 <div class="card">
                     <div class="card-kicker">ACCEPTANCE CRITERIA</div>
-                    <p>Remediation patches include verifiable curl tests and DOM acceptance conditions before code deployment.</p>
+                    <p>Remediation is complete only after an authorized change and a fresh verification check. A recommendation alone is not proof that a fix was applied.</p>
                 </div>
             </div>
         </div>
@@ -598,7 +601,7 @@ async def get_audit_deliverables(
         "analysis_id": analysis_id,
         "domain": report.domain,
         "generated_at": report.generated_at,
-        "certification_status": getattr(report, "certification_status", "CERTIFIED"),
+        "certification_status": getattr(report, "certification_status", None) or "NOT_ASSESSED",
         "deliverables": json_rep.get("deliverables", {}),
     }
 
@@ -1077,7 +1080,7 @@ async def get_adaptive_audit_book(
     matching the detected or requested report family (COMPLETE, SEO, GEO, AEO, CRO, COMPETITOR, HYBRID, CUSTOM).
 
     format='html': returns standalone A4 publication HTML with CSS Paged Media rules,
-                   dedicated cover page, front matter, TOC leader dots, and Zero-Fake closing seal.
+                   dedicated cover page, front matter, TOC leader dots, evidence-status disclosures, and limitations.
     format='json': returns publication manifest and dynamic pagination layout.
     """
     run = require_analysis(analysis_id, user)

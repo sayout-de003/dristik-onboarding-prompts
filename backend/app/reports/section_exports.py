@@ -11,6 +11,7 @@ across the 6 primary workspaces:
 """
 from typing import Dict, Any, List, Optional
 from app.domain.models import ExecutiveReport
+from app.evidence_integrity import validate_score
 from app.aeo.reporting import aeo_cover_figure, render_aeo_audit_book
 from app.geo.reporting import geo_cover_figure, render_geo_audit_book
 from app.seo.reporting import render_seo_audit_book
@@ -579,6 +580,7 @@ class SectionReportGenerator:
             score_val = geo_cover_figure(report)
         else:
             score_val = self._get_section_score(report, section_key)
+        score_val = validate_score(score_val)
         if is_seo or is_aeo or is_geo:
             findings = list(report.findings or [])
             if is_seo:
@@ -621,22 +623,22 @@ class SectionReportGenerator:
         else:
             book_html = ""
             findings_html = (
-                f"<h2>Verified Empirical Findings ({len(findings)})</h2>"
+                f"<h2>Recorded Findings ({len(findings)})</h2>"
                 + (
                     "".join(self._render_finding(f) for f in findings)
                     if findings
-                    else "<p style='color:#64748b;'>No critical defects recorded for this section.</p>"
+                    else "<p style='color:#64748b;'>No findings were recorded for this section; this does not prove that no defects exist.</p>"
                 )
             )
             extra_html = self._render_extra_section_tables(report, section_key, pages)
-            badge = "EVIDENCE-GROUNDED // ZERO-FAKE AUDIT"
+            badge = "AUDIT EVIDENCE SUMMARY"
             assurance_label = "ASSURANCE TIER"
-            assurance_value = "CERTIFIED"
+            assurance_value = getattr(report, "certification_status", None) or "NOT_ASSESSED"
             standard_label = "EVIDENCE STANDARD"
-            standard_value = "ZERO-FAKE AST"
+            standard_value = "Evidence status disclosed"
             score_label = "SECTION HEALTH SCORE"
             score_note = ""
-            footer_mark = "PAGE 1 OF 1 // IMMUTABLE PROVENANCE SEAL"
+            footer_mark = "PAGE 1 OF 1 // EVIDENCE STATUS DISCLOSED"
         if score_val is None:
             score_html = "—"
         else:
@@ -655,7 +657,7 @@ class SectionReportGenerator:
             section_id=sec_id,
             section_title=title,
             section_findings=findings,
-            pages_crawled=len(pages) if pages else 1,
+            pages_crawled=len(pages) if pages else None,
             is_sample_audit=True,
             has_connector=True,
             connector_name="Direct Crawl & DOM Analysis",

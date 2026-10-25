@@ -199,10 +199,10 @@ export function PillarNavBar({
   };
 
   const groupLabel = (label: string) =>
-    !collapsed && <p className="text-[10px] font-mono font-bold uppercase tracking-[0.04em] text-ink-400 px-2.5 mb-1.5">{label}</p>;
+    !collapsed && <p className="text-[10px] font-sans font-semibold uppercase tracking-[0.09em] text-ink-400 px-2.5 mb-1.5">{label}</p>;
 
   const nav = (
-    <nav className={cn('flex flex-col gap-5', !embedded && 'px-3 py-3 lg:px-4 lg:py-5')} aria-label="Audit sections">
+    <nav className={cn('flex flex-col gap-4', !embedded && 'px-3 py-3 lg:px-4 lg:py-5')} aria-label="Audit sections">
       <div className="space-y-1">
         {groupLabel('Workflow')}
         {workflowItems.map(renderItem)}

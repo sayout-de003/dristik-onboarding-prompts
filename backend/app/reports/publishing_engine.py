@@ -22,6 +22,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
+from app.evidence_integrity import validate_score
+
 try:
     import pypdf
 except ImportError:
@@ -46,8 +48,8 @@ class PublicationMetadata:
     score_display: str = "—"
     grade: str = "—"
     overall_score: Optional[float] = None
-    pages_crawled: int = 1
-    findings_count: int = 0
+    pages_crawled: Optional[int] = None
+    findings_count: Optional[int] = None
     story_summary: str = ""
     primary_opportunity: str = ""
     consultant_advice_what_to_ignore: str = ""
@@ -234,8 +236,22 @@ class CoverGenerator:
         palette = cls.PALETTES.get(m.family.upper(), cls.PALETTES["COMPLETE"])
         motif_svg = cls.render_motif_svg(m.family)
 
-        score_text = m.score_display
-        grade_text = m.grade
+        # Never turn missing score metadata into a numeric-looking score or grade.
+        # The publication layer is a display boundary; canonical score validation
+        # belongs to the scoring engine and evidence integrity gate.
+        score_value = validate_score(m.overall_score)
+        score_is_valid = score_value is not None
+        score_text = f"{float(score_value):.1f}" if score_is_valid else "NOT MEASURED"
+        grade_text = (m.grade if m.grade and m.grade not in {"—", "-", "N/A"} else "NOT GRADED") if score_is_valid else "NOT GRADED"
+        crawl_sample_text = (
+            f"{m.pages_crawled} URLs recorded" if isinstance(m.pages_crawled, int) and m.pages_crawled >= 0
+            else "Crawl coverage not recorded"
+        )
+        finding_count_text = (
+            f"{m.findings_count} findings recorded" if isinstance(m.findings_count, int) and m.findings_count >= 0
+            else "Finding count not recorded"
+        )
+        score_display_label = f"{score_text} / 100 · GRADE {grade_text}" if score_is_valid else score_text
 
         return f"""
         <div class="book-cover cover-page" style="background: {palette['bg_gradient']};">
@@ -259,7 +275,7 @@ class CoverGenerator:
                 <h2>{_esc(m.subtitle)}</h2>
 
                 <div class="cover-target-box">
-                    <span class="cover-target-label">SUBJECT ENTITY UNDER ASSURANCE</span>
+                    <span class="cover-target-label">AUDIT SUBJECT</span>
                     <div class="cover-target-name">{_esc(m.brand_name)}</div>
                     <div class="cover-target-url">{_esc(m.domain)}</div>
                 </div>
@@ -290,16 +306,16 @@ class CoverGenerator:
                     <div class="cover-meta-cell">
                         <span class="meta-label">COMPOSITE INDEX</span>
                         <span class="meta-val" style="color: {palette['accent']}; font-weight: 800;">
-                            {_esc(score_text)} / 100 [GRADE {_esc(grade_text)}]
+                            {_esc(score_display_label)}
                         </span>
                     </div>
                     <div class="cover-meta-cell">
                         <span class="meta-label">CRAWL SAMPLE</span>
-                        <span class="meta-val">{_esc(str(m.pages_crawled))} URLs Analysed · {_esc(str(m.findings_count))} Findings</span>
+                        <span class="meta-val">{_esc(crawl_sample_text)} · {_esc(finding_count_text)}</span>
                     </div>
                     <div class="cover-meta-cell">
-                        <span class="meta-label">EVIDENCE PROTOCOL</span>
-                        <span class="meta-val" style="color: #10b981;">ZERO-FAKE AST CERTIFIED</span>
+                        <span class="meta-label">EVIDENCE STATUS</span>
+                        <span class="meta-val">See scope, sources and limitations in this report.</span>
                     </div>
                 </div>
 

@@ -4,6 +4,7 @@ import App from './App';
 import { ToastProvider } from './components/ui';
 import { ThemeProvider } from './theme/ThemeProvider';
 import './index.css';
+import './styles/enterprise-ui.css';
 
 // Handle stale chunk hash mismatches caused by server redeployments
 window.addEventListener('vite:preloadError', (event) => {
