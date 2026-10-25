@@ -172,13 +172,13 @@ class CrawlerService:
             if not sitemap_text:
                 continue
 
-            found_sitemap_url = found_sitemap_url or sitemap_url
             try:
                 root = ET.fromstring(sitemap_text)
             except ET.ParseError:
                 logger.info("Ignoring malformed XML sitemap: %s", sitemap_url)
                 continue
 
+            found_sitemap_url = found_sitemap_url or sitemap_url
             locs = [
                 (element.text or "").strip()
                 for element in root.iter()
