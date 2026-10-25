@@ -173,7 +173,7 @@ export function CroWorkspaceView({
               </span>
               <div className="flex items-baseline gap-2">
                 <span className="font-sans text-3xl font-bold text-ink-700">
-                  {socialProof ? Math.round(socialProof.trust_authority_score) : 60}/100
+                  {socialProof?.trust_authority_score == null ? 'Not measured' : Math.round(socialProof.trust_authority_score)}/100
                 </span>
                 <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded font-bold ${
                   socialProof?.risk_level === 'LOW' ? 'bg-good/10 text-good' : 'bg-warn/10 text-warn'
@@ -214,7 +214,7 @@ export function CroWorkspaceView({
                 </span>
               </div>
               <p className="text-xs text-ink-500">
-                {valueProp?.has_adjacent_cta ? 'Hero CTA paired' : 'Missing hero CTA'}
+                {valueProp?.has_adjacent_cta == null ? 'Hero CTA status not measured' : valueProp.has_adjacent_cta ? 'Hero CTA paired' : 'No adjacent hero CTA observed'}
               </p>
             </Card>
           </div>
@@ -591,7 +591,7 @@ export function CroWorkspaceView({
                 Trust Index
               </span>
               <p className="font-sans text-3xl font-bold text-ink">
-                {socialProof ? Math.round(socialProof.trust_authority_score) : 60}/100
+                {socialProof?.trust_authority_score == null ? 'Not measured' : Math.round(socialProof.trust_authority_score)}/100
               </p>
               <p className="text-xs text-ink-500">Third-party validation score</p>
             </Card>
