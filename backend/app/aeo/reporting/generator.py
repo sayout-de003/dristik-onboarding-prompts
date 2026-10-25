@@ -311,7 +311,7 @@ class CompleteAeoReportGenerator:
             "website_url": report.website_url,
             "generated_at": report.generated_at,
             "report_type": "AEO_MASTER_AUDIT_2026",
-            "certification_status": getattr(report, "certification_status", "CERTIFIED"),
+            "certification_status": getattr(report, "certification_status", "NOT_CERTIFIED"),
             "kpis": {
                 "answer_readiness_score": answer_readiness_score,
                 "observed_visibility_status": visibility_status,
