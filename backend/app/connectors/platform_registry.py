@@ -69,12 +69,26 @@ def registry_payload(adapter_keys: set[str] | None = None) -> list[dict[str, Any
     result = []
     for provider in PROVIDERS:
         adapter_registered = provider.adapter_key is not None or provider.id in keys
+        if not adapter_registered:
+            registered_operations: list[str] = []
+        elif provider.adapter_key == "provider_api":
+            registered_operations = ["health", "live_resource_discovery"]
+        else:
+            # Legacy adapters expose the common lifecycle interface, but are not certified
+            # until provider contract tests have passed against real/sandbox accounts.
+            registered_operations = ["health", "resource_discovery", "preview_patch", "apply_patch", "rollback_patch"]
         result.append({
             "id": provider.id,
             "label": provider.label,
             "category": provider.category,
             "auth_methods": list(provider.auth_methods),
-            "operations": list(provider.operations),
+            "target_operations": list(provider.operations),
+            "operations": registered_operations,
+            "verified_operations": [],
+            "operation_status": {
+                operation: ("REGISTERED_UNVERIFIED" if operation in registered_operations else "NOT_IMPLEMENTED_OR_NOT_VERIFIED")
+                for operation in provider.operations
+            },
             "adapter_registered": adapter_registered,
             "implementation_status": "adapter_registered_unverified" if adapter_registered else "adapter_required",
             "connection_status": "DISCONNECTED",
