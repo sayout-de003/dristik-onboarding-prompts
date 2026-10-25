@@ -240,6 +240,9 @@ class CrawlerService:
             try:
                 pw_html, pw_status, pw_ttfb, pw_headers, pw_err, pw_text, pw_perf = await BrowserRenderService.render_page(url)
                 if pw_html:
+                    max_response_bytes = int(getattr(settings, "CRAWL_MAX_RESPONSE_BYTES", 5 * 1024 * 1024) or 5 * 1024 * 1024)
+                    if len(pw_html.encode("utf-8")) > max_response_bytes:
+                        return None, None, 0, (time.time() - start_time) * 1000, {}, 0, "rendered_response_too_large", None
                     headers = pw_headers or {"x-crawler": "playwright-local-js"}
                     return (
                         pw_html,
@@ -259,7 +262,8 @@ class CrawlerService:
             return None, None, 0, (time.time() - start_time) * 1000, {}, 0, "js_render_unavailable", None
 
         try:
-            fc_resp = await client.post(
+            async with client.stream(
+                "POST",
                 "https://api.firecrawl.dev/v1/scrape",
                 json={
                     "url": url,
@@ -273,24 +277,31 @@ class CrawlerService:
                     "Content-Type": "application/json",
                 },
                 timeout=30.0,
-            )
-            if fc_resp.status_code == 200:
-                data = fc_resp.json().get("data") or {}
-                html_content = data.get("html") or ""
-                markdown = data.get("markdown") or ""
-                if html_content or markdown:
-                    ttfb_ms = (time.time() - start_time) * 1000
-                    payload = html_content or f"<html><body><article>{markdown}</article></body></html>"
-                    return (
-                        payload,
-                        markdown,
-                        200,
-                        ttfb_ms,
-                        {"x-crawler": "firecrawl-js"},
-                        len(payload.encode("utf-8")),
-                        None,
-                        None,
-                    )
+            ) as fc_resp:
+                max_response_bytes = int(getattr(settings, "CRAWL_MAX_RESPONSE_BYTES", 5 * 1024 * 1024) or 5 * 1024 * 1024)
+                if fc_resp.status_code == 200:
+                    fc_body = await read_response_limited(fc_resp, max_response_bytes)
+                    import json
+                    data = (json.loads(fc_body.decode("utf-8", errors="replace")).get("data") or {})
+                    html_content = data.get("html") or ""
+                    markdown = data.get("markdown") or ""
+                    if html_content or markdown:
+                        payload = html_content or f"<html><body><article>{markdown}</article></body></html>"
+                        payload_bytes = len(payload.encode("utf-8"))
+                        if payload_bytes > max_response_bytes:
+                            return None, None, 0, (time.time() - start_time) * 1000, {}, 0, "rendered_response_too_large", None
+                        ttfb_ms = (time.time() - start_time) * 1000
+                        return (
+                            payload,
+                            markdown,
+                            200,
+                            ttfb_ms,
+                            {"x-crawler": "firecrawl-js"},
+                            payload_bytes,
+                            None,
+                            None,
+                        )
+                return None, None, fc_resp.status_code, (time.time() - start_time) * 1000, {}, 0, f"firecrawl HTTP {fc_resp.status_code}", None
             return None, None, fc_resp.status_code, (time.time() - start_time) * 1000, {}, 0, f"firecrawl HTTP {fc_resp.status_code}", None
         except Exception as exc:
             return None, None, 0, (time.time() - start_time) * 1000, {}, 0, str(exc), None
