@@ -347,7 +347,7 @@ async def read_connector_resource(
     integration_id: str,
     resource: str,
     limit: int = 25,
-    user: UserIdentity = Depends(get_current_user),
+    user: UserIdentity = Depends(require_permission("mission:read")),
 ):
     """Read a provider-specific allowlisted resource and record response provenance."""
     integration = _owned_integration(integration_id, user)
