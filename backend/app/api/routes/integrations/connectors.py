@@ -227,7 +227,7 @@ async def update_integration_credentials(
     credentials = existing.model_copy(update=credential_updates)
     connector_store.update_credentials(integration_id, credentials)
     connector_store.persist(integration)
-    connector = connector_store.get_connector(integration_id)
+    connector = connector_store.get_connector_for_org(integration_id, user.org_id)
     if not connector:
         raise HTTPException(status_code=500, detail="Could not initialize connector after credential update.")
     health = await connector.test_connection()
@@ -249,7 +249,7 @@ async def reconnect_integration(
 ):
     """Run a fresh live provider handshake; never assume reconnect succeeded."""
     integration = _owned_integration(integration_id, user)
-    connector = connector_store.get_connector(integration_id)
+    connector = connector_store.get_connector_for_org(integration_id, user.org_id)
     if not connector:
         raise HTTPException(status_code=404, detail="Integration not found")
     health = await connector.test_connection()
@@ -292,7 +292,7 @@ async def revoke_integration_credentials(
 async def check_integration_health(integration_id: str, user: UserIdentity = Depends(get_current_user)):
     """Test live connectivity and health of a specific integration."""
     _owned_integration(integration_id, user)
-    connector = connector_store.get_connector(integration_id)
+    connector = connector_store.get_connector_for_org(integration_id, user.org_id)
     if not connector:
         raise HTTPException(status_code=404, detail="Integration not found")
     health = await connector.test_connection()
@@ -312,7 +312,7 @@ async def check_integration_health(integration_id: str, user: UserIdentity = Dep
 async def discover_integration_structure(integration_id: str, user: UserIdentity = Depends(get_current_user)):
     """Discover site hierarchy, detected SEO plugins, or repo framework."""
     _owned_integration(integration_id, user)
-    connector = connector_store.get_connector(integration_id)
+    connector = connector_store.get_connector_for_org(integration_id, user.org_id)
     if not connector:
         raise HTTPException(status_code=404, detail="Integration not found")
     return await connector.discover_site_structure()
