@@ -54,7 +54,11 @@ def _origin(value: str | None, fallback: str) -> str:
         return fallback
     if not (host == "salesforce.com" or host.endswith(".salesforce.com") or host == "salesforce.mil" or host.endswith(".salesforce.mil")):
         return fallback
-    return f"https://{host}" + (f":{parsed.port}" if parsed.port and parsed.port != 443 else "")
+    try:
+        port = parsed.port
+    except ValueError:
+        return fallback
+    return f"https://{host}" + (f":{port}" if port and port != 443 else "")
 
 
 class ProviderApiConnector(BaseConnector):
