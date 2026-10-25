@@ -69,6 +69,15 @@ async def receive_slack_webhook(integration_id: str, request: Request):
         raise HTTPException(status_code=400, detail="Slack webhook body is not valid JSON/form payload.")
     if isinstance(payload, dict) and payload.get("type") == "url_verification" and payload.get("challenge"):
         return {"challenge": payload["challenge"]}
+    credentials = connector_store.get_credentials(integration_id)
+    expected_team = (credentials.account_id if credentials else None) or (integration.settings or {}).get("account_id")
+    event_payload = payload.get("event") if isinstance(payload, dict) and isinstance(payload.get("event"), dict) else {}
+    team_payload = payload.get("team") if isinstance(payload, dict) and isinstance(payload.get("team"), dict) else {}
+    actual_team = (payload.get("team_id") if isinstance(payload, dict) else None) or event_payload.get("team_id") or team_payload.get("id")
+    if not expected_team:
+        raise HTTPException(status_code=409, detail="Slack webhook cannot be tenant-bound until its authorized team ID is recorded.")
+    if not actual_team or str(actual_team) != str(expected_team):
+        raise HTTPException(status_code=403, detail="Slack webhook team does not match this integration.")
     event_type = str(payload.get("type") or (payload.get("event") or {}).get("type") or "unknown") if isinstance(payload, dict) else "unknown"
     event_key = webhook_event_key("slack", payload, raw_body)
     digest = body_sha256(raw_body)
@@ -99,6 +108,22 @@ async def receive_whatsapp_webhook(integration_id: str, request: Request):
         payload = json.loads(raw_body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
         raise HTTPException(status_code=400, detail="Meta webhook body is not valid JSON.")
+    credentials = connector_store.get_credentials(integration_id)
+    expected_phone_id = (credentials.repository if credentials else None) or (credentials.account_id if credentials else None)
+    phone_ids = []
+    if isinstance(payload, dict):
+        for entry in payload.get("entry") or []:
+            if not isinstance(entry, dict):
+                continue
+            for change in entry.get("changes") or []:
+                value = change.get("value") if isinstance(change, dict) else None
+                metadata = value.get("metadata") if isinstance(value, dict) else None
+                if isinstance(metadata, dict) and metadata.get("phone_number_id"):
+                    phone_ids.append(str(metadata["phone_number_id"]))
+    if not expected_phone_id:
+        raise HTTPException(status_code=409, detail="WhatsApp webhook cannot be tenant-bound until its Phone Number ID is recorded.")
+    if not phone_ids or str(expected_phone_id) not in phone_ids:
+        raise HTTPException(status_code=403, detail="WhatsApp webhook phone number does not match this integration.")
     event_type = str(payload.get("object") or "unknown") if isinstance(payload, dict) else "unknown"
     event_key = webhook_event_key("whatsapp_business", payload, raw_body)
     digest = body_sha256(raw_body)
