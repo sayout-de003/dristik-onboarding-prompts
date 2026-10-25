@@ -2010,6 +2010,15 @@ export interface CroIntelligenceReport {
   model_basis?: string;
   sample_size?: number;
   discovered_urls?: number | null;
+  coverage?: {
+    status?: string;
+    inspected_pages?: number;
+    discovered_urls?: number | null;
+    sample_coverage_pct?: number | null;
+    rendered_dom_status?: string;
+    journey_execution_status?: string;
+    note?: string;
+  };
   dimensions?: CroDimensionScore[];
   metrics?: CroMetricResult[];
   sections?: CroSectionRecord[];
