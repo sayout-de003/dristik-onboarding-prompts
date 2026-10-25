@@ -107,7 +107,8 @@ def test_google_analytics_connector_alias_and_oauth_routes():
 
     # 1. Authorize routes for google_analytics and google_analytics_4
     with patch.object(settings, "GOOGLE_CLIENT_ID", "mock-client-id"), \
-         patch.object(settings, "GOOGLE_CLIENT_SECRET", "mock-client-sec"):
+         patch.object(settings, "GOOGLE_CLIENT_SECRET", "mock-client-sec"), \
+         patch.object(settings, "AUTH_SECRET", "test-oauth-state-signing-secret-0123456789abcdef"):
         resp_ga = client.get(
             "/api/v1/connectors/oauth/google_analytics/authorize?domain=example.com",
             follow_redirects=False,
