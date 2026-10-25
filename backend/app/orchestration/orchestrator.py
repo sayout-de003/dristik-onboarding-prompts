@@ -1814,6 +1814,17 @@ class AnalysisOrchestrator:
                 self.repository.save_run(run, findings=final_findings)
             except Exception as pe:
                 logger.exception("Durable report persistence failed for %s", analysis_id)
+                # The durable write failed; do not let a retry of the failed run expose
+                # a report as certified when its final report/finding transaction did not commit.
+                report.certification_status = "NOT_CERTIFIED"
+                report.quality_gate_results = {
+                    **(report.quality_gate_results or {}),
+                    "report_persistence": {
+                        "status": "FAILED",
+                        "error_type": type(pe).__name__,
+                    },
+                }
+                run.report = report
                 run.status = AnalysisStage.FAILED
                 run.error = "REPORT_PERSISTENCE_FAILED"
                 run.current_step = "Validated report could not be durably persisted"
