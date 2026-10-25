@@ -288,15 +288,26 @@ class PassageAnalysisSpecialist(BaseAeoSpecialist):
 
     def evaluate(self, report: Any) -> SpecialistResult:
         g = getattr(report, "geo_readiness", None)
-        extract_score = getattr(g, "extractability_score", 80.0) if g else 80.0
+        extract_score = getattr(g, "extractability_score", None) if g else None
+        if not isinstance(extract_score, (int, float)):
+            return SpecialistResult(
+                specialist_id=self.specialist_id,
+                specialist_name=self.specialist_name,
+                responsibility=self.responsibility,
+                status=EvidenceState.NOT_TESTED,
+                summary="Passage extractability was not measured; no default score was substituted.",
+                findings=[],
+                metadata={"extractability_score": None, "measurement_status": "NOT_TESTED"},
+            )
+        extract_score = max(0.0, min(100.0, float(extract_score)))
         return SpecialistResult(
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
             status=EvidenceState.SAMPLE_VERIFIED,
-            summary=f"Passage extractability baseline assessed at {extract_score}%.",
+            summary=f"Passage extractability measured at {extract_score:.1f}/100.",
             findings=[],
-            metadata={"extractability_score": extract_score},
+            metadata={"extractability_score": extract_score, "measurement_status": "MEASURED"},
         )
 
 
