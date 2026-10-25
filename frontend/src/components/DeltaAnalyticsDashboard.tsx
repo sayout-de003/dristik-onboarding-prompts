@@ -108,7 +108,7 @@ export function DeltaAnalyticsDashboard() {
     return snapshots.filter(s => {
       const ts = new Date(s.date).getTime();
       if (!includeFailed && ['failed','error','cancelled'].some(x => s.status.includes(x))) return false;
-      if (Number.isFinite(ts) && ts < cutoff) return false;
+      if (!Number.isFinite(ts) || ts < cutoff) return false;
       if (domain !== 'all' && s.domain !== domain) return false;
       return s.domain.toLowerCase().includes(query.toLowerCase());
     });
