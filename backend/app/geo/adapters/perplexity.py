@@ -72,6 +72,7 @@ class PerplexityAdapter(BaseGeoEngineAdapter):
                         raw_content=content,
                         citations=[str(c) for c in citations],
                         status_code=200,
+                        is_live=True,
                         latency_ms=latency,
                     )
                 else:
