@@ -20,9 +20,30 @@ from app.connectors.base.models import ConnectorCredentials, ConnectorHealth
 from app.core.config import settings
 from app.connectors.store import connector_store
 from app.connectors.oauth_providers import router as oauth_router
+from app.connectors.platform_registry import registry_payload
 
 router = APIRouter(prefix="/connectors", tags=["Platform Connectors"])
 router.include_router(oauth_router)
+
+@router.get("/registry")
+async def connector_registry(user: UserIdentity = Depends(get_current_user)):
+    """List all planned providers with honest adapter and per-organization connection state."""
+    if not Authorizer.can_perform(user, "mission:read"):
+        raise HTTPException(status_code=403, detail="You do not have permission to view connectors.")
+    integrations = connector_store.list_integrations(org_id=user.org_id)
+    by_provider = {}
+    for integration in integrations:
+        by_provider[integration.provider.value] = integration
+    items = registry_payload()
+    for item in items:
+        integration = by_provider.get(item["id"])
+        if integration:
+            item["connection_status"] = integration.status.value.upper()
+            item["integration_id"] = integration.integration_id
+            item["last_synced_at"] = integration.last_synced_at
+            item["target_url"] = integration.target_url
+    return {"providers": items, "total": len(items)}
+
 
 class ConnectPlatformRequest(BaseModel):
     provider: ConnectorType
@@ -32,12 +53,17 @@ class ConnectPlatformRequest(BaseModel):
     username: Optional[str] = None
     app_password: Optional[str] = None
     api_key: Optional[str] = None
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    account_id: Optional[str] = None
+    project_id: Optional[str] = None
     github_token: Optional[str] = None
     repository: Optional[str] = None
     branch: Optional[str] = "main"
     scopes: List[str] = Field(default_factory=list)
     org_id: str = "org_default"
     workspace_id: str = "ws_default"
+    
 
 class ConnectPlatformResponse(BaseModel):
     success: bool
@@ -89,6 +115,10 @@ async def connect_platform(
         username=req.username,
         app_password=req.app_password,
         api_key=api_key,
+        access_token=req.access_token,
+        refresh_token=req.refresh_token,
+        account_id=req.account_id,
+        project_id=req.project_id,
         github_token=req.github_token,
         repository=req.repository,
         branch=req.branch or "main",
