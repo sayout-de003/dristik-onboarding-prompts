@@ -143,9 +143,9 @@ async def test_model_router_does_not_repeat_exhausted_retries(monkeypatch):
     # the retry-exhaustion path this test is intended to exercise.
     from app.core.inference.model_router import settings as router_settings
     monkeypatch.setattr(
-        router_settings,
+        type(router_settings),
         "get_llm_credentials",
-        lambda: {"api_key": "test-key", "model_fast": "test-model", "model_reasoning": "test-model"},
+        lambda self: {"api_key": "test-key", "model_fast": "test-model", "model_reasoning": "test-model"},
     )
     router = ModelRouter()
     mock_client = AsyncMock()
