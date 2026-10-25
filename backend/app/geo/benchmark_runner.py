@@ -680,7 +680,7 @@ class GeoBenchmarkRunner:
         clean_domain = self._normalize_hostname(target_domain)
         brand = (brand_name or clean_domain.split(".")[0]).strip()
         comp_list = list(dict.fromkeys(
-            str(c).strip() for c in (competitors or [])
+            str(c).strip().lower() for c in (competitors or [])
             if c and str(c).strip()
         ))
         successes = [
