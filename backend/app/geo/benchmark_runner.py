@@ -112,7 +112,10 @@ class GeoBenchmarkReport(BaseModel):
     locale: str = "en-US"
     run_date: str
     total_queries: int
-    engines_tested: List[str] = Field(default_factory=list)
+    engines_tested: List[str] = Field(default_factory=list)  # engines with successful live responses
+    engines_requested: List[str] = Field(default_factory=list)
+    engines_attempted: List[str] = Field(default_factory=list)
+    engines_configured: List[str] = Field(default_factory=list)
     engine_aggregates: Dict[str, EngineBenchmarkAggregate] = Field(default_factory=dict)
     overall_mention_rate_pct: Optional[float] = None
     overall_mention_rate_ci: Optional[Tuple[float, float]] = None
@@ -567,6 +570,14 @@ class GeoBenchmarkRunner:
             "confidence_level": 0.95,
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
             "engines_configured": [ad.engine_id for ad in active_adapters if ad.is_configured()],
+            "engine_response_counts": {
+                ad.engine_id: {
+                    "attempted": sum(1 for ev in evaluations if ev.engine_id == ad.engine_id),
+                    "successful_live": sum(1 for ev in evaluations if ev.engine_id == ad.engine_id and ev.status == "SUCCESS" and ev.is_live),
+                    "failed_or_non_live": sum(1 for ev in evaluations if ev.engine_id == ad.engine_id and not (ev.status == "SUCCESS" and ev.is_live)),
+                }
+                for ad in active_adapters
+            },
             "cost_tracking_enabled": True,
             "budget_cap_usd": budget_cap_usd,
             "cost_cap_exceeded": cost_cap_exceeded,
@@ -617,7 +628,16 @@ class GeoBenchmarkRunner:
             locale=locale,
             run_date=datetime.now(timezone.utc).isoformat(),
             total_queries=len(suite.queries),
-            engines_tested=[ad.display_name for ad in active_adapters],
+            engines_tested=[
+                ad.display_name for ad in active_adapters
+                if any(ev.engine_id == ad.engine_id and ev.status == "SUCCESS" and ev.is_live for ev in evaluations)
+            ],
+            engines_requested=[str(engine) for engine in engines] if engines else [ad.engine_id for ad in active_adapters],
+            engines_attempted=[
+                ad.display_name for ad in active_adapters
+                if any(ev.engine_id == ad.engine_id for ev in evaluations)
+            ],
+            engines_configured=[ad.engine_id for ad in active_adapters if ad.is_configured()],
             engine_aggregates=engine_aggregates,
             overall_mention_rate_pct=overall_mention_rate,
             overall_mention_rate_ci=overall_mention_ci,
@@ -863,7 +883,7 @@ def build_visibility_scorecard(
         return AiVisibilityScorecard(
             status="NOT_MEASURED",
             measurement_kind="NOT_MEASURED",
-            engines_requested=len(report.engines_tested),
+            engines_requested=len(report.engines_requested or report.engines_attempted),
             engines_queried=engine_names,
             surfaces_not_queried=missing_surfaces,
             queries=report.total_queries,
