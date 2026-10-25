@@ -62,7 +62,7 @@ class CompleteGeoReportGenerator:
         visibility_status = getattr(v_card, "status", "NOT_MEASURED") if v_card else "NOT_MEASURED"
         citation_rate = (
             getattr(v_card, "citation_rate_pct", None)
-            if v_card and getattr(v_card, "measurement_kind", "NOT_MEASURED") != "NOT_MEASURED"
+            if v_card and getattr(v_card, "status", "NOT_MEASURED") == "MEASURED" and getattr(v_card, "citation_rate_pct", None) is not None
             else None
         )
 
