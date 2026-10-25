@@ -134,6 +134,7 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
   const [providerDataset, setProviderDataset] = useState('');
   const [providerApiUrl, setProviderApiUrl] = useState('');
   const [resourcePreview, setResourcePreview] = useState<{ integrationId: string; resource: string; result: any } | null>(null);
+  const [actionDrafts, setActionDrafts] = useState<Record<string, Record<string, string>>>({});
   const [providerRegistry, setProviderRegistry] = useState<Record<string, { implementation_status?: string; connection_status?: string; notes?: string | null }>>({});
 
   const fetchIntegrations = async () => {
@@ -476,6 +477,43 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
       setStatusMessage(data.status === 'LIVE_DATA' ? `✓ Read ${data.resource_count ?? 0} live ${resource} records.` : (data.message || `Resource status: ${data.status || 'unavailable'}`));
     } catch {
       setStatusMessage(`Could not read ${resource}: network error.`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const setActionDraftField = (integrationId: string, field: string, value: string) => {
+    setActionDrafts((current) => ({
+      ...current,
+      [integrationId]: { ...(current[integrationId] || {}), [field]: value },
+    }));
+  };
+
+  const handleProviderAction = async (integrationId: string, action: string, payload: Record<string, string>) => {
+    const approved = window.confirm(`Dristik will send the "${action}" action to the connected provider. Continue?`);
+    if (!approved) return;
+    setLoading(true);
+    try {
+      const key = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const res = await fetch(`/api/v1/connectors/${integrationId}/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, idempotency_key: key, approval_confirmed: true, payload }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const result = data.result || data.detail || data;
+      if (!res.ok) {
+        setStatusMessage(typeof result === 'string' ? result : JSON.stringify(result));
+      } else {
+        setResourcePreview({ integrationId, resource: `action: ${action}`, result });
+        setStatusMessage(result.status === 'SUCCEEDED' ? `✓ Provider accepted ${action}.` : (result.message || `${action}: ${result.status || 'unverified'}`));
+      }
+      await fetchIntegrations();
+      await fetchProviderRegistry();
+    } catch {
+      setStatusMessage(`Action "${action}" failed at the network layer. Check the provider before retrying.`);
     } finally {
       setLoading(false);
     }
@@ -1472,6 +1510,46 @@ export const ConnectorsModal: React.FC<ConnectorsModalProps> = ({
                               Read {resource.replace('_', ' ')}
                             </button>
                           ))}
+                        </div>
+                      )}
+
+                      {String(integ.status).toLowerCase() === 'connected' && ['telegram', 'slack', 'x', 'whatsapp_business', 'instagram'].includes(integ.provider) && (
+                        <div className="rounded border border-line bg-paper-50 p-3 space-y-2">
+                          <div className="text-[10px] uppercase tracking-wide font-semibold text-ink-500">Explicitly confirmed provider action</div>
+                          {integ.provider === 'telegram' && (
+                            <>
+                              <input value={actionDrafts[integ.integration_id]?.chat_id || ''} onChange={(e) => setActionDraftField(integ.integration_id, 'chat_id', e.target.value)} placeholder="Telegram chat ID" className="w-full rounded border border-line bg-paper-50 px-2 py-1.5 text-xs text-ink" />
+                              <textarea value={actionDrafts[integ.integration_id]?.text || ''} onChange={(e) => setActionDraftField(integ.integration_id, 'text', e.target.value)} placeholder="Message text" rows={2} className="w-full rounded border border-line bg-paper-50 px-2 py-1.5 text-xs text-ink" />
+                              <button type="button" disabled={loading || !actionDrafts[integ.integration_id]?.chat_id || !actionDrafts[integ.integration_id]?.text} onClick={() => handleProviderAction(integ.integration_id, 'send_message', { chat_id: actionDrafts[integ.integration_id]?.chat_id || '', text: actionDrafts[integ.integration_id]?.text || '' })} className="rounded border border-line px-2 py-1 text-[11px] text-ink-700 disabled:opacity-40">Send Telegram message…</button>
+                            </>
+                          )}
+                          {integ.provider === 'slack' && (
+                            <>
+                              <input value={actionDrafts[integ.integration_id]?.channel || ''} onChange={(e) => setActionDraftField(integ.integration_id, 'channel', e.target.value)} placeholder="Slack channel ID" className="w-full rounded border border-line bg-paper-50 px-2 py-1.5 text-xs text-ink" />
+                              <textarea value={actionDrafts[integ.integration_id]?.text || ''} onChange={(e) => setActionDraftField(integ.integration_id, 'text', e.target.value)} placeholder="Message text" rows={2} className="w-full rounded border border-line bg-paper-50 px-2 py-1.5 text-xs text-ink" />
+                              <button type="button" disabled={loading || !actionDrafts[integ.integration_id]?.channel || !actionDrafts[integ.integration_id]?.text} onClick={() => handleProviderAction(integ.integration_id, 'post_message', { channel: actionDrafts[integ.integration_id]?.channel || '', text: actionDrafts[integ.integration_id]?.text || '' })} className="rounded border border-line px-2 py-1 text-[11px] text-ink-700 disabled:opacity-40">Post Slack message…</button>
+                            </>
+                          )}
+                          {integ.provider === 'x' && (
+                            <>
+                              <textarea value={actionDrafts[integ.integration_id]?.text || ''} onChange={(e) => setActionDraftField(integ.integration_id, 'text', e.target.value)} placeholder="Post text" rows={3} className="w-full rounded border border-line bg-paper-50 px-2 py-1.5 text-xs text-ink" />
+                              <button type="button" disabled={loading || !actionDrafts[integ.integration_id]?.text} onClick={() => handleProviderAction(integ.integration_id, 'publish_post', { text: actionDrafts[integ.integration_id]?.text || '' })} className="rounded border border-line px-2 py-1 text-[11px] text-ink-700 disabled:opacity-40">Publish on X…</button>
+                            </>
+                          )}
+                          {integ.provider === 'whatsapp_business' && (
+                            <>
+                              <input value={actionDrafts[integ.integration_id]?.to || ''} onChange={(e) => setActionDraftField(integ.integration_id, 'to', e.target.value)} placeholder="Recipient phone number (international format)" className="w-full rounded border border-line bg-paper-50 px-2 py-1.5 text-xs text-ink" />
+                              <input value={actionDrafts[integ.integration_id]?.template_name || ''} onChange={(e) => setActionDraftField(integ.integration_id, 'template_name', e.target.value)} placeholder="Approved WhatsApp template name" className="w-full rounded border border-line bg-paper-50 px-2 py-1.5 text-xs text-ink" />
+                              <button type="button" disabled={loading || !actionDrafts[integ.integration_id]?.to || !actionDrafts[integ.integration_id]?.template_name} onClick={() => handleProviderAction(integ.integration_id, 'send_template', { to: actionDrafts[integ.integration_id]?.to || '', template_name: actionDrafts[integ.integration_id]?.template_name || '' })} className="rounded border border-line px-2 py-1 text-[11px] text-ink-700 disabled:opacity-40">Send approved template…</button>
+                            </>
+                          )}
+                          {integ.provider === 'instagram' && (
+                            <>
+                              <input value={actionDrafts[integ.integration_id]?.media_url || ''} onChange={(e) => setActionDraftField(integ.integration_id, 'media_url', e.target.value)} placeholder="Public HTTPS image URL" className="w-full rounded border border-line bg-paper-50 px-2 py-1.5 text-xs text-ink" />
+                              <textarea value={actionDrafts[integ.integration_id]?.caption || ''} onChange={(e) => setActionDraftField(integ.integration_id, 'caption', e.target.value)} placeholder="Caption (optional)" rows={2} className="w-full rounded border border-line bg-paper-50 px-2 py-1.5 text-xs text-ink" />
+                              <button type="button" disabled={loading || !actionDrafts[integ.integration_id]?.media_url?.startsWith('https://')} onClick={() => handleProviderAction(integ.integration_id, 'publish_image', { media_url: actionDrafts[integ.integration_id]?.media_url || '', caption: actionDrafts[integ.integration_id]?.caption || '' })} className="rounded border border-line px-2 py-1 text-[11px] text-ink-700 disabled:opacity-40">Publish image…</button>
+                            </>
+                          )}
                         </div>
                       )}
 
