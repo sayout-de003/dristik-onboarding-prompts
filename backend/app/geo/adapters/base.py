@@ -23,7 +23,7 @@ class EngineRawResponse(BaseModel):
     latency_ms: float = 0.0
     error: Optional[str] = None
     queried_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    is_live: bool = True
+    is_live: bool = False
 
 
 class BaseGeoEngineAdapter(ABC):
