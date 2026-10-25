@@ -145,7 +145,7 @@ export function CroWorkspaceView({
                 Overall CRO Score
               </span>
               <div className="flex items-baseline gap-2">
-                <span className="font-sans text-3xl font-bold text-ink">{croScore}</span>
+                <span className="font-sans text-3xl font-bold text-ink">{croScore == null ? 'Unmeasured' : croScore}</span>
                 <span className="font-mono text-xs px-2 py-0.5 rounded bg-paper-200 text-ink-700 font-bold">
                   Grade {croGrade}
                 </span>
@@ -178,7 +178,7 @@ export function CroWorkspaceView({
                 <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded font-bold ${
                   socialProof?.risk_level === 'LOW' ? 'bg-good/10 text-good' : 'bg-warn/10 text-warn'
                 }`}>
-                  {socialProof?.risk_level || 'MED'} RISK
+                  {socialProof?.risk_level ? `${socialProof.risk_level} RISK` : 'Not measured'}
                 </span>
               </div>
               <p className="text-xs text-ink-500">Social proof & compliance</p>
