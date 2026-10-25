@@ -5,6 +5,7 @@ measured analytics that were actually connected. Missing rates stay missing.
 """
 from __future__ import annotations
 
+import math
 import re
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
 from urllib.parse import urlparse
@@ -258,6 +259,12 @@ def _profile_models(profile: Any) -> Set[str]:
 
 
 def _read_analytics(channel: Any) -> Dict[str, Any]:
+    """Normalize optional GA4 data without turning malformed values into measurements.
+
+    GA4 key events are event counts, not necessarily unique converting users. A
+    conversion rate is published only when unique converters and eligible users
+    are explicitly supplied by the connector.
+    """
     result: Dict[str, Any] = {
         "state": "NOT_CONNECTED",
         "notice": "Google Analytics 4 was not connected for this audit. Sessions, landing pages, engagement, and conversions were not retrieved.",
@@ -266,6 +273,8 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
         "sessions": None,
         "key_events": None,
         "key_events_present": False,
+        "unique_converters": None,
+        "eligible_users": None,
         "engagement_rate_pct": None,
         "landing_pages": None,
         "revenue": None,
@@ -273,36 +282,83 @@ def _read_analytics(channel: Any) -> Dict[str, Any]:
     }
     if not isinstance(channel, dict):
         return result
-    state = str(channel.get("state") or "NOT_CONNECTED")
+
+    state = str(channel.get("state") or "NOT_CONNECTED").upper()
     result["state"] = state
     result["notice"] = str(channel.get("notice") or result["notice"])
     result["property"] = channel.get("property")
     result["period"] = channel.get("period")
     if state != "MEASURED":
+        # Never accept numeric payload fields from a failed/disconnected provider.
         return result
-    sessions = channel.get("sessions")
-    if isinstance(sessions, (int, float)) and not isinstance(sessions, bool):
-        result["sessions"] = int(sessions)
-    if "key_events" in channel and isinstance(channel.get("key_events"), (int, float)) and not isinstance(channel.get("key_events"), bool):
-        result["key_events"] = int(channel["key_events"])
-        result["key_events_present"] = True
+
+    def count_value(*keys: str) -> Optional[int]:
+        for key in keys:
+            value = channel.get(key)
+            if value is None:
+                continue
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(float(value))
+                or value < 0
+                or not float(value).is_integer()
+            ):
+                result["state"] = "INVALID_DATA"
+                result["notice"] = f"GA4 returned an invalid non-negative integer for {key}; affected metrics were withheld."
+                return None
+            return int(value)
+        return None
+
+    sessions = count_value("sessions")
+    key_events = count_value("key_events", "keyEvents", "conversions")
+    unique_converters = count_value("unique_converters", "converters")
+    eligible_users = count_value("eligible_users", "total_users", "users")
+    if result["state"] == "INVALID_DATA":
+        return result
+    result["sessions"] = sessions
+    result["key_events"] = key_events
+    result["key_events_present"] = key_events is not None
+    result["unique_converters"] = unique_converters
+    result["eligible_users"] = eligible_users
+
     engagement = channel.get("engagement_rate_pct")
-    if isinstance(engagement, (int, float)) and not isinstance(engagement, bool):
+    if engagement is not None:
+        if (
+            isinstance(engagement, bool)
+            or not isinstance(engagement, (int, float))
+            or not math.isfinite(float(engagement))
+            or not 0 <= float(engagement) <= 100
+        ):
+            result["state"] = "INVALID_DATA"
+            result["notice"] = "GA4 returned an invalid engagement percentage; affected metrics were withheld."
+            return result
         result["engagement_rate_pct"] = float(engagement)
+
     if isinstance(channel.get("landing_pages"), list):
         result["landing_pages"] = channel["landing_pages"]
+
     for key in ("revenue", "purchase_revenue", "total_revenue"):
         value = channel.get(key)
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            result["revenue"] = float(value)
-            break
-    for key in ("orders", "transactions", "ecommerce_purchases"):
-        value = channel.get(key)
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            result["orders"] = int(value)
-            break
-    return result
+        if value is None:
+            continue
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(float(value))
+            or value < 0
+        ):
+            result["state"] = "INVALID_DATA"
+            result["notice"] = f"GA4 returned an invalid non-negative amount for {key}; revenue metrics were withheld."
+            return result
+        result["revenue"] = float(value)
+        break
 
+    orders = count_value("orders", "transactions", "ecommerce_purchases")
+    if result["state"] == "INVALID_DATA":
+        return result
+    result["orders"] = orders
+    return result
 
 def _read_search(channel: Any) -> Dict[str, Any]:
     if not isinstance(channel, dict) or channel.get("state") != "MEASURED":
@@ -2900,11 +2956,23 @@ def _section_status(checks: Sequence[CroCheckRecord]) -> str:
 def _metrics(obs: _Obs) -> List[CroMetricResult]:
     analytics = obs.analytics
     window = analytics.get("period")
-    conversion = rate(analytics.get("key_events"), analytics.get("sessions")) if analytics.get("key_events_present") else None
+    conversion = rate(analytics.get("unique_converters"), analytics.get("eligible_users"))
+    key_event_rate = rate(analytics.get("key_events"), analytics.get("sessions")) if analytics.get("key_events_present") else None
     rpv = rate(analytics.get("revenue"), analytics.get("sessions"))
     aov = rate(analytics.get("revenue"), analytics.get("orders"))
     values = {
-        "Conversion rate": (conversion, "key events", "sessions", "A property key-event rate. Not a qualified-lead rate."),
+        "Conversion rate": (
+            conversion,
+            "unique converters",
+            "eligible users",
+            "A conversion rate requires unique converters and an explicitly defined eligible-user denominator.",
+        ),
+        "Key-event rate per session": (
+            key_event_rate,
+            "key events",
+            "sessions",
+            "This is an event-count-per-session ratio, not a unique-user conversion rate; it can exceed 100%.",
+        ),
         "Revenue per visitor": (rpv, "attributed revenue", "sessions", "Shown only when both revenue and sessions were present."),
         "Average order value": (aov, "net sales", "orders", "Shown only when both net sales and orders were present."),
     }
@@ -2925,6 +2993,9 @@ def _metrics(obs: _Obs) -> List[CroMetricResult]:
                 note=note,
             ))
             continue
+        reason = "The numerator and denominator were not both available. Zero was not substituted, and no lift was assumed."
+        if spec["metric"] == "Conversion rate":
+            reason = "Unique converters and eligible users were not both returned by GA4. Key events ÷ sessions is not substituted for conversion rate."
         results.append(CroMetricResult(
             metric=spec["metric"],
             formula=spec["formula"],
@@ -2933,8 +3004,8 @@ def _metrics(obs: _Obs) -> List[CroMetricResult]:
             display="Not measured",
             denominator=None,
             numerator=None,
-            window=window if spec["metric"] == "Conversion rate" and analytics.get("state") == "MEASURED" else None,
-            note="The numerator and denominator were not both available. Zero was not substituted, and no lift was assumed.",
+            window=window if analytics.get("state") == "MEASURED" else None,
+            note=reason,
         ))
     return results
 
