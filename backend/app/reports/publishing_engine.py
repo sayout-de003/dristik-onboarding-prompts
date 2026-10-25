@@ -253,6 +253,7 @@ class CoverGenerator:
             f"{m.findings_count} findings recorded" if isinstance(m.findings_count, int) and m.findings_count >= 0
             else "Finding count not recorded"
         )
+        score_display_label = f"{score_text} / 100 · GRADE {grade_text}" if score_is_valid else score_text
 
         return f"""
         <div class="book-cover cover-page" style="background: {palette['bg_gradient']};">
@@ -307,7 +308,7 @@ class CoverGenerator:
                     <div class="cover-meta-cell">
                         <span class="meta-label">COMPOSITE INDEX</span>
                         <span class="meta-val" style="color: {palette['accent']}; font-weight: 800;">
-                            {_esc(score_text)}{f" / 100 · GRADE {_esc(grade_text)}" if score_is_valid else ""}
+                            {_esc(score_display_label)}
                         </span>
                     </div>
                     <div class="cover-meta-cell">
