@@ -43,6 +43,7 @@ from app.crawl.analyzers.security import analyze_security_headers
 from app.crawl.analyzers.dynamic_content import extract_embedded_cms_content, needs_js_render
 from app.crawl.analyzers.visible import extract_visible_page
 from app.crawl.browser import BrowserRenderService
+from app.crawl.response_limits import read_response_limited
 
 class CrawlerService:
     def __init__(self):
@@ -273,7 +274,8 @@ class CrawlerService:
                 try:
                     async with client.stream("GET", current_url) as stream_resp:
                         ttfb_hop = (time.time() - hop_start) * 1000
-                        content = await stream_resp.aread()
+                        max_response_bytes = int(getattr(settings, "CRAWL_MAX_RESPONSE_BYTES", 5 * 1024 * 1024) or 5 * 1024 * 1024)
+                        content = await read_response_limited(stream_resp, max_response_bytes)
                         hop_latency = (time.time() - hop_start) * 1000
                         status_code = stream_resp.status_code
                         loc = stream_resp.headers.get("location") or stream_resp.headers.get("Location")
@@ -382,7 +384,7 @@ class CrawlerService:
         timeout = httpx.Timeout(settings.CRAWL_TIMEOUT_SECONDS, connect=8.0)
         limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
 
-        async with httpx.AsyncClient(headers=self.headers, timeout=timeout, limits=limits, follow_redirects=False, verify=False) as client:
+        async with httpx.AsyncClient(headers=self.headers, timeout=timeout, limits=limits, follow_redirects=False, verify=True) as client:
             
             # Step A: Discover robots.txt & Sitemap
             if progress_callback:
