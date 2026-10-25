@@ -1002,7 +1002,7 @@ class GeoDimensionScore(BaseModel):
     """Score for a single GEO dimension with provenance."""
     key: str = Field(..., description="GeoDimensionKey enum value")
     label: str
-    score: float = Field(..., ge=0.0, le=100.0, description="0-100 dimension score")
+    score: Optional[float] = Field(default=None, ge=0.0, le=100.0, description="0-100 score, or null when the dimension is unmeasured")
     band: str = Field(..., description="'high' | 'medium' | 'low'")
     confidence: float = Field(default=0.75, ge=0.0, le=1.0)
     provenances: List[str] = Field(default_factory=list, description="Evidence IDs backing this score")
