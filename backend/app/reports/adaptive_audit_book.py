@@ -357,44 +357,10 @@ from app.reports.plain_english_engine import (
 # CHAPTER BODY BUILDERS (EMPIRICAL, GROUNDED DATA)
 # ==============================================================================
 
-def _finding_value(finding: Any, key: str, default: Any = None) -> Any:
-    """Read a field from either a Pydantic/object finding or a dictionary."""
-    if isinstance(finding, dict):
-        return finding.get(key, default)
-    return getattr(finding, key, default)
-
-
-def _report_findings(report: Any) -> List[Any]:
-    """Return one canonical record per repeated finding identity for report assembly."""
-    raw = _report_findings(report)
-    canonical: List[Any] = []
-    seen: set[tuple[str, tuple[str, ...]]] = set()
-    seen_ids: set[str] = set()
-    for finding in raw:
-        finding_id = str(_finding_value(finding, "finding_id", _finding_value(finding, "id", "")) or "").strip()
-        if finding_id and finding_id in seen_ids:
-            continue
-        title = re.sub(r"\s+", " ", str(_finding_value(finding, "title", _finding_value(finding, "name", "")) or "")).strip().casefold()
-        urls = _finding_value(finding, "affected_urls", None) or _finding_value(finding, "urls", None) or []
-        if isinstance(urls, str):
-            urls = [urls]
-        if not urls:
-            url = _finding_value(finding, "url", None) or _finding_value(finding, "affected_url", None)
-            urls = [url] if url else []
-        normalized_urls = tuple(sorted({str(url).rstrip("/").casefold() for url in urls if url}))
-        # Do not merge similarly worded findings on different pages. If URLs are missing,
-        # retain the record using its ID so unrelated records are not collapsed.
-        identity = (title, normalized_urls) if title and normalized_urls else (
-            str(_finding_value(finding, "finding_id", _finding_value(finding, "id", id(finding)))),
-            normalized_urls,
-        )
-        if identity in seen:
-            continue
-        seen.add(identity)
-        if finding_id:
-            seen_ids.add(finding_id)
-        canonical.append(finding)
-    return canonical
+from app.report_finding_registry import (
+    canonicalize_report_findings as _report_findings,
+    finding_value as _finding_value,
+)
 
 
 def _format_finding_cards(findings: List[Any], limit: int = 8, detailed: bool = False) -> str:
