@@ -22,7 +22,7 @@ from app.identity.deps import get_current_user, require_permission
 from app.identity.store import get_store
 from app.payments.store import get_payment_store
 from app.orchestration.orchestrator import orchestrator
-from app.scoring.displayed_score import displayed_composite
+from app.domain.scoring.displayed_score import displayed_composite
 from app.remediation.patch_pack import (
     generate_patch_pack_zip,
     generate_notion_block,
