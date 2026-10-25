@@ -101,42 +101,6 @@ export function Report({
               </svg>
               Complete Master Book (All Disciplines)
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                const id = report.analysis_id || report.report_id;
-                if (id) window.open(`/api/v1/reports/${id}/seo-report?format=pdf&download=true`, '_blank');
-              }}
-              className="btn-secondary px-3 py-2 text-sm flex items-center gap-1.5 font-semibold text-brand"
-              title="Download Publication-Grade SEO Master Audit Book PDF"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              SEO Book (PDF)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const id = report.analysis_id || report.report_id;
-                if (id) window.open(`/api/v1/reports/${id}/seo-report?format=print`, '_blank');
-              }}
-              className="btn-secondary px-3 py-2 text-sm flex items-center gap-1.5"
-              title="Open Publication-Grade SEO Master Audit Book (Print & PDF Preview)"
-            >
-              SEO Book (Print)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const id = report.analysis_id || report.report_id;
-                if (id) window.open(`/api/v1/reports/${id}/aeo-report?format=html`, '_blank');
-              }}
-              className="btn-secondary px-3 py-2 text-sm flex items-center gap-1.5"
-              title="Open Complete 55-Section Answer Engine Optimization (AEO) Master Report (7 Parts, 15 Appendices)"
-            >
-              AEO Report (55-Sec)
-            </button>
             {onPreviewDeck && (
               <button
                 type="button"
