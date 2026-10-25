@@ -186,7 +186,10 @@ class GeoBenchmarkRunner:
 
         if was_first_party:
             quality: SourceQuality = "first_party"
-        elif any(any(soc in d for soc in ["linkedin", "twitter", "x.com", "crunchbase", "github", "clutch", "g2"]) for d in domain_list):
+        elif any(
+            set(d.split(".")) & {"linkedin", "twitter", "x", "crunchbase", "github", "clutch", "g2"}
+            for d in domain_list
+        ):
             quality = "social_directory"
         elif len(domain_list) > 0:
             quality = "third_party"
@@ -203,9 +206,17 @@ class GeoBenchmarkRunner:
         if not low_text or raw_text.startswith("API Error") or "Missing API key" in raw_text:
             return False, None
 
+        brand_pattern = (
+            re.compile(rf"(?<!\\w){re.escape(low_brand)}(?!\\w)", re.IGNORECASE)
+            if low_brand else None
+        )
+        domain_pattern = (
+            re.compile(rf"(?:^|[./\\s]){re.escape(low_domain)}(?:$|[/\\s:?#])", re.IGNORECASE)
+            if low_domain else None
+        )
         has_mention = bool(
-            (low_brand and low_brand in low_text) or
-            (low_domain and low_domain in low_text)
+            (brand_pattern and brand_pattern.search(raw_text or ""))
+            or (domain_pattern and domain_pattern.search(raw_text or ""))
         )
 
         position = None
@@ -214,7 +225,7 @@ class GeoBenchmarkRunner:
             lines = raw_text.split("\n")
             for line in lines:
                 low_line = line.lower()
-                if (low_brand and low_brand in low_line) or (low_domain and low_domain in low_line):
+                if (brand_pattern and brand_pattern.search(line)) or (domain_pattern and domain_pattern.search(line)):
                     m_hash = re.search(r"#([0-9]+)", line)
                     if m_hash:
                         position = int(m_hash.group(1))
