@@ -12,6 +12,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 import json
 import os
+import math
 
 from app.core.config import settings
 from app.connectors.base.interface import BaseConnector
@@ -173,11 +174,12 @@ class GoogleAnalytics4Connector(BaseConnector, ExternalTelemetryConnector):
                 status="NOT_CONNECTED",
                 is_connected=False,
                 metrics={
-                    "sessions_30d": 0,
-                    "engagement_rate": 0.0,
-                    "bounce_rate": 0.0,
-                    "conversions_count": 0,
-                    "conversion_rate": 0.0,
+                    "sessions_30d": None,
+                    "engagement_rate": None,
+                    "bounce_rate": None,
+                    "conversions_count": None,
+                    "conversion_rate": None,
+                    "key_event_rate_per_session_pct": None,
                     "top_landing_pages": [],
                 },
                 unavailability_reason="Google Analytics 4 not connected. Real conversion funnels and user engagement are unmeasured.",
@@ -247,11 +249,12 @@ class GoogleAnalytics4Connector(BaseConnector, ExternalTelemetryConnector):
                 status="UNAVAILABLE",
                 is_connected=bool(token),
                 metrics={
-                    "sessions_30d": 0,
-                    "engagement_rate": 0.0,
-                    "bounce_rate": 0.0,
-                    "conversions_count": 0,
-                    "conversion_rate": 0.0,
+                    "sessions_30d": None,
+                    "engagement_rate": None,
+                    "bounce_rate": None,
+                    "conversions_count": None,
+                    "conversion_rate": None,
+                    "key_event_rate_per_session_pct": None,
                     "top_landing_pages": [],
                 },
                 unavailability_reason="Google Analytics is authorized, but no GA4 property id was found. Open the connector and confirm the property.",
@@ -275,11 +278,12 @@ class GoogleAnalytics4Connector(BaseConnector, ExternalTelemetryConnector):
                 status="UNAVAILABLE",
                 is_connected=False,
                 metrics={
-                    "sessions_30d": 0,
-                    "engagement_rate": 0.0,
-                    "bounce_rate": 0.0,
-                    "conversions_count": 0,
-                    "conversion_rate": 0.0,
+                    "sessions_30d": None,
+                    "engagement_rate": None,
+                    "bounce_rate": None,
+                    "conversions_count": None,
+                    "conversion_rate": None,
+                    "key_event_rate_per_session_pct": None,
                     "top_landing_pages": [],
                 },
                 unavailability_reason=f"Google Analytics query failed: {exc}",
@@ -297,20 +301,55 @@ class GoogleAnalytics4Connector(BaseConnector, ExternalTelemetryConnector):
             order = ["sessions", "bounceRate", "averageSessionDuration", "conversions", "engagementRate"]
             named = {order[index]: values[index] for index in range(min(len(order), len(values)))}
 
-        def _num(key: str) -> float:
+        def _num(key: str) -> Optional[float]:
+            raw = named.get(key)
+            if raw is None or raw == "":
+                return None
             try:
-                return float(named.get(key) or 0)
-            except (TypeError, ValueError):
-                return 0.0
+                value = float(raw)
+            except (TypeError, ValueError, OverflowError):
+                return None
+            if not math.isfinite(value) or value < 0:
+                return None
+            return value
 
-        sessions = int(_num("sessions"))
-        conversions = int(_num("conversions"))
+        sessions_value = _num("sessions")
+        conversions_value = _num("conversions")
+        engagement_value = _num("engagementRate")
+        bounce_value = _num("bounceRate")
+        if sessions_value is None:
+            return ExternalTelemetryResult(
+                connector_id="ga4",
+                connector_name="Google Analytics 4",
+                domain=domain,
+                status="UNAVAILABLE",
+                is_connected=True,
+                metrics={
+                    "sessions_30d": None,
+                    "engagement_rate": None,
+                    "bounce_rate": None,
+                    "conversions_count": None,
+                    "conversion_rate": None,
+                    "key_event_rate_per_session_pct": None,
+                    "top_landing_pages": [],
+                },
+                unavailability_reason="GA4 authorized the request, but the response did not contain a valid sessions metric. No metric was substituted.",
+                provenance_label="LIVE_EXTERNAL_QUERY",
+            )
+        sessions = int(sessions_value)
+        conversions = int(conversions_value) if conversions_value is not None else None
         metrics = {
             "sessions_30d": sessions,
-            "engagement_rate": round(_num("engagementRate") * 100, 2),
-            "bounce_rate": round(_num("bounceRate") * 100, 2),
+            "engagement_rate": round(engagement_value * 100, 2) if engagement_value is not None else None,
+            "bounce_rate": round(bounce_value * 100, 2) if bounce_value is not None else None,
             "conversions_count": conversions,
-            "conversion_rate": round((conversions / sessions) * 100, 2) if sessions else 0.0,
+            # GA4 conversions/key events are event counts, not unique converting users.
+            "conversion_rate": None,
+            "key_event_rate_per_session_pct": (
+                round((conversions / sessions) * 100, 2)
+                if conversions is not None and sessions > 0
+                else None
+            ),
             "top_landing_pages": [],
         }
         ev_hash = hashlib.sha256(json.dumps(metrics, sort_keys=True).encode()).hexdigest()
