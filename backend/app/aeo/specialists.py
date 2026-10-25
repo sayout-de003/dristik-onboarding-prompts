@@ -181,73 +181,133 @@ class IntentClassificationSpecialist(BaseAeoSpecialist):
 class QuestionClusteringSpecialist(BaseAeoSpecialist):
     specialist_id = "SPEC-03"
     specialist_name = "Question Clustering"
-    responsibility = "Group semantically related questions and identify primary vs supporting queries"
+    responsibility = "Cluster real question text using supplied embeddings, with a labelled lexical fallback"
 
     def evaluate(self, report: Any) -> SpecialistResult:
+        from app.aeo.semantic_quality import SemanticQuestionClusterer
+
         g = getattr(report, "geo_readiness", None)
         questions = getattr(g, "questions", []) if g else []
-        clusters: Dict[str, List[str]] = {}
-        for q in questions:
-            cat = getattr(q, "category", "Core Offering") or "Core Offering"
-            clusters.setdefault(cat, []).append(getattr(q, "question", ""))
+        result = SemanticQuestionClusterer.cluster(questions)
+        if result["status"] == "NOT_TESTED":
+            status = EvidenceState.NOT_TESTED
+        elif result["status"] == "MEASURED":
+            status = EvidenceState.SAMPLE_VERIFIED
+        else:
+            status = EvidenceState.INFERRED
+
+        evidence_items = []
+        for cluster in result.get("clusters", []):
+            evidence_items.append({
+                "cluster_id": cluster["cluster_id"],
+                "representative_question": cluster["representative_question"],
+                "question_ids": cluster["question_ids"],
+                "member_count": cluster["member_count"],
+                "source_urls": cluster["source_urls"],
+                "method": result["method"],
+                "similarity_threshold": result["threshold"],
+            })
 
         return SpecialistResult(
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=EvidenceState.SAMPLE_VERIFIED if questions else EvidenceState.NOT_TESTED,
+            status=status,
             summary=(
-                f"Grouped {len(questions)} questions by existing category labels into {len(clusters)} groups; this is not semantic clustering."
-                if questions else "No questions were available for clustering."
+                f"Clustered {result['question_count']} question records into {result['cluster_count']} groups using {result['method']}."
+                if result["status"] != "NOT_TESTED"
+                else "Question clustering was not tested because no usable question text was supplied."
             ),
             findings=[],
-            metadata={"cluster_count": len(clusters)},
+            evidence_items=evidence_items,
+            metadata={
+                "status": result["status"],
+                "method": result["method"],
+                "threshold": result["threshold"],
+                "question_count": result["question_count"],
+                "cluster_count": result["cluster_count"],
+                "clusters": result["clusters"],
+                "limitations": result["limitations"],
+            },
         )
 
 
 class AnswerQualitySpecialist(BaseAeoSpecialist):
     specialist_id = "SPEC-04"
     specialist_name = "Answer Quality"
-    responsibility = "Evaluate completeness, clarity, directness, and absence of unnecessary preambles"
+    responsibility = "Evaluate explicit answer passages for relevance, directness, concision, and standalone completeness"
 
     def evaluate(self, report: Any) -> SpecialistResult:
-        g = getattr(report, "geo_readiness", None)
-        unsupp = getattr(g, "questions_unsupported", 0) if g else 0
-        findings = []
-        if unsupp > 0:
-            findings.append(AeoFindingRecord(
-                finding_id="AEO-QUAL-001",
-                priority="P1",
-                evidence_state=EvidenceState.SAMPLE_VERIFIED,
-                question="Are all critical brand capabilities explained with concise opening answers?",
-                observed_issue=f"{unsupp} assessed questions lack a self-contained, direct opening answer passage.",
-                evidence_url=getattr(report, "website_url", ""),
-                evidence_excerpt="Unanswered query topics detected in content evaluation.",
-                collection_timestamp=datetime.now(timezone.utc).isoformat(),
-                scope="Analyzed question inventory.",
-                why_it_matters="Passages requiring inference are deprioritized by answer extraction algorithms.",
-                recommended_fix="Place explicit 40-60 word standalone answer summaries directly beneath matching H2 headings.",
-                validation="Passage extraction score >= 85%.",
-                success_metrics="Zero unsupported priority questions in re-audit.",
-                limitations="On-page quality alone does not force SERP snippet placement.",
-            ))
+        from app.aeo.semantic_quality import AnswerPassageQualityEvaluator
 
+        g = getattr(report, "geo_readiness", None)
+        questions = getattr(g, "questions", []) if g else []
+        result = AnswerPassageQualityEvaluator.evaluate(questions)
+        findings = []
+        now = datetime.now(timezone.utc).isoformat()
+
+        for item in result.get("results", []):
+            if item.get("status") != "SAMPLE_VERIFIED":
+                continue
+            score = item.get("quality_score")
+            issues = item.get("findings") or []
+            if (isinstance(score, (int, float)) and score < 65) or issues:
+                evidence = next(
+                    (p for p in item.get("evidence", []) if p.get("text")),
+                    {},
+                )
+                excerpt = str(evidence.get("text") or "")[:1200]
+                url = str(evidence.get("source_url") or getattr(report, "website_url", "") or "")
+                findings.append(AeoFindingRecord(
+                    finding_id=f"AEO-ANSWER-{item['question_id']}",
+                    priority="P1" if isinstance(score, (int, float)) and score < 45 else "P2",
+                    evidence_state=EvidenceState.SAMPLE_VERIFIED,
+                    question=item.get("question") or "Is the answer passage directly useful for the target question?",
+                    observed_issue="; ".join(issues) if issues else f"Passage quality heuristic score is {score}/100.",
+                    evidence_url=url,
+                    evidence_excerpt=excerpt or "No passage excerpt was recorded.",
+                    collection_timestamp=now,
+                    scope="Only the explicit question/passage records attached to this audit; not a site-wide claim.",
+                    why_it_matters="Clear, relevant, self-contained passages are easier to interpret and extract, but this heuristic does not predict ranking.",
+                    recommended_fix="Rewrite the passage to answer the exact question in the opening sentence, include the essential verified details, and remove unrelated preamble. Preserve a source URL.",
+                    validation="Re-crawl the same page and rerun passage-level evaluation; review the passage manually for semantic correctness and factual support.",
+                    success_metrics="Improve the measured passage dimensions on the same question and page; do not treat this heuristic score as an answer-engine visibility metric.",
+                    limitations="Text heuristics only; does not prove semantic entailment, factual accuracy, or live answer-engine selection.",
+                ))
+
+        status = (
+            EvidenceState.SAMPLE_VERIFIED if result["status"] == "MEASURED"
+            else EvidenceState.NOT_TESTED
+        )
         return SpecialistResult(
             specialist_id=self.specialist_id,
             specialist_name=self.specialist_name,
             responsibility=self.responsibility,
-            status=(
-                EvidenceState.SAMPLE_VERIFIED
-                if getattr(g, "questions_total", 0) > 0
-                else EvidenceState.NOT_TESTED
-            ),
+            status=status,
             summary=(
-                "Reviewed answer-support counts from the available question evaluation; passage-level quality evidence is not attached by this specialist."
-                if getattr(g, "questions_total", 0) > 0
-                else "Answer quality was not tested because no assessed question inventory is available."
+                f"Evaluated explicit answer passages for {result['questions_tested']} of {result['questions_received']} supplied questions; mean heuristic score: {result['quality_score_mean']}."
+                if result["status"] == "MEASURED"
+                else "Answer quality was not tested because no explicit answer passage was attached to the question inventory."
             ),
             findings=findings,
-            metadata={"unsupported_count": unsupp},
+            evidence_items=[
+                {
+                    "question_id": item["question_id"],
+                    "question": item["question"],
+                    "status": item["status"],
+                    "quality_score": item["quality_score"],
+                    "dimensions": item["dimensions"],
+                    "evidence": item["evidence"],
+                }
+                for item in result["results"]
+            ],
+            metadata={
+                "status": result["status"],
+                "questions_received": result["questions_received"],
+                "questions_tested": result["questions_tested"],
+                "quality_score_mean": result["quality_score_mean"],
+                "limitations": result["limitations"],
+            },
         )
 
 
