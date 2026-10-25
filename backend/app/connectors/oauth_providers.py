@@ -208,7 +208,7 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
         "client_secret": "INSTAGRAM_CLIENT_SECRET",
         "authorize": "https://www.facebook.com/v22.0/dialog/oauth",
         "token": "https://graph.facebook.com/v22.0/oauth/access_token",
-        "scope": "instagram_basic instagram_content_publish instagram_manage_insights pages_show_list pages_read_engagement",
+        "scope": "instagram_basic,instagram_content_publish,instagram_manage_insights,pages_show_list,pages_read_engagement",
     },
     "whatsapp_business": {
         "label": "WhatsApp Business Platform",
@@ -217,7 +217,7 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
         "client_secret": "WHATSAPP_BUSINESS_CLIENT_SECRET",
         "authorize": "https://www.facebook.com/v22.0/dialog/oauth",
         "token": "https://graph.facebook.com/v22.0/oauth/access_token",
-        "scope": "whatsapp_business_management whatsapp_business_messaging business_management",
+        "scope": "whatsapp_business_management,whatsapp_business_messaging,business_management",
     },
     "wordpress": {
         "label": "WordPress.com",
@@ -328,7 +328,11 @@ async def _exchange(provider: str, code: str, shop: str, redirect_uri: Optional[
         }
     headers = {"Accept": "application/json"}
     async with httpx.AsyncClient(timeout=20) as client:
-        response = await client.post(url, data=body, headers=headers)
+        if provider in ("instagram", "whatsapp_business"):
+            # Meta OAuth access-token exchange is a GET with query parameters.
+            response = await client.get(url, params=body, headers=headers)
+        else:
+            response = await client.post(url, data=body, headers=headers)
     if not response.is_success:
         raise HTTPException(status_code=400, detail="The provider rejected the authorization code. No connector was saved.")
     try:
