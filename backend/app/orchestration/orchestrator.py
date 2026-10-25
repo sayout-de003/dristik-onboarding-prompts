@@ -1800,9 +1800,91 @@ class AnalysisOrchestrator:
                     "reason": "One or more findings lack linked evidence; these findings must not be treated as verified.",
                 })
 
-            # Seal only after the final report and its exact finding set are validated.
-            seal_manifest(run_manifest, snapshots=blackboard.evidence_store.snapshots)
+            # Persist a validated report in a non-terminal state first. Only mark the
+            # audit completed after the manifest is sealed and the terminal state is durable.
+            telemetry_data = telemetry_tracker.get_data()
+            report.telemetry = telemetry_data
+            run.status = AnalysisStage.EXECUTIVE_SYNTHESIS
+            run.current_step = "Persisting validated report and findings"
+            run.report = report
+            run.telemetry = telemetry_data
+            final_findings = report.findings or final_findings
+
+            try:
+                self.repository.persist_findings(analysis_id, final_findings)
+                self.repository.save_run(run)
+            except Exception as pe:
+                logger.exception("Durable report persistence failed for %s", analysis_id)
+                run.status = AnalysisStage.FAILED
+                run.error = "REPORT_PERSISTENCE_FAILED"
+                run.current_step = "Validated report could not be durably persisted"
+                run.is_sealed = False
+                try:
+                    self.repository.save_run(run)
+                except Exception:
+                    logger.exception("Could not persist failure state for %s", analysis_id)
+                await self._emit_event(
+                    analysis_id,
+                    "failed",
+                    100,
+                    "The audit findings were validated but could not be durably saved. This run is not certified as complete.",
+                    {"error_code": "REPORT_PERSISTENCE_FAILED", "error_type": type(pe).__name__},
+                )
+                return
+
+            try:
+                seal_manifest(run_manifest, snapshots=blackboard.evidence_store.snapshots)
+            except Exception as seal_err:
+                logger.exception("Manifest sealing failed for %s", analysis_id)
+                run.status = AnalysisStage.FAILED
+                run.error = "MANIFEST_SEAL_FAILED"
+                run.current_step = "Validated report persisted but manifest sealing failed"
+                run.is_sealed = False
+                try:
+                    self.repository.save_run(run)
+                except Exception:
+                    logger.exception("Could not persist manifest-seal failure state for %s", analysis_id)
+                await self._emit_event(
+                    analysis_id,
+                    "failed",
+                    100,
+                    "The report was saved, but its evidence manifest could not be sealed. This run is not certified as complete.",
+                    {"error_code": "MANIFEST_SEAL_FAILED", "error_type": type(seal_err).__name__},
+                )
+                return
+
             run.is_sealed = True
+            run.status = AnalysisStage.COMPLETED
+            run.current_step = "Completed"
+            try:
+                self.repository.save_run(run)
+                self.repository.save_checkpoint(StageCheckpoint(
+                    analysis_id=analysis_id,
+                    stage=AnalysisStage.COMPLETED,
+                    step_number=5,
+                    status="COMPLETED",
+                    findings_count=len(final_findings),
+                    state_payload={"overall_score": overall_scores.overall_score},
+                ))
+            except Exception as pe:
+                logger.exception("Could not persist terminal completion state for %s", analysis_id)
+                run.status = AnalysisStage.FAILED
+                run.error = "COMPLETION_STATE_PERSISTENCE_FAILED"
+                run.current_step = "Completion state could not be durably saved"
+                run.is_sealed = False
+                try:
+                    self.repository.save_run(run)
+                except Exception:
+                    logger.exception("Could not persist completion-state failure for %s", analysis_id)
+                await self._emit_event(
+                    analysis_id,
+                    "failed",
+                    100,
+                    "The report was validated, but the terminal completion state could not be durably saved.",
+                    {"error_code": "COMPLETION_STATE_PERSISTENCE_FAILED", "error_type": type(pe).__name__},
+                )
+                return
+
             try:
                 from app.domain.commercial.store import get_outcome_store
                 get_outcome_store().schedule(
@@ -1812,27 +1894,6 @@ class AnalysisOrchestrator:
                 )
             except Exception as schedule_err:
                 logger.warning("Outcome monitoring schedule failed for %s: %s", analysis_id, type(schedule_err).__name__)
-
-            telemetry_data = telemetry_tracker.get_data()
-            report.telemetry = telemetry_data
-            run.status = AnalysisStage.COMPLETED
-            run.report = report
-            run.telemetry = telemetry_data
-
-            try:
-                final_findings = report.findings or final_findings
-                self.repository.persist_findings(analysis_id, final_findings)
-                self.repository.save_run(run)
-                self.repository.save_checkpoint(StageCheckpoint(
-                    analysis_id=analysis_id,
-                    stage=AnalysisStage.COMPLETED,
-                    step_number=5,
-                    status="COMPLETED",
-                    findings_count=len(final_findings),
-                    state_payload={"overall_score": overall_scores.overall_score}
-                ))
-            except Exception as pe:
-                logger.warning(f"Persistence error on completion: {pe}")
 
             controller.mark_node_status("node_final_report_assembly", GraphNodeStatus.COMPLETED)
             controller.log_activity("node_final_report_assembly", "success", "report.final", f"Multi-page audit completed across {len(manifest.pages)} pages. Overall Score: {overall_scores.overall_score:.0f}/100 ({overall_scores.grade}).")
