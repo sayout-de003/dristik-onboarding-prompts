@@ -147,23 +147,42 @@ class GeoBenchmarkRunner:
     def __init__(self):
         self.store = geo_pipeline_store
 
+    @staticmethod
+    def _normalize_hostname(value: str) -> str:
+        """Normalize a URL or hostname without allowing substring domain matches."""
+        candidate = (value or "").strip()
+        if not candidate:
+            return ""
+        parsed = urlparse(candidate if "://" in candidate else f"//{candidate}")
+        hostname = (parsed.hostname or "").rstrip(".").lower()
+        if hostname.startswith("www."):
+            hostname = hostname[4:]
+        try:
+            hostname = hostname.encode("idna").decode("ascii")
+        except (UnicodeError, AttributeError):
+            return ""
+        return hostname
+
     def _classify_sources(self, citations: List[str], raw_text: str, target_domain: str) -> Tuple[List[str], SourceQuality, bool]:
-        low_domain = target_domain.lower()
+        target_host = self._normalize_hostname(target_domain)
         extracted_domains = set()
 
-        for c in citations:
-            try:
-                netloc = urlparse(str(c)).netloc.lower()
-                if netloc:
-                    extracted_domains.add(netloc.replace("www.", ""))
-            except Exception:
-                pass
+        for citation in citations:
+            hostname = self._normalize_hostname(str(citation))
+            if hostname:
+                extracted_domains.add(hostname)
 
-        for match in re.finditer(r"https?://([a-zA-Z0-9\.\-]+)", raw_text):
-            extracted_domains.add(match.group(1).lower().replace("www.", ""))
+        for match in re.finditer(r"https?://([^\s\]\)\>,\"']+)", raw_text or "", re.IGNORECASE):
+            hostname = self._normalize_hostname(match.group(1).rstrip(".,;"))
+            if hostname:
+                extracted_domains.add(hostname)
 
-        domain_list = sorted(list(extracted_domains))
-        was_first_party = any(low_domain in d for d in domain_list)
+        domain_list = sorted(extracted_domains)
+        # A first-party match is an exact hostname or a valid DNS subdomain.
+        was_first_party = bool(target_host) and any(
+            host == target_host or host.endswith("." + target_host)
+            for host in domain_list
+        )
 
         if was_first_party:
             quality: SourceQuality = "first_party"
