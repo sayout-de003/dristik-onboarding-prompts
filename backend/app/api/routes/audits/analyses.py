@@ -270,7 +270,7 @@ async def get_analysis_report(analysis_id: str, user: UserIdentity = Depends(get
 @router.get("/{analysis_id}/manifest")
 async def get_analysis_manifest(analysis_id: str, user: UserIdentity = Depends(get_current_user)):
     """Return the sealed run manifest used to reconstruct this audit."""
-    from app.audit.manifest import load_manifest
+    from app.crawl.audit.manifest import load_manifest
     run = _get_org_run(analysis_id, user)
     disk = load_manifest(run.analysis_id)
     if not disk:
@@ -281,7 +281,7 @@ async def get_analysis_manifest(analysis_id: str, user: UserIdentity = Depends(g
 @router.get("/{analysis_id}/snapshots/{snapshot_id}")
 async def get_analysis_snapshot(analysis_id: str, snapshot_id: str, user: UserIdentity = Depends(get_current_user)):
     """Return a raw immutable snapshot (page body or API payload) by content-addressed ID."""
-    from app.audit.snapshots import SnapshotStore
+    from app.crawl.audit.snapshots import SnapshotStore
     run = _get_org_run(analysis_id, user)
     store = SnapshotStore(run.analysis_id)
     record = store.get(snapshot_id)
