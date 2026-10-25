@@ -1,0 +1,218 @@
+/* Dristik enterprise application layer
+   Application UI only. Print/report-specific styles remain in index.css. */
+
+:root {
+  --app-canvas: #f6f8fa;
+  --app-surface: #ffffff;
+  --app-surface-muted: #f8fafc;
+  --app-border: #e2e8f0;
+  --app-border-strong: #cbd5e1;
+  --app-text: #111827;
+  --app-muted: #64748b;
+  --app-accent: #0f766e;
+  --app-accent-hover: #115e59;
+  --app-accent-soft: #f0fdfa;
+  --app-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 8px 24px rgb(15 23 42 / 0.035);
+}
+
+.dark {
+  --app-canvas: #0b0f14;
+  --app-surface: #111820;
+  --app-surface-muted: #151e27;
+  --app-border: #283442;
+  --app-border-strong: #3a4a5c;
+  --app-text: #e5eaf0;
+  --app-muted: #9aa9ba;
+  --app-accent: #5eead4;
+  --app-accent-hover: #99f6e4;
+  --app-accent-soft: #122b2b;
+  --app-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 12px 32px rgb(0 0 0 / 0.12);
+}
+
+html { scroll-behavior: smooth; }
+body {
+  background: var(--app-canvas);
+  color: var(--app-text);
+  font-size: 14px;
+  line-height: 1.55;
+}
+::selection { background: rgb(15 118 110 / .16); }
+:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 2px; }
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+button { transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease; }
+button:disabled { cursor: not-allowed; }
+a { text-underline-offset: 3px; }
+
+#root > div.min-h-screen {
+  background: var(--app-canvas);
+}
+aside[aria-label="Primary"] {
+  background: var(--app-surface) !important;
+  border-color: var(--app-border) !important;
+  box-shadow: 1px 0 0 rgb(15 23 42 / .015);
+}
+aside[aria-label="Primary"] > div:first-child {
+  min-height: 64px;
+  padding-inline: 18px;
+  border-color: var(--app-border);
+}
+aside[aria-label="Primary"] > div:first-child button > span:first-child {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--app-accent);
+  color: #fff;
+  box-shadow: 0 2px 5px rgb(15 118 110 / .18);
+}
+aside[aria-label="Primary"] > div:first-child button > span:last-child {
+  letter-spacing: -.035em;
+  font-size: 17px;
+}
+aside[aria-label="Primary"] .workspace-link {
+  min-height: 38px;
+  padding: 8px 11px;
+  border-radius: 7px;
+  color: var(--app-muted);
+  font-weight: 500;
+}
+aside[aria-label="Primary"] .workspace-link:hover {
+  color: var(--app-text);
+  background: var(--app-surface-muted);
+}
+aside[aria-label="Primary"] .workspace-link.is-active {
+  color: var(--app-accent);
+  background: var(--app-accent-soft);
+  box-shadow: inset 2px 0 0 var(--app-accent);
+  font-weight: 650;
+}
+aside[aria-label="Primary"] .border-t { border-color: var(--app-border); }
+
+header.topbar {
+  height: 64px;
+  padding-inline: clamp(12px, 2vw, 28px);
+  background: color-mix(in srgb, var(--app-surface) 92%, transparent) !important;
+  border-color: var(--app-border) !important;
+  backdrop-filter: blur(16px) saturate(1.15);
+}
+header.topbar button { border-radius: 7px; }
+header.topbar button:hover { background: var(--app-surface-muted); }
+header.topbar kbd {
+  background: var(--app-surface-muted);
+  padding: 2px 5px;
+  border-radius: 5px;
+}
+header.topbar .card {
+  background: var(--app-surface);
+  border-color: var(--app-border);
+  box-shadow: var(--app-shadow);
+}
+main#main { min-width: 0; }
+main#main > * { min-width: 0; }
+
+.card, .sheet {
+  background: var(--app-surface);
+  border-color: var(--app-border);
+  border-radius: 10px;
+  box-shadow: var(--app-shadow);
+}
+.card:hover { border-color: var(--app-border-strong); }
+[class*="rounded-xl"] { --tw-border-radius: 10px; }
+[class*="rounded-2xl"] { --tw-border-radius: 12px; }
+[class*="border-line"] { border-color: var(--app-border); }
+.bg-paper { background-color: var(--app-canvas) !important; }
+.bg-paper-50 { background-color: var(--app-surface) !important; }
+.bg-paper-100 { background-color: var(--app-surface-muted) !important; }
+.bg-paper-200 { background-color: color-mix(in srgb, var(--app-border) 60%, var(--app-surface)) !important; }
+.text-ink { color: var(--app-text) !important; }
+.text-ink-500, .text-ink-400 { color: var(--app-muted) !important; }
+.text-ink-600 { color: var(--app-muted) !important; }
+.border-line { border-color: var(--app-border) !important; }
+
+.btn-primary, .bg-pine-solid {
+  background: var(--app-accent) !important;
+}
+.btn-primary:hover, .bg-pine-solid:hover {
+  background: var(--app-accent-hover) !important;
+}
+.btn-secondary {
+  background: var(--app-surface);
+  border-color: var(--app-border-strong);
+}
+.btn-secondary:hover { background: var(--app-surface-muted); }
+.field, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+select, textarea {
+  border-color: var(--app-border-strong);
+  border-radius: 7px;
+}
+.field:focus, input:focus, select:focus, textarea:focus {
+  border-color: var(--app-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent) 16%, transparent);
+}
+.label {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+table:not(.dristik-editorial-report table) {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+table:not(.dristik-editorial-report table) thead th {
+  background: var(--app-surface-muted);
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+table:not(.dristik-editorial-report table) th,
+table:not(.dristik-editorial-report table) td {
+  border-color: var(--app-border);
+  padding: 11px 13px;
+  vertical-align: top;
+}
+table:not(.dristik-editorial-report table) tbody tr:hover { background: var(--app-surface-muted); }
+
+.nav-link, .subnav-item, .workspace-link { transition: all 140ms ease; }
+.subnav {
+  border-color: var(--app-border);
+  gap: 4px;
+}
+.subnav-item { padding: 11px 14px; }
+.subnav-item.is-active {
+  color: var(--app-accent);
+  border-bottom-color: var(--app-accent);
+}
+.score-pill {
+  border-radius: 5px;
+  background: var(--app-surface-muted);
+  border-color: var(--app-border);
+}
+.scrim { backdrop-filter: blur(2px); }
+[role="dialog"], [data-radix-dialog-content] {
+  border-radius: 12px;
+}
+hr { border-color: var(--app-border); }
+pre, code { border-radius: 6px; }
+
+@media (min-width: 1024px) {
+  main#main { padding-bottom: 28px; }
+}
+@media (max-width: 767px) {
+  header.topbar { height: 58px; padding-inline: 10px; }
+  .card, .sheet { border-radius: 9px; }
+  table:not(.dristik-editorial-report table) th,
+  table:not(.dristik-editorial-report table) td { padding: 9px 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
