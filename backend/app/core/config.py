@@ -332,6 +332,14 @@ class Settings(BaseSettings):
     SALESFORCE_CLIENT_SECRET: Optional[str] = None
     STRIPE_CLIENT_ID: Optional[str] = None
     STRIPE_CLIENT_SECRET: Optional[str] = None
+    LINKEDIN_CLIENT_ID: Optional[str] = None
+    LINKEDIN_CLIENT_SECRET: Optional[str] = None
+    SLACK_CLIENT_ID: Optional[str] = None
+    SLACK_CLIENT_SECRET: Optional[str] = None
+    INSTAGRAM_CLIENT_ID: Optional[str] = None
+    INSTAGRAM_CLIENT_SECRET: Optional[str] = None
+    WHATSAPP_BUSINESS_CLIENT_ID: Optional[str] = None
+    WHATSAPP_BUSINESS_CLIENT_SECRET: Optional[str] = None
     WORDPRESS_CLIENT_ID: Optional[str] = None
     WORDPRESS_CLIENT_SECRET: Optional[str] = None
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
