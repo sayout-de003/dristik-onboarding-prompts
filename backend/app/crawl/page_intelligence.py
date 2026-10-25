@@ -11,12 +11,12 @@ import re
 import logging
 from typing import Any, Dict, List, Optional
 
-from app.agents.runtime.base import BaseAgent
-from app.agents.runtime.task_cards import task_card_for
-from app.cognition.blackboard import CognitiveBlackboard
+from app.orchestration.runtime.base import BaseAgent
+from app.orchestration.runtime.task_cards import task_card_for
+from app.orchestration.cognition.blackboard import CognitiveBlackboard
 from app.domain.enums import Category, Severity
-from app.evidence.models import Evidence
-from app.inference.prompt_compiler import load_prompt
+from app.domain.evidence.models import Evidence
+from app.core.inference.prompt_compiler import load_prompt
 from app.domain.models import (
     BusinessProfile,
     CopyFaqItem,
