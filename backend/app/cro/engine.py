@@ -2966,7 +2966,8 @@ def _metrics(obs: _Obs) -> List[CroMetricResult]:
     window = analytics.get("period")
     conversion = rate(analytics.get("unique_converters"), analytics.get("eligible_users"))
     key_event_rate = rate(analytics.get("key_events"), analytics.get("sessions")) if analytics.get("key_events_present") else None
-    rpv = rate(analytics.get("revenue"), analytics.get("sessions"))
+    # Revenue per visitor requires an eligible-visitor denominator; sessions are not people.
+    rpv = rate(analytics.get("revenue"), analytics.get("eligible_visitors"))
     aov = rate(analytics.get("revenue"), analytics.get("orders"))
     values = {
         "Conversion rate": (
@@ -2981,7 +2982,12 @@ def _metrics(obs: _Obs) -> List[CroMetricResult]:
             "sessions",
             "This is an event-count-per-session ratio, not a unique-user conversion rate; it can exceed 100%.",
         ),
-        "Revenue per visitor": (rpv, "attributed revenue", "sessions", "Shown only when both revenue and sessions were present."),
+        "Revenue per visitor": (
+            rpv,
+            "attributed revenue",
+            "eligible visitors",
+            "Shown only when attributed revenue and an explicitly defined eligible-visitor denominator were both present. Sessions are not substituted for visitors.",
+        ),
         "Average order value": (aov, "net sales", "orders", "Shown only when both net sales and orders were present."),
     }
     results = []
