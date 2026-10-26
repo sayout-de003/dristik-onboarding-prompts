@@ -187,6 +187,45 @@ export function AeoAnalyticsDashboard({ report, analysisId }: Props) {
           <code className="block whitespace-normal text-xs text-ink-700">((fully supported questions + 0.5 × partially supported questions) ÷ assessed questions) × 100</code>
           <p className="text-[11px] leading-relaxed text-ink-500">The content-readiness composite is published only when every required component in its configured formula is measured. The technical-eligibility composite follows the same complete-component rule. No missing component is silently treated as zero or dropped to inflate the score.</p>
         </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="border border-line rounded-lg p-4 space-y-3">
+            <div className="text-sm font-semibold text-ink">Content readiness composite</div>
+            <p className="text-[11px] text-ink-500">Published only when all four components have valid measurements.</p>
+            {[
+              ['Question coverage', 30],
+              ['Answer completeness', 20],
+              ['Clarity / extractability', 30],
+              ['Factual support', 20],
+            ].map(([label, weight]) => (
+              <div key={String(label)} className="space-y-1">
+                <div className="flex justify-between text-[11px]"><span className="text-ink-600">{label}</span><span className="font-mono text-ink-500">{weight}%</span></div>
+                <div className="h-2 rounded bg-paper-200 dark:bg-ink-800 overflow-hidden"><div className="h-full bg-pine rounded" style={{ width: `${weight}%` }} /></div>
+              </div>
+            ))}
+            <code className="block text-[10px] text-ink-600 whitespace-normal">0.30 × coverage + 0.20 × completeness + 0.30 × extractability + 0.20 × factual support</code>
+          </div>
+          <div className="border border-line rounded-lg p-4 space-y-3">
+            <div className="text-sm font-semibold text-ink">Technical eligibility composite</div>
+            <p className="text-[11px] text-ink-500">Published only when all five components have valid measurements.</p>
+            {[
+              ['Crawlability', 25],
+              ['Indexability', 25],
+              ['Structured-data validity', 20],
+              ['Internal discovery', 15],
+              ['URL stability', 15],
+            ].map(([label, weight]) => (
+              <div key={String(label)} className="space-y-1">
+                <div className="flex justify-between text-[11px]"><span className="text-ink-600">{label}</span><span className="font-mono text-ink-500">{weight}%</span></div>
+                <div className="h-2 rounded bg-paper-200 dark:bg-ink-800 overflow-hidden"><div className="h-full bg-pine rounded" style={{ width: `${weight}%` }} /></div>
+              </div>
+            ))}
+            <code className="block text-[10px] text-ink-600 whitespace-normal">0.25 × crawlability + 0.25 × indexability + 0.20 × schema + 0.15 × discovery + 0.15 × URL stability</code>
+          </div>
+        </div>
+        <div className="rounded-lg border border-line p-4">
+          <div className="text-xs font-semibold text-ink mb-1">Why there is no single total AEO number</div>
+          <p className="text-[11px] leading-relaxed text-ink-500">The implementation intentionally does not average readiness, technical eligibility, live visibility and business outcomes into one score. Those pillars have different evidence sources, denominators and measurement states. A single blended total would conceal missing data and imply a comparability that the measurement contract does not establish.</p>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="border border-line rounded-lg p-3">
             <div className="text-xs font-semibold text-ink mb-1">Observed answer visibility</div>
