@@ -73,6 +73,27 @@ export function SeoExecutiveOverview({
   const highFindings = seoFindings.filter((f) => f.severity === 'HIGH');
   const priorityFindings = [...criticalFindings, ...highFindings].slice(0, 3);
 
+  const gapGroups = [
+    {
+      key: 'TECHNICAL_SEO',
+      title: 'Crawlability and indexation',
+      description: 'Can search engines discover the right URLs, access them, and interpret canonical and response directives?',
+    },
+    {
+      key: 'ON_PAGE_SEO',
+      title: 'Page relevance and search snippets',
+      description: 'Do page titles, headings, metadata, and on-page structure accurately describe the page and its search intent?',
+    },
+    {
+      key: 'CONTENT',
+      title: 'Content depth and intent',
+      description: 'Does the checked content satisfy the visitor’s question clearly and cover the page’s intended topic?',
+    },
+  ].map((group) => ({
+    ...group,
+    findings: seoFindings.filter((finding) => finding.category === group.key),
+  }));
+
   const getScoreGrade = (score: number) => {
     if (score >= 90) return { label: 'Optimal', badge: 'bg-good/10 text-good border-good/20' };
     if (score >= 75) return { label: 'Good', badge: 'bg-pine-500/10 text-pine-600 dark:text-pine-400 border-pine-500/20' };
@@ -342,6 +363,59 @@ export function SeoExecutiveOverview({
           </Card>
         </div>
       </div>
+
+      <Card className="space-y-4 border-line bg-paper-50 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-pine-600">SEO gap analysis</p>
+            <h3 className="mt-1 text-base font-semibold text-ink">Where the checked site needs attention</h3>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-ink-500">
+              These counts come from validated findings in this report, not estimates for pages that were not checked.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigateTab('issues')}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-pine-600 hover:underline"
+          >
+            Open issue ledger <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          {gapGroups.map((group) => (
+            <button
+              type="button"
+              key={group.key}
+              onClick={() => onNavigateTab(group.key === 'TECHNICAL_SEO' ? 'architecture' : 'onpage')}
+              className="rounded-lg border border-line bg-paper-100/60 p-4 text-left transition-colors hover:border-pine-500/40 hover:bg-paper-100"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <h4 className="text-sm font-semibold text-ink">{group.title}</h4>
+                <span className={`rounded-full px-2 py-0.5 font-mono text-xs font-bold ${group.findings.length ? 'bg-warn/10 text-warn' : 'bg-paper-200 text-ink-500'}`}>
+                  {group.findings.length}
+                </span>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-ink-500">{group.description}</p>
+              {group.findings.length > 0 ? (
+                <ul className="mt-3 space-y-2 border-t border-line pt-3">
+                  {group.findings.slice(0, 2).map((finding) => (
+                    <li key={finding.finding_id} className="text-xs leading-5 text-ink-700">
+                      <span className="font-semibold">{finding.severity}:</span> {finding.title}
+                    </li>
+                  ))}
+                  {group.findings.length > 2 && (
+                    <li className="text-[11px] font-medium text-pine-600">+{group.findings.length - 2} more findings in issue ledger</li>
+                  )}
+                </ul>
+              ) : (
+                <p className="mt-3 border-t border-line pt-3 text-[11px] leading-5 text-ink-500">
+                  No validated finding published for this category in the returned report. This is not proof that every URL is issue-free.
+                </p>
+              )}
+            </button>
+          ))}
+        </div>
+      </Card>
 
       {/* ─────────────────────────────────────────────────────────────
           3. TOP PRIORITY ACTION BLOCKERS
