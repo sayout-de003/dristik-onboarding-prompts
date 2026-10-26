@@ -1,5 +1,6 @@
 """History serialization must keep CRO scores distinct from the overall site score."""
 from app.api.routes.audits.analyses import _listed_cro_score
+from app.cro.engine import build_cro_intelligence
 
 
 def test_cro_history_reads_explicit_cro_audit_score():
@@ -24,3 +25,32 @@ def test_cro_history_rejects_invalid_or_out_of_range_scores():
     assert _listed_cro_score({"cro_audit": {"overall_cro_score": True}}) is None
     assert _listed_cro_score({"cro_audit": {"overall_cro_score": 101}}) is None
     assert _listed_cro_score({"cro_audit": {"overall_cro_score": "unknown"}}) is None
+
+
+
+def test_experience_dimension_formula_uses_only_observed_pass_fail_checks():
+    report = build_cro_intelligence(
+        pages=[{
+            "url": "https://example.com/",
+            "raw_html": (
+                "<html><head><meta name='viewport' content='width=device-width'></head>"
+                "<body><h1>Example service</h1><a href='/demo'>Book a demo</a>"
+                "<form><input type='email' name='email'><button type='submit'>Send</button></form>"
+                "</body></html>"
+            ),
+        }],
+        discovered_urls=1,
+    )
+    experience = next(item for item in report.dimensions if item.id == "experience")
+    observed = experience.passed_checks + experience.failed_checks
+    assert observed > 0
+    assert experience.score == round(100 * experience.passed_checks / observed, 1)
+    assert experience.excluded_checks >= 0
+    assert "not a conversion rate" in experience.note
+
+
+def test_no_observed_pass_fail_checks_remain_unmeasured_not_zero():
+    report = build_cro_intelligence(pages=[])
+    experience = next(item for item in report.dimensions if item.id == "experience")
+    assert experience.score is None
+    assert experience.status == "UNMEASURED"
