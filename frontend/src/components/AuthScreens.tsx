@@ -132,7 +132,7 @@ function AuthShell({
 }) {
   return (
     <div className="max-w-md mx-auto space-y-8 pt-4">
-      <div className="space-y-2">
+      <div data-page-header className="space-y-2">
         <p className="label">{kicker}</p>
         <h1 className="font-sans text-4xl leading-[1.12] text-ink tracking-tight">{title}</h1>
       </div>
