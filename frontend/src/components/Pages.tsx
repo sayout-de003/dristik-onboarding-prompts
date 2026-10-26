@@ -264,35 +264,35 @@ function SpecialistInsightsBar({ insights }: { insights?: Record<string, string>
   if (!insights || Object.keys(insights).length === 0) return null;
   return (
     <div className="bg-paper-50 border border-line rounded-lg p-4 space-y-2 text-xs">
-      <p className="label text-xs">5-Specialist Copywriting Workforce Analysis</p>
+      <p className="label text-xs">Page content review</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         {insights.seo && (
           <div className="p-2.5 bg-paper-50 rounded border border-line space-y-1">
-            <span className="label text-[10px] text-ink-700 block">1. Semantic SEO</span>
+            <span className="label text-[10px] text-ink-700 block">Search relevance</span>
             <p className="text-ink-700 text-[11px] leading-snug">{insights.seo}</p>
           </div>
         )}
         {insights.geo && (
           <div className="p-2.5 bg-paper-50 rounded border border-line space-y-1">
-            <span className="label text-[10px] text-ink-700 block">2. Answer Engine (GEO)</span>
+            <span className="label text-[10px] text-ink-700 block">AI search clarity</span>
             <p className="text-ink-700 text-[11px] leading-snug">{insights.geo}</p>
           </div>
         )}
         {insights.cro && (
           <div className="p-2.5 bg-paper-50 rounded border border-line space-y-1">
-            <span className="label text-[10px] text-ink-700 block">3. Conversion (CRO)</span>
+            <span className="label text-[10px] text-ink-700 block">Conversion clarity</span>
             <p className="text-ink-700 text-[11px] leading-snug">{insights.cro}</p>
           </div>
         )}
         {insights.clarity && (
           <div className="p-2.5 bg-paper-50 rounded border border-line space-y-1">
-            <span className="label text-[10px] text-ink-700 block">4. Brand & Clarity</span>
+            <span className="label text-[10px] text-ink-700 block">Brand and messaging</span>
             <p className="text-ink-700 text-[11px] leading-snug">{insights.clarity}</p>
           </div>
         )}
         {insights.sections && (
           <div className="p-2.5 bg-paper-50 rounded border border-line space-y-1">
-            <span className="label text-[10px] text-ink-700 block">5. Modular Architecture</span>
+            <span className="label text-[10px] text-ink-700 block">Content structure</span>
             <p className="text-ink-700 text-[11px] leading-snug">{insights.sections}</p>
           </div>
         )}
@@ -309,7 +309,7 @@ function FaqBlock({ faqs }: { faqs?: CopyFaqItem[] }) {
         <div>
           <p className="label text-ink-700">Generative Engine Optimization (GEO) FAQs</p>
           <p className="text-xs text-ink-500">
-            Structured Q&A pairs formatted for direct citation by ChatGPT, Perplexity, and Google AI Overviews.
+            Suggested question-and-answer content. This format may help answer discovery, but does not guarantee citations by any search or AI platform.
           </p>
         </div>
         <CopyButton

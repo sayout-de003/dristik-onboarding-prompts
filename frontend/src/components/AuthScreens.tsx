@@ -132,7 +132,7 @@ function AuthShell({
 }) {
   return (
     <div className="max-w-md mx-auto space-y-8 pt-4">
-      <div className="space-y-2">
+      <div data-page-header className="space-y-2">
         <p className="label">{kicker}</p>
         <h1 className="font-sans text-4xl leading-[1.12] text-ink tracking-tight">{title}</h1>
       </div>
@@ -168,19 +168,19 @@ export function LoginScreen({
   };
 
   return (
-    <AuthShell kicker="Account" title="Sign in to Dristik.">
+    <AuthShell kicker="Account" title="Sign in">
       <OAuthSSOButtons onAuthed={onAuthed} />
       <form className="space-y-6" onSubmit={submit}>
         <Field label="Email" type="email" value={email} onChange={setEmail} autoComplete="email" />
         <Field label="Password" type="password" value={password} onChange={setPassword} autoComplete="current-password" />
         {error && <p className="text-sm text-bad" role="alert">{error}</p>}
         <button type="submit" disabled={busy} className="btn-primary px-5 py-2.5 text-sm tracking-wide disabled:opacity-50">
-          {busy ? 'Signing in…' : 'Sign in with Password'}
+          {busy ? 'Signing in…' : 'Sign in with password'}
         </button>
       </form>
       <p className="text-sm text-ink-500 space-x-3">
         <button type="button" onClick={() => onView('signup')} className="text-ink hover:underline">
-          Create an organization
+          Create a workspace
         </button>
         <button type="button" onClick={() => onView('forgot')} className="hover:underline">
           Forgot password
@@ -224,7 +224,7 @@ export function SignupScreen({
   };
 
   return (
-    <AuthShell kicker="Organizations" title="Create your Dristik workspace.">
+    <AuthShell kicker="Organizations" title="Create your workspace">
       <p className="text-ink-500 leading-relaxed">
         You become the organization owner. Admins and staff can be added after you sign in.
       </p>
@@ -273,7 +273,7 @@ export function ForgotScreen({ onView }: { onView: (view: AppView) => void }) {
   };
 
   return (
-    <AuthShell kicker="Password" title="Reset your password.">
+    <AuthShell kicker="Password" title="Reset your password">
       <form className="space-y-6" onSubmit={submit}>
         <Field label="Email" type="email" value={email} onChange={setEmail} autoComplete="email" />
         {error && <p className="text-sm text-bad" role="alert">{error}</p>}
@@ -328,7 +328,7 @@ export function ResetScreen({
   };
 
   return (
-    <AuthShell kicker="Password" title="Choose a new password.">
+    <AuthShell kicker="Password" title="Set a new password">
       {done ? (
         <div className="space-y-4">
           <p className="text-ink-700">Password updated. Sign in with the new password.</p>

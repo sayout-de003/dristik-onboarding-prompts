@@ -269,7 +269,7 @@ export function AppShell(props: AppShellProps) {
                 onNewAudit={onNewAudit}
               />
             ) : (
-              <nav className="space-y-1" aria-label="Product">
+              <nav className="space-y-1" aria-label="Product">\n                {!compact && <p className="px-3 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-400">Workspace</p>}
                 {productLinks.map((item) => {
                   const Icon = item.icon;
                   return (
@@ -296,11 +296,11 @@ export function AppShell(props: AppShellProps) {
               type="button"
               className="workspace-link text-sm"
               onClick={() => setCommandOpen(true)}
-              title="Open Tools & Quick Actions (⌘K)"
+              title="Open tools and quick actions (⌘K)"
             >
               <span className="flex items-center gap-2.5">
                 <Wrench className="h-4 w-4" aria-hidden />
-                {!compact && <span>Tools Menu</span>}
+                {!compact && <span>Tools &amp; settings</span>}
               </span>
             </button>
             <button type="button" className="workspace-link text-sm" onClick={() => onNavigate('pricing')} title="Pricing">
@@ -353,9 +353,9 @@ export function AppShell(props: AppShellProps) {
               </span>
             )}
             <div className="ml-auto flex items-center gap-1">
-              <Button variant="ghost" size="sm" onClick={() => setCommandOpen(true)} aria-label="Open command menu">
+              <Button variant="ghost" size="sm" onClick={() => setCommandOpen(true)} aria-label="Search pages and actions">
                 <Search className="h-4 w-4" />
-                <span className="hidden md:inline">Search</span>
+                <span className="hidden md:inline">Search pages and actions</span>
                 <kbd className="hidden md:inline font-mono text-[10px] text-ink-400 border border-line rounded px-1">⌘K</kbd>
               </Button>
               <RecentAuditsDropdown currentAnalysisId={run?.analysis_id} onSelectAudit={onSelectAudit} onNewAudit={onNewAudit} onAuditDeleted={onDeleteAudit} />

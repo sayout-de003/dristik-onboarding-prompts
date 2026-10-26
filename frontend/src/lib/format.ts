@@ -116,8 +116,9 @@ export function formatAuditCost(telemetry?: {
   if (!telemetry) return '—';
   const unpriced = telemetry.unpriced_calls ?? 0;
   const known = telemetry.cost_complete !== false;
-  const amount = telemetry.estimated_cost_usd ?? 0;
-  if (!known && unpriced > 0 && !amount) return 'Unpriced';
+  const amount = telemetry.estimated_cost_usd;
+  if (amount == null) return unpriced > 0 ? 'Unpriced' : 'Not reported';
+  if (!known && unpriced > 0 && amount === 0) return 'Unpriced';
   const formatted = formatUsd(amount);
   if (!known && unpriced > 0) {
     return `${formatted} · ${unpriced} call${unpriced === 1 ? '' : 's'} unpriced`;

@@ -66,8 +66,8 @@ export function PublicGrader({ onStartAudit }: { onStartAudit: () => void }) {
     <section className="space-y-8">
       <PageHeader
         kicker="Public grader"
-        title="See what a bounded check can actually prove."
-        description="One homepage and three root files. Real HTTP responses only. Live AI visibility, traffic, and a full audit stay out of this result."
+        title="Get a quick, evidence-based website check."
+        description="Check a small, clearly defined sample of a public website. The result shows what was observed, what was not checked, and which measurements need a full audit or connected data source."
       />
       <form className="card p-5 sm:p-6 space-y-4" onSubmit={submit}>
         <Input
@@ -89,7 +89,7 @@ export function PublicGrader({ onStartAudit }: { onStartAudit: () => void }) {
           <article className="card p-5 space-y-2">
             <p className="label">{grade.domain}</p>
             <p className="text-ink">
-              Preliminary readiness {grade.geo_score == null ? 'not measured' : `${grade.geo_score}`}
+              Preliminary readiness score: {grade.geo_score == null ? 'not measured' : `${grade.geo_score}`}
               {grade.grade ? ` · ${grade.grade}` : ''} · {grade.grade_label}
             </p>
             <p className="text-sm text-ink-500">{grade.coverage_note}</p>
@@ -97,7 +97,7 @@ export function PublicGrader({ onStartAudit }: { onStartAudit: () => void }) {
             {grade.fetch_error && <p className="text-sm text-bad">{grade.fetch_error}</p>}
           </article>
           <article className="card p-5 space-y-3">
-            <p className="label">Pages inspected</p>
+            <p className="label">Pages checked in this sample</p>
             <ul className="space-y-1 text-sm text-ink-700">
               {grade.pages_inspected.map((page) => (
                 <li key={page.url} className="font-mono text-xs">
@@ -107,7 +107,7 @@ export function PublicGrader({ onStartAudit }: { onStartAudit: () => void }) {
             </ul>
           </article>
           <article className="card p-5 space-y-3">
-            <p className="label">Findings from the fetched responses</p>
+            <p className="label">Issues observed in the fetched pages</p>
             {grade.top_findings.length === 0 ? (
               <p className="text-sm text-ink-500">No qualifying finding was observed in this bounded check.</p>
             ) : (
@@ -126,7 +126,7 @@ export function PublicGrader({ onStartAudit }: { onStartAudit: () => void }) {
             )}
           </article>
           <article className="card p-5 space-y-2">
-            <p className="label">Not measured</p>
+            <p className="label">Not checked in this quick review</p>
             <p className="text-sm text-ink-700">{grade.traffic_summary.attribution_note}</p>
             <ul className="text-sm text-ink-600 list-disc pl-5">
               {grade.checks_not_run.map((check) => <li key={check}>{check}</li>)}

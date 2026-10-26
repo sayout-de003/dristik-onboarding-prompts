@@ -104,9 +104,9 @@ export function CroWorkspaceView({
 
   return (
     <PillarShell
-      kicker="Discipline 4 · Conversion Rate Optimization"
+      kicker="Conversion experience"
       title="Conversion Rate & UX Optimization (CRO)"
-      description="CTA ergonomics, above-the-fold value proposition clarity, social proof depth, pricing psychology, and form friction diagnostics."
+      description="Review whether visitors understand the offer, trust the business, find the next step, and can complete forms without unnecessary friction. Analytics-backed outcomes appear only when supporting data is available."
       scoreLabel="CRO Score"
       score={croScore == null ? 'Unmeasured' : croScore}
       metaLabel="Form Grade"
@@ -119,15 +119,15 @@ export function CroWorkspaceView({
         />
       }
       tabs={[
-        { id: 'overview', label: 'Scorecard & Diagnostics' },
+        { id: 'overview', label: 'Overview and checks' },
         { id: 'ctas', label: `CTA Studio (${ctaData?.total_ctas_detected ?? (ctaData ? ctasList.length : 'Not measured')})` },
-        { id: 'valueprop', label: '5-Sec Hook & Value Prop' },
+        { id: 'valueprop', label: 'Message clarity' },
         { id: 'trust', label: `Trust & Social Proof (${socialProof?.trust_authority_score == null ? 'Not measured' : `${socialProof.trust_authority_score}%`})` },
-        { id: 'pricing', label: 'Pricing & Risk Reversal' },
+        { id: 'pricing', label: 'Pricing and reassurance' },
         { id: 'forms', label: `Form Friction (${formAudit?.total_forms_detected == null ? 'Not measured' : formAudit.total_forms_detected})` },
         { id: 'findings', label: `Findings (${croFindings.length})` },
-        { id: 'revenue', label: 'Funnel & Revenue' },
-        { id: 'leadgen', label: 'Lead Gen' },
+        { id: 'revenue', label: 'Funnel and revenue' },
+        { id: 'leadgen', label: 'Lead opportunities' },
         { id: 'index', label: 'Full CRO audit' },
       ]}
       activeTab={activeSubTab}
