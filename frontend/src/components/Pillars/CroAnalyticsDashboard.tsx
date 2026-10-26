@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../../services/http';
-import { AnalysisSummary, CroIntelligenceReport, ExecutiveReport } from '../../types';
+import { AnalysisSummary, CroIntelligenceReport, CroMetricResult, ExecutiveReport } from '../../types';
 import { Card } from '../ui';
 
 type HistoryRange = '30' | '90' | 'all';
@@ -23,7 +23,7 @@ function dateLabel(value?: string | null): string {
   return Number.isNaN(date.getTime()) ? 'Date unavailable' : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-function metricDisplay(metric: CroIntelligenceReport['metrics'] extends Array<infer T> | undefined ? T : never): string {
+function metricDisplay(metric?: CroMetricResult): string {
   if (!metric) return unavailable;
   const status = String(metric.status || '').toUpperCase();
   if (status.includes('UNAVAILABLE') || status.includes('NOT_CONFIGURED') || status.includes('DATA_UNAVAILABLE')) return unavailable;
