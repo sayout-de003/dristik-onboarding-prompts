@@ -202,11 +202,11 @@ export function Overview({
             <div className="space-y-1 text-xs">
               <div className="flex items-center gap-1.5 font-mono">
                 <span className="text-ink-400">Pages:</span>
-                <span className="font-bold text-ink">{Array.isArray(report?.crawl_manifest?.pages) ? report.crawl_manifest.pages.length : '—'}</span>
+                <span className="font-bold text-ink">{report?.crawl_manifest?.pages?.length ?? '—'}</span>
               </div>
               <div className="flex items-center gap-1.5 font-mono">
                 <span className="text-ink-400">Issues:</span>
-                <span className="font-bold text-ink">{Array.isArray(report?.findings) ? report.findings.length : '—'}</span>
+                <span className="font-bold text-ink">{report?.findings?.length ?? '—'}</span>
               </div>
               <div className="flex items-center gap-1.5 font-mono">
                 <span className="text-ink-400">Patches:</span>
