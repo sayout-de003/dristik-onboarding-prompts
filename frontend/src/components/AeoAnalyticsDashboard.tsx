@@ -55,8 +55,8 @@ export function AeoAnalyticsDashboard({ report, analysisId }: Props) {
   const domain = String(report?.domain || report?.website_url || '').replace(/^https?:\/\//, '').split('/')[0];
 
   const pillars = useMemo(() => [
-    { name: 'Content readiness', description: 'Can the content answer relevant questions clearly and with support?', value: num(readiness?.composite_readiness_score), state: readiness?.state ?? 'NOT_TESTED' },
-    { name: 'Technical eligibility', description: 'Can crawlers access, index and interpret the relevant pages?', value: num(technical?.composite_eligibility_score), state: technical?.state ?? 'NOT_TESTED' },
+    { name: 'Content readiness', description: 'Can the content answer relevant questions clearly and with support?', value: num(readiness?.composite_readiness_score), display: undefined, state: readiness?.state ?? 'NOT_TESTED' },
+    { name: 'Technical eligibility', description: 'Can crawlers access, index and interpret the relevant pages?', value: num(technical?.composite_eligibility_score), display: undefined, state: technical?.state ?? 'NOT_TESTED' },
     { name: 'Observed answer visibility', description: 'Was the brand actually mentioned or cited in live, recorded engine tests?', value: null, display: num(visibility?.brand_mention_rate_pct) === null ? 'Not measured' : `${num(visibility?.brand_mention_rate_pct)?.toFixed(1)}% mention rate`, state: visibility?.state ?? 'NOT_TESTED' },
     { name: 'Business outcomes', description: 'Are AI referral visits or conversions measured by connected analytics?', value: null, display: num(outcomes?.ai_referral_sessions) === null ? 'Not measured' : `${num(outcomes?.ai_referral_sessions)} referral sessions`, state: outcomes?.state ?? 'DATA_UNAVAILABLE' },
   ], [readiness, technical, visibility, outcomes]);
