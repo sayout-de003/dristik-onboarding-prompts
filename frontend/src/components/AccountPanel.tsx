@@ -47,13 +47,13 @@ export function AccountPanel({
       </div>
 
       <section className="card p-6 space-y-4">
-        <p className="label">Delete account</p>
+        <p className="label">Account deactivation</p>
         <p className="text-sm text-ink-500 leading-relaxed">
-          This signs you out and deactivates the account. If you are the last owner, the organization is deactivated too.
+          This action cannot be undone from this screen. It signs you out and deactivates your account. If you are the last organization owner, the organization is deactivated as well.
         </p>
         <form className="space-y-4 max-w-md" onSubmit={submit}>
           <label className="block">
-            <span className="label block mb-2">Confirm with password</span>
+            <span className="label block mb-2">Enter your password to confirm</span>
             <input
               type="password"
               className={fieldClass}
@@ -112,7 +112,7 @@ export function TeamPanel({ user }: { user: AuthUser }) {
   if (!can(user, 'staff:invite')) {
     return (
       <div className="pt-6">
-        <p className="text-ink-500">Only organization admins can manage staff.</p>
+        <p className="text-ink-500">Your current role does not allow team management. Ask an organization admin to invite or update team members.</p>
       </div>
     );
   }
@@ -121,9 +121,9 @@ export function TeamPanel({ user }: { user: AuthUser }) {
     <div className="max-w-2xl space-y-8 pt-2">
       <div className="space-y-2">
         <p className="label">Team</p>
-        <h1 className="font-sans text-4xl leading-[1.12] text-ink tracking-tight">{orgName}</h1>
+        <h1 className="font-sans text-4xl leading-[1.12] text-ink tracking-tight">{orgName} team</h1>
         <p className="text-ink-500 leading-relaxed">
-          Owner and admin sit above staff. Staff levels are analyst, viewer, and auditor.
+          Manage who can access this workspace. Assign the least-privileged role that gives each person the access they need.
         </p>
       </div>
 
