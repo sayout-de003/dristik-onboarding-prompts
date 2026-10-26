@@ -485,8 +485,7 @@ export function Findings({ findings, onSelect, patches = [] }: FindingsProps) {
             </span>
           </div>
           <p className="text-xs text-ink-600 mt-1 max-w-2xl leading-relaxed">
-            Institutional defect register backed by cryptographic DOM selectors, HTTP response headers,
-            and deterministic AST syntax trees. Free of speculative prose.
+            Review each finding's evidence type, scope and recommended fix. Direct observations, external signals, AI-assisted interpretations and hypotheses are labelled separately.
           </p>
         </div>
 
