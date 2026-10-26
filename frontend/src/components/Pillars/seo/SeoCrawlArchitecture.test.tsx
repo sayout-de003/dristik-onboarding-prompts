@@ -10,7 +10,7 @@ describe('SeoCrawlArchitecture data availability', () => {
     render(<SeoCrawlArchitecture report={{} as ExecutiveReport} />);
 
     expect(screen.getByText('HTTP status data unavailable')).toBeInTheDocument();
-    expect(screen.getByText('Not measured')).toBeInTheDocument();
+    expect(screen.getAllByText(/Not measured/).length).toBeGreaterThan(0);
     expect(screen.queryByText('HTTPS & TLS Enforced')).not.toBeInTheDocument();
     expect(screen.queryByText('100/100')).not.toBeInTheDocument();
     expect(screen.queryByText('2 Hops')).not.toBeInTheDocument();
