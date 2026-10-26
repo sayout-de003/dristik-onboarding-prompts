@@ -12,14 +12,14 @@ export function Telemetry({ telemetry, onNavigateToCosting }: TelemetryProps) {
   const stageCosts = telemetry.stage_costs ? Object.values(telemetry.stage_costs) : [];
   const models = (telemetry.models_used || []).join(' · ');
   const basis = costBasisCaption(telemetry.cost_basis);
-  const totalCost = telemetry.estimated_cost_usd ?? 0;
+  const totalCost = telemetry.estimated_cost_usd;
   const actualCost = telemetry.actual_cost_usd ?? 0;
   const isActualBilled = (telemetry.has_actual_costs ?? false) && actualCost > 0;
 
   const items = [
-    { label: 'Total Tokens', value: telemetry.total_tokens ? telemetry.total_tokens.toLocaleString() : '0' },
-    { label: 'Model Calls', value: String(telemetry.model_calls_count || 0) },
-    { label: 'Latency', value: formatMs(telemetry.total_latency_ms) },
+    { label: 'Total tokens', value: telemetry.total_tokens == null ? 'Not reported' : telemetry.total_tokens.toLocaleString() },
+    { label: 'Model calls', value: telemetry.model_calls_count == null ? 'Not reported' : String(telemetry.model_calls_count) },
+    { label: 'Latency', value: telemetry.total_latency_ms == null ? 'Not reported' : formatMs(telemetry.total_latency_ms) },
     { label: 'Total AI Cost', value: formatAuditCost(telemetry), highlight: true },
   ];
 
@@ -81,7 +81,7 @@ export function Telemetry({ telemetry, onNavigateToCosting }: TelemetryProps) {
               Audit Pipeline Stage Cost Ledger
             </h4>
             <span className="text-[11px] text-ink-500 font-mono">
-              Total: ${totalCost.toFixed(4)} USD
+              Total: {totalCost == null ? 'Not reported' : `USD {totalCost == null ? 'Not reported' : `USD ${totalCost.toFixed(4)}`}`}
             </span>
           </div>
           <table className="w-full text-left text-xs">
@@ -119,14 +119,14 @@ export function Telemetry({ telemetry, onNavigateToCosting }: TelemetryProps) {
             <tfoot>
               <tr className="border-t-2 border-line font-bold text-ink-900 bg-paper-100/60">
                 <td className="py-2 px-2 font-sans">Total Audit Cost</td>
-                <td className="py-2 px-2 text-right font-mono">{telemetry.model_calls_count || 0}</td>
+                <td className="py-2 px-2 text-right font-mono">{telemetry.model_calls_count ?? '—'}</td>
                 <td className="py-2 px-2 text-right font-mono">
-                  <span>{(telemetry.input_tokens || 0).toLocaleString()}</span>
+                  <span>{telemetry.input_tokens == null ? '—' : telemetry.input_tokens.toLocaleString()}</span>
                   <span className="text-ink-400"> / </span>
-                  <span>{(telemetry.output_tokens || 0).toLocaleString()}</span>
+                  <span>{telemetry.output_tokens == null ? '—' : telemetry.output_tokens.toLocaleString()}</span>
                 </td>
                 <td className="py-2 px-2 text-right font-mono">
-                  {formatMs(telemetry.total_latency_ms || 0)}
+                  {telemetry.total_latency_ms == null ? '—' : formatMs(telemetry.total_latency_ms)}
                 </td>
                 <td className="py-2 px-2 text-right font-mono text-ink-700 text-sm">
                   ${totalCost.toFixed(4)}
