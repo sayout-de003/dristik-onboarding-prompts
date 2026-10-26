@@ -218,12 +218,12 @@ export function CostLedgerView({ report, telemetry: propTelemetry, onNavigateToT
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.04em] text-ink-700 mb-1">
             <Coins className="w-4 h-4 text-ink-700" />
-            <span>Unit Economics & Cost Accounting</span>
+            <span>Audit cost details</span>
             <span className="text-ink-400">·</span>
-            <span className="text-ink-500 font-mono">Zero-Fake Telemetry</span>
+            <span className="text-ink-500 font-mono">Reported and estimated values</span>
           </div>
           <h1 className="text-2xl font-sans font-bold text-ink">
-            Pipeline Cost Ledger & Model Economics
+            AI audit cost ledger
           </h1>
           <p className="text-sm text-ink-500 mt-1 max-w-3xl">
             Granular dollar accounting for every step and sub-step of the autonomous intelligence pipeline.
@@ -238,7 +238,7 @@ export function CostLedgerView({ report, telemetry: propTelemetry, onNavigateToT
             className="text-xs px-3 py-1.5 rounded-md border border-line bg-surface hover:bg-paper-50 font-medium text-ink-700 flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Calculator className="w-3.5 h-3.5 text-ink-700" />
-            {showRateCard ? 'Hide Price Table' : 'Official Rate Cards'}
+            {showRateCard ? 'Hide rate reference' : 'View rate reference'}
           </button>
           <button
             type="button"
