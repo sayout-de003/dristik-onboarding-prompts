@@ -112,10 +112,10 @@ export function Pricing({ onSelectPlan }: PricingProps) {
       <section className="max-w-2xl space-y-3 pt-2">
         <p className="label">Pricing</p>
         <h1 className="font-sans text-4xl sm:text-5xl text-ink tracking-tight">
-          One-time sprints and monthly monitoring.
+          Choose an audit sprint or ongoing monitoring.
         </h1>
         <p className="text-ink-500 leading-relaxed">
-          Full diagnosis, buyer-question tests, a developer patch pack, and citation proof. No retainers.
+          Compare each package by scope and deliverables. Live citation checks, analytics and external data depend on the providers and measurements available to your workspace.
         </p>
 
         {/* Currency & Scope Toggles */}
@@ -534,7 +534,7 @@ export function Pricing({ onSelectPlan }: PricingProps) {
       <section className="p-8 rounded-2xl bg-paper-50 border-2 border-line shadow-sm space-y-6">
         <div className="text-center max-w-2xl mx-auto space-y-2">
           <span className="label text-ink-700">Revenue & Commercial Upside Modeling</span>
-          <h2 className="font-sans text-3xl text-ink">Estimate Your Business ROI from Dristik</h2>
+          <h2 className="font-sans text-3xl text-ink">Explore potential value from Dristik</h2>
           <p className="text-xs text-ink-700 leading-relaxed">
             See how fixing AI search extractability and conversion bottlenecks connects directly to business revenue.
           </p>
@@ -647,7 +647,7 @@ export function Pricing({ onSelectPlan }: PricingProps) {
         <section className="border-t border-line pt-12 space-y-4">
           <div>
             <span className="label">Planning ranges</span>
-            <h2 className="font-sans text-3xl text-ink mt-1">Subscription hypotheses</h2>
+            <h2 className="font-sans text-3xl text-ink mt-1">Subscription assumptions</h2>
           </div>
           {hypothesisNote && <p className="text-sm text-ink-500 max-w-3xl">{hypothesisNote}</p>}
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
