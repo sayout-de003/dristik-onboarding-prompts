@@ -21,7 +21,7 @@ export function ExternalAuthorityView({ report }: { report?: ExternalAuthorityRe
   if (!report) {
     return (
       <section className="card p-6 space-y-2">
-        <h2 className="section-title">External Authority & Entity Intelligence</h2>
+        <h2 className="section-title">External search and brand signals</h2>
         <p className="text-sm text-ink-500">This audit has no external-authority attachment. Crawl findings are unchanged.</p>
       </section>
     );
@@ -38,8 +38,8 @@ export function ExternalAuthorityView({ report }: { report?: ExternalAuthorityRe
       <header className="space-y-2">
         <p className="label">Measured providers only</p>
         <h2 className="section-title">{report.title || 'External Authority & Entity Intelligence'}</h2>
-        <p className="text-sm text-ink-500">{report.score_note}</p>
-        <p className="text-sm text-ink-700">Period: {report.period_label || `${report.period_days || 28} days`}. No universal authority score is calculated.</p>
+        <p className="text-sm text-ink-500">{report.score_note || 'Only data returned by the available providers is shown. Missing metrics remain unavailable; no universal authority score is calculated.'}</p>
+        <p className="text-sm text-ink-700">Period: {report.period_label || (report.period_days != null ? `${report.period_days} days` : 'Not specified')}. No universal authority score is calculated.</p>
       </header>
 
       <section className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
