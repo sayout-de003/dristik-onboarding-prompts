@@ -11,7 +11,7 @@ interface CrawlWorkspaceViewProps {
 export function CrawlWorkspaceView({ report, analysisId }: CrawlWorkspaceViewProps) {
   const [search, setSearch] = useState('');
   const manifest = report.crawl_manifest;
-  const pages: any[] = (manifest?.pages && manifest.pages.length > 0) ? manifest.pages : (report.page_reports || []);
+  const pages: any[] = (manifest?.pages && manifest.pages.length > 0) ? manifest.pages : (report.page_reports || []);\n  const pagesKnown = Array.isArray(manifest?.pages) || Array.isArray(report.page_reports);
   const health = (manifest?.crawl_health || {}) as Record<string, any>;
 
   const id = analysisId || report.analysis_id || report.report_id;
@@ -24,23 +24,23 @@ export function CrawlWorkspaceView({ report, analysisId }: CrawlWorkspaceViewPro
   );
 
   const avgTtfb = typeof health.avg_ttfb_ms === 'number' ? Math.round(health.avg_ttfb_ms) : null;
-  const llmsTxtFound = Boolean((manifest as any)?.llms_txt_found);
+  const llmsTxtFound = typeof (manifest as any)?.llms_txt_found === 'boolean' ? Boolean((manifest as any).llms_txt_found) : null;
 
   return (
     <div className="space-y-6">
       {/* Top Banner / Actions */}
-      <div className="bg-paper-100 dark:bg-dark-surface border border-line rounded-xl p-6 shadow-sm">
+      <div className="bg-paper-100  border border-line rounded-xl p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-xs font-mono font-bold tracking-wider uppercase text-sky-600 dark:text-sky-400">
               <Globe className="w-4 h-4" />
-              01 // Technical Ingestion & Network Topology
+              Website crawl
             </div>
-            <h2 className="text-2xl font-bold text-ink dark:text-light mt-1">
-              Website Crawl & Infrastructure
+            <h2 className="text-2xl font-bold text-ink  mt-1">
+              Crawl coverage and technical checks
             </h2>
-            <p className="text-sm text-ink-muted dark:text-dark-muted mt-1 max-w-2xl">
-              Deterministic crawl manifest verifying HTTP status codes, TTFB server latencies, robots.txt crawler permissions, and canonical URI consistency.
+            <p className="text-sm text-ink-500 mt-1 max-w-2xl">
+              Review which pages were fetched and what the server returned. Check response status, load timing, crawl directives, sitemap discovery and canonical URLs where the audit collected them.
             </p>
           </div>
 
@@ -52,7 +52,7 @@ export function CrawlWorkspaceView({ report, analysisId }: CrawlWorkspaceViewPro
               className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 hover:bg-sky-100 transition-colors shadow-xs"
             >
               <FileText className="w-4 h-4" />
-              Export Crawl PDF
+              Export crawl report
             </a>
             <a
               href={pptxUrl}
@@ -60,18 +60,18 @@ export function CrawlWorkspaceView({ report, analysisId }: CrawlWorkspaceViewPro
               className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-colors"
             >
               <Download className="w-4 h-4" />
-              Export Crawl PPT
+              Export crawl slides
             </a>
           </div>
         </div>
 
         {/* Quick Stats Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mt-6 pt-6 border-t border-line">
-          <div className="p-3 bg-paper-50 dark:bg-dark-surface/50 rounded-lg border border-line">
-            <div className="text-[11px] font-mono text-ink-muted dark:text-dark-muted uppercase">Pages Crawled</div>
+          <div className="p-3 bg-paper-50  rounded-lg border border-line">
+            <div className="text-[11px] font-mono text-ink-500 uppercase">Pages Crawled</div>
             <div className="text-xl font-bold text-ink dark:text-light mt-0.5">{pages.length}</div>
           </div>
-          <div className="p-3 bg-paper-50 dark:bg-dark-surface/50 rounded-lg border border-line">
+          <div className="p-3 bg-paper-50 50 rounded-lg border border-line">
             <div className="text-[11px] font-mono text-ink-muted dark:text-dark-muted uppercase">Avg TTFB</div>
             <div className="text-xl font-bold text-ink dark:text-light mt-0.5">
               {avgTtfb ? `${avgTtfb}ms` : '—'}
@@ -81,21 +81,21 @@ export function CrawlWorkspaceView({ report, analysisId }: CrawlWorkspaceViewPro
             <div className="text-[11px] font-mono text-ink-muted dark:text-dark-muted uppercase">Robots.txt</div>
             <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
               {manifest?.robots_txt_found ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5 text-rose-500" />}
-              {manifest?.robots_txt_found ? 'Verified' : 'Missing'}
+              {manifest?.robots_txt_found === true ? 'Found' : manifest?.robots_txt_found === false ? 'Missing' : 'Not checked'}
             </div>
           </div>
           <div className="p-3 bg-paper-50 dark:bg-dark-surface/50 rounded-lg border border-line">
             <div className="text-[11px] font-mono text-ink-muted dark:text-dark-muted uppercase">XML Sitemap</div>
             <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
               {manifest?.sitemap_found ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5 text-rose-500" />}
-              {manifest?.sitemap_found ? 'Discovered' : 'Missing'}
+              {manifest?.sitemap_found === true ? 'Found' : manifest?.sitemap_found === false ? 'Missing' : 'Not checked'}
             </div>
           </div>
           <div className="p-3 bg-paper-50 dark:bg-dark-surface/50 rounded-lg border border-line">
             <div className="text-[11px] font-mono text-ink-muted dark:text-dark-muted uppercase">/llms.txt</div>
             <div className="text-sm font-bold text-sky-600 dark:text-sky-400 mt-1 flex items-center gap-1">
               {llmsTxtFound ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />}
-              {llmsTxtFound ? 'Active' : 'Missing'}
+              {llmsTxtFound === true ? 'Found' : llmsTxtFound === false ? 'Missing' : 'Not checked'}
             </div>
           </div>
           <div className="p-3 bg-paper-50 dark:bg-dark-surface/50 rounded-lg border border-line">
