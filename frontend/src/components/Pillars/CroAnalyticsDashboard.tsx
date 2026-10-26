@@ -76,7 +76,7 @@ export function CroAnalyticsDashboard({ report, analysisId }: CroAnalyticsDashbo
     const cutoff = range === 'all' ? 0 : now - Number(range) * 24 * 60 * 60 * 1000;
     return history
       .filter((item) => {
-        const itemDomain = (item.domain || item.website_url || '').replace(/^https?:\\/\\//, '').replace(/\\/$/, '').toLowerCase();
+        const itemDomain = (item.domain || item.website_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase();
         const parsed = item.completed_at || item.started_at;
         const timestamp = parsed ? new Date(parsed).getTime() : Number.NaN;
         return itemDomain === domain && Number.isFinite(timestamp) && timestamp >= cutoff;
