@@ -276,11 +276,12 @@ class GeoPipelineStore:
                 """
                 SELECT * FROM geo_snapshots
                 WHERE domain = ?
-                ORDER BY timestamp ASC
+                ORDER BY timestamp DESC
                 LIMIT ?
                 """,
                 (clean_domain, limit)
             ).fetchall()
+            rows = list(reversed(rows))
 
             return [
                 GeoSnapshotSummary(
