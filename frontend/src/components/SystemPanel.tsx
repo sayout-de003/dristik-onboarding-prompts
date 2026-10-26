@@ -87,19 +87,19 @@ export function SystemPanel() {
     <div className="space-y-10 pt-2">
       <div className="space-y-2">
         <p className="label">Admin</p>
-        <h1 className="font-sans text-4xl leading-[1.12] text-ink tracking-tight">System console</h1>
+        <h1 className="font-sans text-4xl leading-[1.12] text-ink tracking-tight">System administration</h1>
         <p className="text-ink-500 max-w-2xl leading-relaxed">
           Organizations, users, plans, audits, and database maintenance.
         </p>
       </div>
 
-      {error && <p className="text-sm text-bad">{error}</p>}
-      {notice && <p className="text-sm text-good">{notice}</p>}
+      {error && <p role="alert" className="text-sm text-bad">{error}</p>}
+      {notice && <p role="status" className="text-sm text-good">{notice}</p>
 
       {overview && (
         <>
           <section>
-            <p className="label mb-4">KPI matrix</p>
+            <p className="label mb-4">Overview metrics</p>
             <dl className="grid grid-cols-2 sm:grid-cols-4 gap-6">
               <Kpi label="Customer orgs" value={overview.organizations.customer} hint={`${overview.organizations.active} active · ${overview.organizations.deleted} deleted`} />
               <Kpi label="People" value={overview.users.active} hint={`${overview.users.signed_up_7d} new in 7 days · ${overview.users.logged_in_24h} in last day`} />
@@ -110,7 +110,7 @@ export function SystemPanel() {
 
           <section className="grid grid-cols-1 sm:grid-cols-2 gap-10">
             <div>
-              <p className="label mb-3">Plan mix</p>
+              <p className="label mb-3">Plans in use</p>
               <ul className="space-y-2 text-sm text-ink-700">
                 {Object.entries(overview.plan_mix).map(([plan, count]) => (
                   <li key={plan} className="flex justify-between border-b border-line pb-2">
@@ -121,7 +121,7 @@ export function SystemPanel() {
               </ul>
             </div>
             <div>
-              <p className="label mb-3">Role mix</p>
+              <p className="label mb-3">User roles</p>
               <ul className="space-y-2 text-sm text-ink-700">
                 {Object.entries(overview.role_mix).map(([role, count]) => (
                   <li key={role} className="flex justify-between border-b border-line pb-2">
