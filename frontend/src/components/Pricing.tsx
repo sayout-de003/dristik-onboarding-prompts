@@ -109,7 +109,7 @@ export function Pricing({ onSelectPlan }: PricingProps) {
   return (
     <div className="space-y-16 max-w-[1400px] mx-auto pb-16">
       {/* Header & Market Value Anchor */}
-      <section className="max-w-2xl space-y-3 pt-2">
+      <section data-page-header className="max-w-2xl space-y-3 pt-2">
         <p className="label">Pricing</p>
         <h1 className="font-sans text-4xl sm:text-5xl text-ink tracking-tight">
           Choose an audit sprint or ongoing monitoring.
