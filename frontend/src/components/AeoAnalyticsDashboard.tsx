@@ -102,6 +102,26 @@ export function AeoAnalyticsDashboard({ report, analysisId }: Props) {
 
       <section className="sheet border border-line rounded-xl p-5 space-y-4">
         <div>
+          <h4 className="text-lg font-semibold text-ink">Measured component scores</h4>
+          <p className="text-xs text-ink-500">Only complete, measured composites are charted. A missing component is shown as unavailable, not zero.</p>
+        </div>
+        <div className="space-y-4">
+          {[
+            { label: 'Content readiness', value: num(readiness?.composite_readiness_score) },
+            { label: 'Technical eligibility', value: num(technical?.composite_eligibility_score) },
+          ].map((item) => (
+            <div key={item.label} className="space-y-1.5">
+              <div className="flex justify-between gap-3 text-xs"><span className="font-medium text-ink">{item.label}</span><span className="font-mono text-ink-500">{item.value === null ? 'Not measured' : `${item.value.toFixed(1)} / 100`}</span></div>
+              <div className="h-3 rounded bg-paper-200 dark:bg-ink-800 overflow-hidden">
+                {item.value !== null && <div className="h-full rounded bg-pine" style={{ width: `${Math.max(0, Math.min(100, item.value))}%` }} />}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="sheet border border-line rounded-xl p-5 space-y-4">
+        <div>
           <h4 className="text-lg font-semibold text-ink">Current KPI detail</h4>
           <p className="text-xs text-ink-500">Values are read from this report's stored evidence. Unavailable data is displayed as unavailable.</p>
         </div>
@@ -140,7 +160,7 @@ export function AeoAnalyticsDashboard({ report, analysisId }: Props) {
           <h4 className="text-lg font-semibold text-ink">How AEO measurement is calculated</h4>
           <p className="text-xs text-ink-500">This reflects the current four-pillar measurement contract. It deliberately does not invent one blended AEO total.</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-2 items-stretch">
+        <div className="grid grid-cols-1 md:grid-cols-9 gap-2 items-stretch">
           {[
             ['1 · Collect', 'Crawled page reports, question assessments, schema checks, live answer tests and connected analytics.'],
             ['2 · Validate', 'Check denominators, evidence state, source coverage and whether a live test actually ran.'],
