@@ -81,28 +81,28 @@ export function SeoCrawlArchitecture({ report }: SeoCrawlArchitectureProps) {
           </div>
 
           {hasHttpData ? <div className="w-full h-4 rounded-full overflow-hidden flex bg-paper-200 border border-line">
-            {pct2xx > 0 && (
+            {pct2xx != null && pct2xx > 0 && (
               <div
                 style={{ width: `${pct2xx}%` }}
                 className="bg-good hover:opacity-90 transition-opacity"
                 title={`2xx Success: ${count2xx} URLs (${pct2xx}%)`}
               />
             )}
-            {pct3xx > 0 && (
+            {pct3xx != null && pct3xx > 0 && (
               <div
                 style={{ width: `${pct3xx}%` }}
                 className="bg-pine-500 hover:opacity-90 transition-opacity"
                 title={`3xx Redirects: ${count3xx} URLs (${pct3xx}%)`}
               />
             )}
-            {pct4xx > 0 && (
+            {pct4xx != null && pct4xx > 0 && (
               <div
                 style={{ width: `${pct4xx}%` }}
                 className="bg-warn hover:opacity-90 transition-opacity"
                 title={`4xx Client Errors: ${count4xx} URLs (${pct4xx}%)`}
               />
             )}
-            {pct5xx > 0 && (
+            {pct5xx != null && pct5xx > 0 && (
               <div
                 style={{ width: `${pct5xx}%` }}
                 className="bg-bad hover:opacity-90 transition-opacity"
