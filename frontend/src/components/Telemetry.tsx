@@ -81,7 +81,7 @@ export function Telemetry({ telemetry, onNavigateToCosting }: TelemetryProps) {
               Audit Pipeline Stage Cost Ledger
             </h4>
             <span className="text-[11px] text-ink-500 font-mono">
-              Total: {totalCost == null ? 'Not reported' : `USD {totalCost == null ? 'Not reported' : `USD ${totalCost.toFixed(4)}`}`}
+              Total: {totalCost == null ? 'Not reported' : `USD ${totalCost.toFixed(4)}`}
             </span>
           </div>
           <table className="w-full text-left text-xs">
