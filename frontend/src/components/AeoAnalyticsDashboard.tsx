@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card } from './ui';
 import { GeoAeoTrendTracker } from './GeoAeoTrendTracker';
+import { api } from '../services/http';
 
 type Props = { report: any; analysisId?: string };
 
@@ -18,7 +19,22 @@ const score = (value: unknown) => {
 /** Evidence-first AEO analytics. Never turns absent measurements into zero. */
 export function AeoAnalyticsDashboard({ report, analysisId }: Props) {
   const geo = report?.geo_readiness;
-  const scorecard = report?.aeo_four_pillars_scorecard;
+  const [loadedScorecard, setLoadedScorecard] = useState<any>(report?.aeo_four_pillars_scorecard ?? null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const effectiveAnalysisId = analysisId || report?.analysis_id || report?.report_id;
+  useEffect(() => {
+    let active = true;
+    if (!effectiveAnalysisId) return;
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    api<any>(`/api/v1/reports/${encodeURIComponent(effectiveAnalysisId)}/aeo-analytics`, {}, 'Could not load AEO analytics')
+      .then((payload) => { if (active) setLoadedScorecard(payload); })
+      .catch((error: any) => { if (active) setAnalyticsError(error?.message || 'AEO analytics endpoint is unavailable.'); })
+      .finally(() => { if (active) setAnalyticsLoading(false); });
+    return () => { active = false; };
+  }, [effectiveAnalysisId]);
+  const scorecard = loadedScorecard;
   const metrics = scorecard?.core_metrics ?? [];
   const readiness = scorecard?.pillar_a_content_readiness;
   const technical = scorecard?.pillar_b_technical_eligibility;
@@ -69,6 +85,8 @@ export function AeoAnalyticsDashboard({ report, analysisId }: Props) {
           <span className="px-2 py-1 rounded border border-line">Analysis: {analysisId || report?.analysis_id || 'current report'}</span>
           <span className="px-2 py-1 rounded border border-line">Evidence-first · missing ≠ zero</span>
         </div>
+        {analyticsLoading && <p className="text-xs text-ink-500">Loading calculated AEO metrics from the analysis report…</p>}
+        {analyticsError && <p className="text-xs text-ink-500">Calculated metrics endpoint: {analyticsError}. Showing report-level measurements where available.</p>}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
