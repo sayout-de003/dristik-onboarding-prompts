@@ -68,39 +68,39 @@ export function CrawlWorkspaceView({ report, analysisId }: CrawlWorkspaceViewPro
 
         {/* Quick Stats Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mt-6 pt-6 border-t border-line">
-          <div className="p-3 bg-paper-50  rounded-lg border border-line">
-            <div className="text-[11px] font-mono text-ink-500 uppercase">Pages Crawled</div>
-            <div className="text-xl font-bold text-ink  mt-0.5">{pages.length}</div>
+          <div className="p-3 bg-paper-50 rounded-lg border border-line">
+            <div className="text-[11px] font-mono text-ink-500 uppercase">Pages checked</div>
+            <div className="text-xl font-bold text-ink mt-0.5">{pagesKnown ? pages.length : '—'}</div>
           </div>
-          <div className="p-3 bg-paper-50 50 rounded-lg border border-line">
-            <div className="text-[11px] font-mono text-ink-500  uppercase">Avg TTFB</div>
-            <div className="text-xl font-bold text-ink  mt-0.5">
+          <div className="p-3 bg-paper-50 rounded-lg border border-line">
+            <div className="text-[11px] font-mono text-ink-500 uppercase">Avg TTFB</div>
+            <div className="text-xl font-bold text-ink mt-0.5">
               {avgTtfb ? `${avgTtfb}ms` : '—'}
             </div>
           </div>
-          <div className="p-3 bg-paper-50  rounded-lg border border-line">
-            <div className="text-[11px] font-mono text-ink-500  uppercase">Robots.txt</div>
+          <div className="p-3 bg-paper-50 rounded-lg border border-line">
+            <div className="text-[11px] font-mono text-ink-500 uppercase">Robots.txt</div>
             <div className="text-sm font-bold text-good mt-1 flex items-center gap-1">
               {manifest?.robots_txt_found ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5 text-bad" />}
               {manifest?.robots_txt_found === true ? 'Found' : manifest?.robots_txt_found === false ? 'Missing' : 'Not checked'}
             </div>
           </div>
-          <div className="p-3 bg-paper-50  rounded-lg border border-line">
-            <div className="text-[11px] font-mono text-ink-500  uppercase">XML Sitemap</div>
+          <div className="p-3 bg-paper-50 rounded-lg border border-line">
+            <div className="text-[11px] font-mono text-ink-500 uppercase">XML Sitemap</div>
             <div className="text-sm font-bold text-good mt-1 flex items-center gap-1">
               {manifest?.sitemap_found ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5 text-rose-500" />}
               {manifest?.sitemap_found === true ? 'Found' : manifest?.sitemap_found === false ? 'Missing' : 'Not checked'}
             </div>
           </div>
-          <div className="p-3 bg-paper-50  rounded-lg border border-line">
-            <div className="text-[11px] font-mono text-ink-500  uppercase">/llms.txt</div>
+          <div className="p-3 bg-paper-50 rounded-lg border border-line">
+            <div className="text-[11px] font-mono text-ink-500 uppercase">/llms.txt</div>
             <div className="text-sm font-bold text-pine mt-1 flex items-center gap-1">
               {llmsTxtFound ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5 text-warn" />}
               {llmsTxtFound === true ? 'Found' : llmsTxtFound === false ? 'Missing' : 'Not checked'}
             </div>
           </div>
-          <div className="p-3 bg-paper-50  rounded-lg border border-line">
-            <div className="text-[11px] font-mono text-ink-500  uppercase">Protocol</div>
+          <div className="p-3 bg-paper-50 rounded-lg border border-line">
+            <div className="text-[11px] font-mono text-ink-500 uppercase">Protocol</div>
             <div className="text-sm font-bold text-ink  mt-1 flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
               {report.website_url.startsWith('https') ? 'HTTPS / TLS' : 'HTTP'}
@@ -129,7 +129,7 @@ export function CrawlWorkspaceView({ report, analysisId }: CrawlWorkspaceViewPro
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-paper-50  border-b border-line text-ink-500  uppercase font-mono text-[11px]">
+            <thead className="bg-paper-50  border-b border-line text-ink-500 uppercase font-mono text-[11px]">
               <tr>
                 <th className="py-2.5 px-4">URL</th>
                 <th className="py-2.5 px-3">Status</th>
