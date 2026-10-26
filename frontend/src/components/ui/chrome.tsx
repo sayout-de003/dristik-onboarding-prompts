@@ -15,7 +15,7 @@ export function PageHeader({
   children?: React.ReactNode;
 }) {
   return (
-    <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6">
+    <header data-page-header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6">
       <div className="min-w-0 max-w-2xl space-y-2">
         {kicker && <p className="label">{kicker}</p>}
         <h1 className="text-2xl sm:text-[1.75rem] font-semibold leading-tight text-ink tracking-tight">{title}</h1>
@@ -41,7 +41,7 @@ export function Section({
   className?: string;
 }) {
   return (
-    <section className={cn('space-y-4', className)}>
+    <section data-section className={cn('space-y-4', className)}>
       {(title || actions || description) && (
         <div className="flex items-end justify-between gap-4">
           <div className="min-w-0">
