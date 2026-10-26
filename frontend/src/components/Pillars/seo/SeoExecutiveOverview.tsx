@@ -43,7 +43,7 @@ export function SeoExecutiveOverview({
   const intlSeo = report.international_seo;
   const redirects = report.host_and_redirects;
 
-  const technicalSeoCategory = report.scores?.category_scores?.['TECHNICAL_SEO'];
+  const technicalSeoCategory = report.scores?.category_scores?.['TECHNICAL_SEO'] as ({ score?: number; status?: string } | undefined);
   const technicalScoreStatus = String(technicalSeoCategory?.status || 'MEASURED').toUpperCase();
   const rawScore = technicalSeoCategory && !['NOT_MEASURED', 'UNAVAILABLE', 'NOT_CONNECTED', 'NOT_CONFIGURED', 'SIMULATION_ONLY', 'DATA_UNAVAILABLE', 'NOT_TESTED'].includes(technicalScoreStatus)
     ? technicalSeoCategory.score
