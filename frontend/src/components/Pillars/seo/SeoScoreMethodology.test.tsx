@@ -35,7 +35,7 @@ describe('SeoScoreMethodology', () => {
       />,
     );
 
-    expect(screen.getByText('Not measured')).toBeInTheDocument();
+    expect(screen.getByText(/Not measured/)).toBeInTheDocument();
     expect(screen.getByText('—')).toBeInTheDocument();
     expect(screen.queryByText('100')).not.toBeInTheDocument();
   });
