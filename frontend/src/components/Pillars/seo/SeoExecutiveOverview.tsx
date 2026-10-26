@@ -1,6 +1,7 @@
 import React from 'react';
 import { ExecutiveReport, Finding } from '../../../types';
 import { Card } from '../../ui';
+import { SeoScoreMethodology } from './SeoScoreMethodology';
 import {
   ShieldCheck,
   CheckCircle2,
@@ -42,7 +43,8 @@ export function SeoExecutiveOverview({
   const intlSeo = report.international_seo;
   const redirects = report.host_and_redirects;
 
-  const rawScore = report.scores?.category_scores?.['TECHNICAL_SEO']?.score;
+  const technicalSeoCategory = report.scores?.category_scores?.['TECHNICAL_SEO'];
+  const rawScore = technicalSeoCategory?.score;
   const seoScore = rawScore != null && Number.isFinite(rawScore) ? Math.round(rawScore) : null;
 
   const crawlHealth = httpStatus && httpStatus.total_urls_checked > 0
@@ -89,7 +91,7 @@ export function SeoExecutiveOverview({
             <div className="flex items-center justify-between">
               <span className="text-xs font-mono uppercase tracking-[0.05em] text-ink-500 font-semibold flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-pine-600" />
-                Technical SEO Composite Index
+                Technical SEO Rating
               </span>
               <span className={`text-xs font-mono font-bold px-2.5 py-0.5 rounded-full border ${grade.badge}`}>
                 {grade.label}
@@ -137,7 +139,7 @@ export function SeoExecutiveOverview({
                 Discipline Health Breakdown
               </h3>
               <span className="text-[11px] font-mono text-ink-400">
-                Industry Standard Weights
+                Observed sub-metrics · not score weights
               </span>
             </div>
 
@@ -184,6 +186,14 @@ export function SeoExecutiveOverview({
         </Card>
       </div>
 
+      <SeoScoreMethodology
+        score={seoScore}
+        status={technicalSeoCategory?.status}
+        checkedUrls={pages.length}
+        findingCount={seoFindings.length}
+        onNavigate={onNavigateTab}
+      />
+
       {/* ─────────────────────────────────────────────────────────────
           2. ENTERPRISE VITALS GRID (6 Core KPIs)
           ───────────────────────────────────────────────────────────── */}
@@ -210,12 +220,12 @@ export function SeoExecutiveOverview({
               <span className="font-mono text-xl font-bold text-good">
                 {httpStatus && httpStatus.total_urls_checked > 0
                   ? `${Math.round((httpStatus.count_2xx / httpStatus.total_urls_checked) * 100)}%`
-                  : '100%'}
+                  : '—'}
               </span>
               <span className="text-[11px] font-mono text-ink-400">OK</span>
             </div>
             <p className="text-[11px] text-ink-500 truncate group-hover:text-pine-600 transition-colors">
-              {httpStatus?.count_2xx ?? pages.length} clean URLs &rarr;
+              {httpStatus?.count_2xx != null ? `${httpStatus.count_2xx} successful URLs →` : 'HTTP response data unavailable'}
             </p>
           </Card>
 
@@ -229,16 +239,16 @@ export function SeoExecutiveOverview({
             </span>
             <div className="flex items-baseline gap-1.5">
               <span className="font-mono text-xl font-bold text-ink">
-                {canonicalAudit?.canonical_health_score
+                {canonicalAudit?.canonical_health_score != null && Number.isFinite(canonicalAudit.canonical_health_score)
                   ? `${Math.round(canonicalAudit.canonical_health_score)}%`
-                  : '100%'}
+                  : '—'}
               </span>
               <span className="text-[11px] font-mono text-good font-semibold">
-                {canonicalAudit?.broken_canonical_count ? `${canonicalAudit.broken_canonical_count} broken` : 'Clean'}
+                {canonicalAudit?.broken_canonical_count != null ? (canonicalAudit.broken_canonical_count ? `${canonicalAudit.broken_canonical_count} broken` : 'No broken canonicals reported') : 'Not measured'}
               </span>
             </div>
             <p className="text-[11px] text-ink-500 truncate group-hover:text-pine-600 transition-colors">
-              {canonicalAudit?.self_canonical_count ?? pages.length} self-referential &rarr;
+              {canonicalAudit?.self_canonical_count != null ? `${canonicalAudit.self_canonical_count} self-canonical URLs →` : 'Canonical inventory unavailable'}
             </p>
           </Card>
 
@@ -257,11 +267,11 @@ export function SeoExecutiveOverview({
                 <AlertTriangle className="w-4 h-4 text-warn shrink-0" />
               )}
               <span className="font-mono text-sm font-bold text-ink">
-                {crawl?.sitemap_found ? 'Valid' : 'Missing'}
+                {crawl?.sitemap_found == null ? 'Not measured' : crawl.sitemap_found ? 'Found' : 'Not found'}
               </span>
             </div>
             <p className="text-[11px] text-ink-500 truncate font-mono group-hover:text-pine-600 transition-colors">
-              {crawl?.sitemap_url ? 'robots.txt aligned' : 'Declare in robots &rarr;'}
+              {crawl?.sitemap_url ? 'Sitemap URL recorded' : crawl?.sitemap_found === false ? 'Review sitemap discovery' : 'Sitemap data unavailable'}
             </p>
           </Card>
 
@@ -275,14 +285,14 @@ export function SeoExecutiveOverview({
             </span>
             <div className="flex items-baseline gap-1.5">
               <span className="font-mono text-xl font-bold text-ink">
-                {clickDepth?.max_click_depth != null ? `${clickDepth.max_click_depth}` : '2'}
+                {clickDepth?.max_click_depth != null ? `${clickDepth.max_click_depth}` : '—'}
               </span>
               <span className="text-[11px] font-mono text-ink-500">Hops</span>
             </div>
             <p className="text-[11px] text-ink-500 truncate group-hover:text-pine-600 transition-colors">
-              {clickDepth?.high_depth_warning_count
-                ? `${clickDepth.high_depth_warning_count} deep pages (>3) &rarr;`
-                : 'Optimal crawl hierarchy &rarr;'}
+              {clickDepth?.high_depth_warning_count != null
+                ? (clickDepth.high_depth_warning_count ? `${clickDepth.high_depth_warning_count} deep pages (>3) →` : 'No deep-page warnings reported')
+                : 'Click-depth data unavailable'}
             </p>
           </Card>
 
@@ -296,14 +306,14 @@ export function SeoExecutiveOverview({
             </span>
             <div className="flex items-baseline gap-1.5">
               <span className="font-mono text-xl font-bold text-ink">
-                {headings?.h1_health_score ? `${Math.round(headings.h1_health_score)}%` : '100%'}
+                {headings?.h1_health_score != null && Number.isFinite(headings.h1_health_score) ? `${Math.round(headings.h1_health_score)}%` : '—'}
               </span>
               <span className="text-[11px] font-mono text-ink-500">Score</span>
             </div>
             <p className="text-[11px] text-ink-500 truncate group-hover:text-pine-600 transition-colors">
-              {headings?.missing_h1?.length
-                ? `${headings.missing_h1.length} missing H1 &rarr;`
-                : 'Valid single H1 per page &rarr;'}
+              {headings?.missing_h1 != null
+                ? (headings.missing_h1.length ? `${headings.missing_h1.length} missing H1 →` : 'No missing H1 reported')
+                : 'Heading data unavailable'}
             </p>
           </Card>
 
@@ -317,14 +327,14 @@ export function SeoExecutiveOverview({
             </span>
             <div className="flex items-baseline gap-1.5">
               <span className="font-mono text-xl font-bold text-good">
-                {media?.modern_format_count ?? 0}
+                {media?.modern_format_count != null ? media.modern_format_count : '—'}
               </span>
               <span className="text-[11px] font-mono text-ink-400">WebP</span>
             </div>
             <p className="text-[11px] text-ink-500 truncate group-hover:text-pine-600 transition-colors">
-              {media?.missing_alt_count
-                ? `${media.missing_alt_count} missing alt &rarr;`
-                : '100% accessible alts &rarr;'}
+              {media?.missing_alt_count != null
+                ? (media.missing_alt_count ? `${media.missing_alt_count} missing alt →` : 'No missing alt reported')
+                : 'Image alt data unavailable'}
             </p>
           </Card>
         </div>
