@@ -3,6 +3,7 @@ import { ExecutiveReport, Finding, CtaAuditItem } from '../../types';
 import { LifecycleRevenueIntelligenceView } from '../LifecycleRevenueIntelligenceView';
 import { LeadGenOpportunitiesView } from '../LeadGenOpportunitiesView';
 import { CroIntelligencePanel } from './CroIntelligencePanel';
+import { CroAnalyticsDashboard } from './CroAnalyticsDashboard';
 import { PillarShell, Card } from '../ui';
 import { SectionExportButtons } from '../ui/SectionExportButtons';
 import {
@@ -42,6 +43,7 @@ type CroSubTab =
   | 'findings'
   | 'revenue'
   | 'leadgen'
+  | 'analytics'
   | 'index';
 
 export function CroWorkspaceView({
@@ -128,6 +130,7 @@ export function CroWorkspaceView({
         { id: 'findings', label: `Findings (${croFindings.length})` },
         { id: 'revenue', label: 'Funnel and revenue' },
         { id: 'leadgen', label: 'Lead opportunities' },
+        { id: 'analytics', label: 'Analytics & score method' },
         { id: 'index', label: 'Full CRO audit' },
       ]}
       activeTab={activeSubTab}
@@ -967,6 +970,10 @@ export function CroWorkspaceView({
           analysisId={analysisId}
           onDeployRequested={onDeployRemediation}
         />
+      )}
+
+      {activeSubTab === 'analytics' && (
+        <CroAnalyticsDashboard report={report} analysisId={analysisId} />
       )}
 
       {activeSubTab === 'index' && (
