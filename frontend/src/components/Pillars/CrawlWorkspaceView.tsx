@@ -87,7 +87,7 @@ export function CrawlWorkspaceView({ report, analysisId }: CrawlWorkspaceViewPro
           </div>
           <div className="p-3 bg-paper-50  rounded-lg border border-line">
             <div className="text-[11px] font-mono text-ink-500  uppercase">XML Sitemap</div>
-            <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
+            <div className="text-sm font-bold text-good mt-1 flex items-center gap-1">
               {manifest?.sitemap_found ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5 text-rose-500" />}
               {manifest?.sitemap_found === true ? 'Found' : manifest?.sitemap_found === false ? 'Missing' : 'Not checked'}
             </div>
@@ -146,13 +146,13 @@ export function CrawlWorkspaceView({ report, analysisId }: CrawlWorkspaceViewPro
                 const statusOk = statusCode < 400;
                 const h1Val = Array.isArray(p.h1) ? p.h1[0] : (typeof p.h1 === 'string' ? p.h1 : '—');
                 return (
-                  <tr key={idx} className="hover:bg-paper-50 dark:hover:bg-dark-surface/40 transition-colors">
+                  <tr key={idx} className="hover:bg-paper-50  transition-colors">
                     <td className="py-2.5 px-4 font-mono font-medium text-ink  max-w-xs truncate">
                       <a
                         href={p.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="hover:text-sky-600 dark:hover:text-sky-400 inline-flex items-center gap-1"
+                        className="hover:text-pine inline-flex items-center gap-1"
                       >
                         {(p.url || '').replace(/^https?:\/\/[^/]+/, '') || '/'}
                         <ArrowUpRight className="w-3 h-3 opacity-60" />
@@ -160,7 +160,7 @@ export function CrawlWorkspaceView({ report, analysisId }: CrawlWorkspaceViewPro
                     </td>
                     <td className="py-2.5 px-3">
                       <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-mono font-bold ${
-                        statusOk ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300'
+                        statusOk ? 'bg-good/10 text-good' : 'bg-bad/10 text-bad'
                       }`}>
                         {statusCode}
                       </span>
@@ -179,7 +179,7 @@ export function CrawlWorkspaceView({ report, analysisId }: CrawlWorkspaceViewPro
                     </td>
                     <td className="py-2.5 px-3">
                       {p.canonical_url ? (
-                        <span className="text-emerald-600 dark:text-emerald-400 font-mono text-[10px]">OK</span>
+                        <span className="text-good font-mono text-[10px]">OK</span>
                       ) : (
                         <span className="text-amber-500 font-mono text-[10px]">None</span>
                       )}
