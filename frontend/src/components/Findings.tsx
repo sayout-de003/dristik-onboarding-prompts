@@ -443,7 +443,7 @@ export function Findings({ findings, onSelect, patches = [] }: FindingsProps) {
       `**Summary:**`,
       `- Total Findings: ${findings.length}`,
       `- Critical & High Priority: ${metrics.criticalAndHigh}`,
-      `- Findings with observed or external evidence: ${metrics.integrityPercent == null ? 'Not available' : `${metrics.integrityPercent == null ? '—' : `${metrics.integrityPercent}%`}`}`,
+      `- Findings with observed or external evidence: ${metrics.integrityPercent == null ? 'Not available' : `${metrics.integrityPercent}%`}`,
       `- Resolved: ${metrics.resolvedCount} | Open: ${metrics.openCount}`,
       '',
       `## Key Findings:`,
@@ -657,7 +657,7 @@ export function Findings({ findings, onSelect, patches = [] }: FindingsProps) {
             <span className="text-[10px] font-mono font-bold uppercase tracking-wider">Observed / external</span>
             <ShieldCheck className="w-3.5 h-3.5 text-good" />
           </div>
-          <div className="text-2xl font-bold font-mono text-good">{metrics.integrityPercent}%</div>
+          <div className="text-2xl font-bold font-mono text-good">{metrics.integrityPercent == null ? '—' : `${metrics.integrityPercent}%`}</div>
           <div className="text-[10px] text-ink-500 font-mono mt-0.5">
             {metrics.observedCount + metrics.externalCount} findings with observed or external evidence
           </div>
@@ -963,7 +963,7 @@ export function Findings({ findings, onSelect, patches = [] }: FindingsProps) {
                   <th className="py-3 px-3 w-24">Severity</th>
                   <th className="py-3 px-3 min-w-[280px]">Finding &amp; Issue</th>
                   <th className="py-3 px-3 w-32">Category</th>
-                  <th className="py-3 px-3 min-w-[200px]">Ground Truth Proof</th>
+                  <th className="py-3 px-3 min-w-[200px]">Evidence details</th>
                   <th className="py-3 px-3 w-28 text-center">Impact / Effort</th>
                   <th className="py-3 px-3 w-24 text-center">Status</th>
                   <th className="py-3 px-3 w-28 text-right">Actions</th>
