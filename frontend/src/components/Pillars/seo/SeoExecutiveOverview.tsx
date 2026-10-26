@@ -44,7 +44,10 @@ export function SeoExecutiveOverview({
   const redirects = report.host_and_redirects;
 
   const technicalSeoCategory = report.scores?.category_scores?.['TECHNICAL_SEO'];
-  const rawScore = technicalSeoCategory?.score;
+  const technicalScoreStatus = String(technicalSeoCategory?.status || 'MEASURED').toUpperCase();
+  const rawScore = technicalSeoCategory && !['NOT_MEASURED', 'UNAVAILABLE', 'NOT_CONNECTED', 'NOT_CONFIGURED', 'SIMULATION_ONLY', 'DATA_UNAVAILABLE', 'NOT_TESTED'].includes(technicalScoreStatus)
+    ? technicalSeoCategory.score
+    : null;
   const seoScore = rawScore != null && Number.isFinite(rawScore) ? Math.round(rawScore) : null;
 
   const crawlHealth = httpStatus && httpStatus.total_urls_checked > 0
@@ -106,7 +109,7 @@ export function SeoExecutiveOverview({
             </div>
 
             <p className="text-xs text-ink-600 leading-relaxed">
-              Evaluating crawler traversal, canonical routing, meta pixel boundaries, image CLS vectors, and search engine directives for <strong className="text-ink font-medium">{report.domain}</strong>.
+              Evaluating crawl access, canonical URLs, page metadata, headings, and search directives for <strong className="text-ink font-medium">{report.domain}</strong>.
             </p>
           </div>
 
