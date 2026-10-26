@@ -1,5 +1,5 @@
 """History serialization must keep CRO scores distinct from the overall site score."""
-from app.api.routes.audits.analyses import _listed_cro_score
+from app.api.routes.audits.analyses import _listed_cro_metrics, _listed_cro_score
 from app.cro.engine import build_cro_intelligence
 
 
@@ -54,3 +54,44 @@ def test_no_observed_pass_fail_checks_remain_unmeasured_not_zero():
     experience = next(item for item in report.dimensions if item.id == "experience")
     assert experience.score is None
     assert experience.status == "UNMEASURED"
+
+
+
+def test_history_exposes_only_metric_observations_stored_in_report():
+    report = {
+        "cro_audit": {
+            "intelligence": {
+                "metrics": [
+                    {
+                        "metric": "Conversion rate",
+                        "formula": "Unique converters / eligible users",
+                        "status": "MEASURED",
+                        "value": 0.12,
+                        "display": "12%",
+                        "numerator": "unique converters",
+                        "denominator": "eligible users",
+                        "window": "last 28 days",
+                        "note": "Measured",
+                    },
+                    {
+                        "metric": "Revenue per visitor",
+                        "formula": "Revenue / eligible visitors",
+                        "status": "DATA_UNAVAILABLE",
+                        "value": None,
+                        "display": "Not measured",
+                    },
+                ]
+            }
+        }
+    }
+    metrics = _listed_cro_metrics(report)
+    assert len(metrics) == 2
+    assert metrics[0]["value"] == 0.12
+    assert metrics[0]["denominator"] == "eligible users"
+    assert metrics[1]["status"] == "DATA_UNAVAILABLE"
+    assert metrics[1]["value"] is None
+
+
+def test_history_does_not_create_metric_observations_when_missing():
+    assert _listed_cro_metrics({"cro_audit": {"intelligence": {"metrics": None}}}) == []
+    assert _listed_cro_metrics({"cro_audit": {}}) == []
