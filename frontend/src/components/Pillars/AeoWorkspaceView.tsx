@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { DynamicQuestionSandboxView } from '../DynamicQuestionSandboxView';
 import { AeoAuditBook } from '../../report/aeoIndex/AeoAuditBook';
+import { AeoAnalyticsDashboard } from '../AeoAnalyticsDashboard';
 
 interface AeoWorkspaceViewProps {
   report: ExecutiveReport;
@@ -21,7 +22,7 @@ interface AeoWorkspaceViewProps {
   onOpenPatchPack?: () => void;
 }
 
-type AeoSubTab = 'audit' | 'directives' | 'schema' | 'questions' | 'triples';
+type AeoSubTab = 'audit' | 'analytics' | 'directives' | 'schema' | 'questions' | 'triples';
 
 export const QUESTION_KEY_CATEGORY_MAP: Record<string, string> = {
   identity_what: 'Entity Identity',
@@ -166,6 +167,7 @@ export function AeoWorkspaceView({ report, analysisId, onOpenPatchPack }: AeoWor
       }
       tabs={[
         { id: 'audit', label: 'Full AEO audit' },
+        { id: 'analytics', label: 'AEO KPIs & Analytics' },
         { id: 'directives', label: 'AI crawler settings' },
         { id: 'schema', label: `Schema Graph (${schemaTypes.length})` },
         { id: 'questions', label: `AI Question Sandbox (${sandboxEvals.length})` },
@@ -175,6 +177,7 @@ export function AeoWorkspaceView({ report, analysisId, onOpenPatchPack }: AeoWor
       onTab={(id) => setActiveSubTab(id as AeoSubTab)}
     >
       {activeSubTab === 'audit' && <AeoAuditBook report={report} />}
+      {activeSubTab === 'analytics' && <AeoAnalyticsDashboard report={report} analysisId={analysisId} />}
 
       {/* ─────────────────────────────────────────────────────────────
           SUB-TAB 1: AI BOTS & LLMS.TXT DIRECTIVES

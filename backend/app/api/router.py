@@ -30,6 +30,7 @@ from app.api.routes.integrations.connectors import router as connectors_router
 from app.api.routes.integrations.external_authority import router as external_authority_router
 from app.api.routes.integrations.google import router as integrations_router
 from app.api.routes.remediation.patches import router as remediation_router
+from app.aeo.router import router as aeo_reports_router
 from app.core.security.enterprise_audit_logger import router as audit_logs_router
 from app.intelligence.citations.live import router as live_ai_citation_router
 from app.remediation.sync_engine import router as developer_sync_router
@@ -67,6 +68,7 @@ _PREFIXED_ROUTERS = (
     live_ai_citation_router,
     developer_sync_router,
     reports_router,
+    aeo_reports_router,
     audit_logs_router,
     white_label_router,
 )
