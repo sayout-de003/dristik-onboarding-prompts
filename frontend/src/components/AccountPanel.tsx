@@ -38,7 +38,7 @@ export function AccountPanel({
 
   return (
     <div className="max-w-2xl space-y-8 pt-2">
-      <div className="space-y-2">
+      <div data-page-header className="space-y-2">
         <p className="label">Account</p>
         <h1 className="font-sans text-4xl leading-[1.12] text-ink tracking-tight">{user.full_name}</h1>
         <p className="text-ink-500">
