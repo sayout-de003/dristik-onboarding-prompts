@@ -65,7 +65,7 @@ export function SeoCrawlArchitecture({ report }: SeoCrawlArchitectureProps) {
           <div className="flex items-center gap-2">
             <Globe className="w-4 h-4 text-ink-700" />
             <h3 className="font-sans text-base font-semibold text-ink">
-              HTTP Response Codes & Crawler Indexability
+              Observed HTTP Response Codes
             </h3>
           </div>
           <span className="text-xs font-mono text-ink-500">
@@ -132,7 +132,7 @@ export function SeoCrawlArchitecture({ report }: SeoCrawlArchitectureProps) {
               <CheckCircle2 className="w-3.5 h-3.5 text-good" />
             </div>
             <span className={`text-2xl font-mono font-bold block my-1 ${hasHttpData ? 'text-good' : 'text-ink-500'}`}>{hasHttpData ? count2xx : '—'}</span>
-            <p className="text-[11px] text-ink-500 leading-tight">Indexable valid pages</p>
+            <p className="text-[11px] text-ink-500 leading-tight">HTTP 2xx responses</p>
           </div>
 
           <div
@@ -374,7 +374,7 @@ export function SeoCrawlArchitecture({ report }: SeoCrawlArchitectureProps) {
             </div>
 
             <p className="text-xs text-ink-600 leading-relaxed">
-              Orphan URLs exist in your XML sitemap but have 0 incoming internal links from crawled pages, leading to search crawler de-indexation.
+              Orphan URLs have no incoming internal links in the checked crawl. This can make discovery less reliable, so confirm the URL inventory and crawl scope before prioritizing a fix.
             </p>
 
             {orphanPages?.orphan_urls && orphanPages.orphan_urls.length > 0 ? (
