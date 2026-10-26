@@ -129,7 +129,7 @@ export function Telemetry({ telemetry, onNavigateToCosting }: TelemetryProps) {
                   {telemetry.total_latency_ms == null ? '—' : formatMs(telemetry.total_latency_ms)}
                 </td>
                 <td className="py-2 px-2 text-right font-mono text-ink-700 text-sm">
-                  ${totalCost.toFixed(4)}
+                  {totalCost == null ? 'Not reported' : `USD ${totalCost.toFixed(4)}`}
                 </td>
               </tr>
             </tfoot>
