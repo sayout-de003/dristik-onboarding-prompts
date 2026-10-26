@@ -12,6 +12,7 @@ from app.identity.access import require_analysis
 from app.identity.authorizer import UserIdentity
 from app.identity.deps import get_current_user
 from app.aeo.scoring import AeoMetricsCalculator
+from app.aeo.analytics_history import aeo_analytics_history_store
 from app.aeo.reporting import (
     aeo_report_generator,
     generate_aeo_remediation_csv,
@@ -82,6 +83,28 @@ async def get_aeo_analytics(analysis_id: str, user: UserIdentity = Depends(get_c
         "unified_total_score_reason": "Content readiness, technical eligibility, observed answer visibility and business outcomes are independent measurements and must not be conflated.",
     }
     return payload
+
+
+@router.get("/{analysis_id}/aeo-analytics/history")
+async def get_aeo_analytics_history(
+    analysis_id: str,
+    limit: int = 100,
+    user: UserIdentity = Depends(get_current_user),
+):
+    """Return historical AEO pillar scorecards for completed audits of the same domain."""
+    run = require_analysis(analysis_id, user)
+    report = getattr(run, "report", None)
+    if not report:
+        raise HTTPException(status_code=400, detail="AEO analytics history requires a synthesized report.")
+    domain = getattr(report, "domain", None) or getattr(run, "website_url", None)
+    history = aeo_analytics_history_store.get_domain_history(domain or "", limit=limit)
+    return {
+        "analysis_id": analysis_id,
+        "domain": domain,
+        "total_snapshots": len(history),
+        "history": history,
+        "policy": "Only completed audits with persisted scorecards are included; historical data is not backfilled from estimates.",
+    }
 
 
 @router.get("/{analysis_id}/export/aeo-remediation-tracker.csv")
