@@ -94,7 +94,7 @@ export function SystemPanel() {
       </div>
 
       {error && <p role="alert" className="text-sm text-bad">{error}</p>}
-      {notice && <p role="status" className="text-sm text-good">{notice}</p>
+      {notice && <p role="status" className="text-sm text-good">{notice}</p>}
 
       {overview && (
         <>
