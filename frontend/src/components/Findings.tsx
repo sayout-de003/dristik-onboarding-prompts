@@ -98,36 +98,36 @@ function getEvidenceSourceBadge(evidenceClass: EvidenceClass, subtype?: string) 
         label: subtype ? `DOM / ${subtype}` : 'Verified DOM Proof',
         shortLabel: subtype || 'DOM',
         style: 'bg-good/10 text-good border-good/30 dark:bg-good/15 dark:text-good dark:border-good/40',
-        hint: 'Directly verified from browser DOM / HTTP response / AST tree. Zero hallucination.',
+        hint: 'Directly observed in the fetched page or response. Review the cited evidence and scope before acting.',
       };
     case 'EXTERNALLY_VERIFIED':
       return {
-        label: subtype ? `External · ${subtype}` : 'External Ground Truth',
+        label: subtype ? `External · ${subtype}` : 'Verified external source',
         shortLabel: subtype || 'External',
         style: 'bg-paper-200 text-ink-800 border-line dark:bg-ink-800 dark:text-ink-200 dark:border-ink-700',
-        hint: 'Corroborated by external authoritative source (GSC, DNS, live search queries).',
+        hint: 'Checked against a connected or external source, when available. Open the source details to confirm coverage.',
       };
     case 'MODEL_INFERRED':
       return {
-        label: 'AI Model Deduction',
+        label: 'AI-assisted interpretation',
         shortLabel: 'AI Synthesis',
         style: 'bg-paper-100 text-ink-700 border-line dark:bg-ink-900 dark:text-ink-300 dark:border-ink-800',
-        hint: 'Cognitive reasoning and semantic synthesis by neural language models.',
+        hint: 'An AI-assisted interpretation, not a direct observation. Validate it against the linked evidence.',
       };
     case 'HYPOTHESIS':
       return {
-        label: 'Provisional Hypothesis',
+        label: 'Hypothesis to verify',
         shortLabel: 'Hypothesis',
         style: 'bg-warn/10 text-warn border-warn/30 dark:bg-warn/15 dark:text-warn dark:border-warn/40',
-        hint: 'Single-source signal or provisional anomaly requiring human confirmation.',
+        hint: 'A possible issue that needs human confirmation or another source before it is treated as fact.',
       };
     case 'RECOMMENDATION':
     default:
       return {
-        label: 'Remediation Directive',
+        label: 'Recommended action',
         shortLabel: 'Directive',
         style: 'bg-paper-100 text-ink-700 border-line dark:bg-ink-900 dark:text-ink-300 dark:border-ink-800',
-        hint: 'Actionable engineering remediation or architectural patch.',
+        hint: 'A suggested change. Review the affected page and verify the result after implementation.',
       };
   }
 }
