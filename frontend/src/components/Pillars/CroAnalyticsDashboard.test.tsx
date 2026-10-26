@@ -47,4 +47,56 @@ describe('CroAnalyticsDashboard', () => {
 
     await waitFor(() => expect(screen.getByText(/History could not be loaded: network unavailable/)).toBeInTheDocument());
   });
+
+  it('plots only comparable measured KPI observations from saved audit snapshots', async () => {
+    vi.mocked(api).mockResolvedValue([
+      {
+        analysis_id: 'audit-old',
+        website_url: 'https://example.com',
+        domain: 'example.com',
+        status: 'COMPLETED',
+        progress: 100,
+        started_at: '2026-10-18T10:00:00Z',
+        completed_at: '2026-10-18T10:01:00Z',
+        page_count: 3,
+        cro_metrics: [{
+          metric: 'Conversion rate',
+          formula: 'Unique converters / eligible users',
+          status: 'MEASURED',
+          value: 0.12,
+          display: '12%',
+          numerator: 'unique converters',
+          denominator: 'eligible users',
+          window: 'last 28 days',
+          note: 'Measured',
+        }],
+      },
+      {
+        analysis_id: 'audit-new',
+        website_url: 'https://example.com',
+        domain: 'example.com',
+        status: 'COMPLETED',
+        progress: 100,
+        started_at: '2026-10-25T10:00:00Z',
+        completed_at: '2026-10-25T10:01:00Z',
+        page_count: 3,
+        cro_metrics: [{
+          metric: 'Conversion rate',
+          formula: 'Unique converters / eligible users',
+          status: 'MEASURED',
+          value: 0.15,
+          display: '15%',
+          numerator: 'unique converters',
+          denominator: 'eligible users',
+          window: 'last 28 days',
+          note: 'Measured',
+        }],
+      },
+    ] as never);
+    render(<CroAnalyticsDashboard report={emptyReport} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    await waitFor(() => expect(screen.getByRole('img', { name: 'Historical measured values for Conversion rate' })).toBeInTheDocument());
+    expect(screen.getByText(/Unique converters \/ eligible users/)).toBeInTheDocument();
+  });
 });
