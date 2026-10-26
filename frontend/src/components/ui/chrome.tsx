@@ -226,7 +226,7 @@ export function PillarShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-6">
+    <div data-pillar-shell className="space-y-6">
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5">
         <div className="max-w-2xl space-y-1.5">
           <p className="label">{kicker}</p>
