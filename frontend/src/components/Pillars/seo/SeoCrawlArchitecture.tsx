@@ -160,7 +160,7 @@ export function SeoCrawlArchitecture({ report }: SeoCrawlArchitectureProps) {
               <AlertTriangle className="w-3.5 h-3.5 text-warn" />
             </div>
             <span className={`text-2xl font-mono font-bold block my-1 ${!hasHttpData ? 'text-ink-500' : count4xx > 0 ? 'text-warn' : 'text-good'}`}>
-              {count4xx}
+              {hasHttpData ? count4xx : '—'}
             </span>
             <p className="text-[11px] text-ink-500 leading-tight">404 Not Found / 403 Forbidden</p>
           </div>
@@ -176,7 +176,7 @@ export function SeoCrawlArchitecture({ report }: SeoCrawlArchitectureProps) {
               <XCircle className="w-3.5 h-3.5 text-bad" />
             </div>
             <span className={`text-2xl font-mono font-bold block my-1 ${!hasHttpData ? 'text-ink-500' : count5xx > 0 ? 'text-bad' : 'text-good'}`}>
-              {count5xx}
+              {hasHttpData ? count5xx : '—'}
             </span>
             <p className="text-[11px] text-ink-500 leading-tight">Backend timeouts & 500 crashes</p>
           </div>
