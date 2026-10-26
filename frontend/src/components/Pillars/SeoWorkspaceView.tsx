@@ -10,6 +10,7 @@ import { SeoMarketIntelligence } from './seo/SeoMarketIntelligence';
 import { SeoIssuesAndAppendix } from './seo/SeoIssuesAndAppendix';
 import { AuditIndex } from '../../report/auditIndex/AuditIndex';
 import { EnterpriseSeoAudit } from './seo/EnterpriseSeoAudit';
+import { DeltaAnalyticsDashboard } from '../DeltaAnalyticsDashboard';
 
 interface SeoWorkspaceViewProps {
   report: ExecutiveReport;
@@ -26,7 +27,8 @@ export type EnterpriseSeoTab =
   | 'gsc'
   | 'issues'
   | 'index'
-  | 'enterprise';
+  | 'enterprise'
+  | 'history';
 
 export function SeoWorkspaceView({
   report,
@@ -71,6 +73,7 @@ export function SeoWorkspaceView({
       case 'issues':
       case 'index':
       case 'enterprise':
+      case 'history':
         setActiveTab(rawId as EnterpriseSeoTab);
         break;
       default:
@@ -127,6 +130,7 @@ export function SeoWorkspaceView({
         { id: 'issues', label: `Issues & URLs (${seoFindings.length})` },
         { id: 'index', label: 'Full audit index' },
         { id: 'enterprise', label: 'Advanced assessment' },
+        { id: 'history', label: 'History & trends' },
       ]}
       activeTab={activeTab}
       onTab={handleTabChange}
@@ -193,6 +197,8 @@ export function SeoWorkspaceView({
       {activeTab === 'enterprise' && (
         <EnterpriseSeoAudit analysisId={analysisId || report.analysis_id || report.report_id} />
       )}
+
+      {activeTab === 'history' && <DeltaAnalyticsDashboard />}
     </PillarShell>
   );
 }
