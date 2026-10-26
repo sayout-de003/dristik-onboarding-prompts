@@ -49,7 +49,7 @@ export function ContactForm({ user }: { user: AuthUser | null }) {
       </div>
 
       {done ? (
-        <p className="text-ink-700">{done}</p>
+        <p role="status" className="rounded-lg border border-good/30 bg-good/5 p-4 text-ink-700">{done}</p>
       ) : (
         <form className="card p-6 sm:p-7 space-y-5" onSubmit={submit}>
           <label className="block">
