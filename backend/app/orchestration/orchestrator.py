@@ -13,6 +13,8 @@ from typing import Dict, Any, Optional, AsyncGenerator, List
 logger = logging.getLogger(__name__)
 
 from app.core.config import settings
+from app.aeo.analytics_history import aeo_analytics_history_store
+from app.aeo.scoring import AeoMetricsCalculator
 from app.domain.models import AnalysisRun, ExecutiveReport, CrawlManifest, FindingEvidence
 from app.domain.enums import AnalysisStage, Category, Severity
 from app.domain.capability import CAPABILITY_REGISTRY
@@ -1866,6 +1868,16 @@ class AnalysisOrchestrator:
                     findings_count=len(final_findings),
                     state_payload={"overall_score": overall_scores.overall_score},
                 ))
+                # Auxiliary analytics history must never invalidate a sealed audit.
+                try:
+                    aeo_scorecard = AeoMetricsCalculator.calculate(report).to_dict()
+                    aeo_analytics_history_store.record_snapshot(
+                        analysis_id=analysis_id,
+                        domain=getattr(report, "domain", None) or run.website_url,
+                        scorecard=aeo_scorecard,
+                    )
+                except Exception:
+                    logger.exception("Could not persist AEO analytics history for %s", analysis_id)
             except Exception as pe:
                 logger.exception("Could not persist terminal completion state for %s", analysis_id)
                 run.status = AnalysisStage.FAILED
