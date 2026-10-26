@@ -51,7 +51,7 @@ describe('SeoIssuesAndAppendix', () => {
     expect(screen.getByText('The title string is identical on two checked URLs.')).toBeInTheDocument();
     expect(screen.getByText('Distinct titles help searchers understand how pages differ.')).toBeInTheDocument();
     expect(screen.getByText('2 affected of 8 checked')).toBeInTheDocument();
-    expect(screen.getByText('ev_001')).toBeInTheDocument();
+    expect(screen.getByText(/Evidence ID: ev_001/)).toBeInTheDocument();
     expect(screen.getByText('Re-crawl both URLs.')).toBeInTheDocument();
   });
 
