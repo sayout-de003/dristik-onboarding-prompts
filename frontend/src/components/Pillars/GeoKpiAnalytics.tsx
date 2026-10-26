@@ -125,6 +125,16 @@ export function GeoKpiAnalytics({ domain }: { domain: string }) {
       </div>
       <div className="rounded-lg bg-ink/5 p-4"><p className="font-mono text-sm text-ink">Score = Σ(response points) ÷ number of successful responses</p><p className="text-xs text-ink-600 mt-2">Denominator: {data.formula.denominator}</p><p className="text-xs text-ink-600 mt-1">Failure rule: {data.formula.failed_response_treatment}</p></div>
       <MethodFlow />
+      <div className="rounded-lg border border-line p-4 space-y-2">
+        <h5 className="font-semibold text-ink">Separate rating: on-page GEO readiness</h5>
+        <p className="text-xs text-ink-600">The repository's readiness helper uses normalized inputs on a 0–1 scale; it is not the live visibility score above.</p>
+        <p className="font-mono text-sm text-ink">Readiness = (citation_rate × 0.70 + sentiment_score × 0.30) × 100</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-ink-600">
+          <p className="rounded bg-paper-50 p-3"><strong className="text-ink">70% weight</strong><br />Citation-rate input</p>
+          <p className="rounded bg-paper-50 p-3"><strong className="text-ink">30% weight</strong><br />Sentiment-score input</p>
+        </div>
+        <p className="text-xs text-ink-500">This dashboard does not invent those input values or combine this readiness rating with live visibility. The two ratings have different meanings and denominators.</p>
+      </div>
     </Card>
     <Card className="p-5 space-y-3"><h4 className="font-semibold text-ink">Data quality & limitations</h4><div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs"><div className="rounded border border-line p-3"><p className="font-semibold text-ink">Measured responses</p><p className="mt-1 text-ink-600">{data.data_quality.successful_observations}</p></div><div className="rounded border border-line p-3"><p className="font-semibold text-ink">Failed/empty attempts</p><p className="mt-1 text-ink-600">{data.data_quality.failed_or_empty_attempts}</p></div><div className="rounded border border-line p-3"><p className="font-semibold text-ink">Measurement scope</p><p className="mt-1 text-ink-600">{data.data_quality.scope}</p></div></div><ul className="list-disc pl-5 space-y-1 text-xs text-ink-600">{data.data_quality.limitations.map(item => <li key={item}>{item}</li>)}</ul></Card>
   </div>;
