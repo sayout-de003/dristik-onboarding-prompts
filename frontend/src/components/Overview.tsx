@@ -106,56 +106,56 @@ export function Overview({
   const disciplineCards = [
     {
       id: 'seo' as TabId,
-      name: 'SEO: Technical & On-Page',
+      name: 'SEO: Search performance',
       shortName: 'SEO',
       icon: Search,
       score: rollup.seo.score,
       grade: rollup.seo.grade,
-      summary: 'Robots.txt, XML sitemap, redirects, click depth, headings, meta tags, and internal link equity.',
+      summary: 'Checks how search engines can crawl, understand, and navigate the site, including metadata, links, redirects, and sitemaps.',
       issuesCount: rollup.seo.findingsCount,
       color: 'text-ink-700',
     },
     {
       id: 'geo' as TabId,
-      name: 'GEO: Generative Engines',
+      name: 'GEO: AI search readiness',
       shortName: 'GEO',
       icon: Sparkles,
       score: rollup.geo.score,
       grade: rollup.geo.grade,
-      summary: 'GEO Readiness is on-page extractability. Live AI citation visibility is a separate measurement.',
+      summary: 'Checks whether site content is easy for AI systems to interpret. Actual AI citations require separate live measurement.',
       issuesCount: rollup.geo.findingsCount,
       color: 'text-good',
     },
     {
       id: 'aeo' as TabId,
-      name: 'AEO: Answer Engine & Agents',
+      name: 'AEO: Answers and structured data',
       shortName: 'AEO',
       icon: Bot,
       score: rollup.aeo.score,
       grade: rollup.aeo.grade,
-      summary: 'Schema.org JSON-LD graphs, AI crawler directives, llms.txt, and 50-question deterministic extractability.',
+      summary: 'Checks structured data and how clearly pages answer specific questions. Coverage depends on the data available to this audit.',
       issuesCount: rollup.aeo.findingsCount,
       color: 'text-ink-700',
     },
     {
       id: 'cro' as TabId,
-      name: 'CRO: Conversion & UX',
+      name: 'CRO: Conversion experience',
       shortName: 'CRO',
       icon: Zap,
       score: rollup.cro.score,
       grade: rollup.cro.grade,
-      summary: 'Form friction diagnostics, 5-second value proposition clarity, CTAs, and visual UX inspection.',
+      summary: 'Reviews the clarity of key messages, calls to action, forms, and other factors that can affect conversion.',
       issuesCount: rollup.cro.findingsCount,
       color: 'text-warn',
     },
     {
       id: 'competitors' as TabId,
-      name: 'Competitor Intelligence',
+      name: 'Competitor comparison',
       shortName: 'Competitors',
       icon: Swords,
       score: rollup.competitors.score,
       grade: rollup.competitors.grade,
-      summary: 'Head-to-head intent bake-offs, side-by-side metric benchmarks, and market gap discovery.',
+      summary: 'Compares available competitor signals to identify differences and possible opportunities.',
       issuesCount: rollup.competitors.findingsCount,
       color: 'text-bad',
     },
@@ -171,7 +171,7 @@ export function Overview({
           <div className="space-y-2 max-w-2xl">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-mono uppercase tracking-[0.04em] text-ink-700 font-bold">
-                Enterprise Executive Scorecard
+                Audit summary
               </span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-paper-50 border border-line text-ink-500 font-semibold">
                 {report ? 'Report snapshot' : 'Awaiting report'}
@@ -181,7 +181,7 @@ export function Overview({
               {report?.domain || profile?.business_name || 'Website Audit Intelligence'}
             </h1>
             <p className="text-xs text-ink-600 leading-relaxed">
-              Overall Website Readiness from the crawled sample. GEO Readiness is separate from live AI citation visibility.
+              A summary of the pages checked in this audit. A readiness score is not the same as proof that AI search engines cite the site.
             </p>
             {typeof report?.crawl_manifest?.crawl_health?.sampling_note === 'string' && (
               <p className="text-xs text-ink-700 leading-relaxed border-l-2 border-line pl-3">
