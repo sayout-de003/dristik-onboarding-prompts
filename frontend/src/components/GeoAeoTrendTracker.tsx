@@ -294,6 +294,31 @@ export function GeoAeoTrendTracker({ domain, brandName, industry }: GeoAeoTrendT
         </div>
       )}
 
+      {/* Historical visibility score chart: only persisted snapshots are plotted. */}
+      {hasHistory && (
+        <div className="sheet border border-line rounded-xl p-5 space-y-4">
+          <div>
+            <h4 className="font-sans text-lg text-ink font-semibold">Historical visibility score</h4>
+            <p className="text-xs text-ink-500">Each bar is a persisted live pipeline snapshot. This is not the content-readiness or technical AEO score.</p>
+          </div>
+          <div className="space-y-3" role="img" aria-label="Historical live answer-engine visibility score by snapshot">
+            {data.history.map((snap, idx) => {
+              const value = Number.isFinite(snap.overall_score) ? Math.max(0, Math.min(100, snap.overall_score)) : null;
+              return (
+                <div key={snap.snapshot_id} className="grid grid-cols-[88px_minmax(0,1fr)_44px] gap-3 items-center">
+                  <span className="text-[10px] font-mono text-ink-500">{formatDate(snap.timestamp)}</span>
+                  <div className="h-3 rounded bg-paper-200 dark:bg-ink-800 overflow-hidden">
+                    {value !== null && <div className="h-full rounded bg-pine" style={{ width: `${value}%` }} />}
+                  </div>
+                  <span className="text-xs font-mono font-semibold text-ink text-right">{value === null ? '—' : value}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex justify-between text-[10px] text-ink-500 font-mono"><span>0</span><span>50</span><span>100</span></div>
+        </div>
+      )}
+
       {/* TIMELINE & HISTORICAL TRAJECTORY */}
       {hasHistory && (
         <div className="sheet border border-line rounded-xl p-6 space-y-5">
