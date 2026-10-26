@@ -22,6 +22,8 @@ export function AeoAnalyticsDashboard({ report, analysisId }: Props) {
   const [loadedScorecard, setLoadedScorecard] = useState<any>(report?.aeo_four_pillars_scorecard ?? null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [historySnapshots, setHistorySnapshots] = useState<any[]>([]);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const effectiveAnalysisId = analysisId || report?.analysis_id || report?.report_id;
   useEffect(() => {
     let active = true;
@@ -32,6 +34,9 @@ export function AeoAnalyticsDashboard({ report, analysisId }: Props) {
       .then((payload) => { if (active) setLoadedScorecard(payload); })
       .catch((error: any) => { if (active) setAnalyticsError(error?.message || 'AEO analytics endpoint is unavailable.'); })
       .finally(() => { if (active) setAnalyticsLoading(false); });
+    api<any>(`/api/v1/reports/${encodeURIComponent(effectiveAnalysisId)}/aeo-analytics/history?limit=100`, {}, 'Could not load AEO analytics history')
+      .then((payload) => { if (active) setHistorySnapshots(Array.isArray(payload?.history) ? payload.history : []); })
+      .catch((error: any) => { if (active) setHistoryError(error?.message || 'AEO history endpoint is unavailable.'); });
     return () => { active = false; };
   }, [effectiveAnalysisId]);
   const scorecard = loadedScorecard;
@@ -192,6 +197,46 @@ export function AeoAnalyticsDashboard({ report, analysisId }: Props) {
             <p className="text-[11px] text-ink-500 leading-relaxed">Requires connected and attributable analytics. Missing connector data means DATA_UNAVAILABLE—not zero revenue.</p>
           </div>
         </div>
+      </section>
+
+      <section className="sheet border border-line rounded-xl p-5 space-y-4">
+        <div>
+          <h4 className="text-lg font-semibold text-ink">Historical AEO readiness & eligibility</h4>
+          <p className="text-xs text-ink-500">Snapshots are recorded after a completed audit is durably saved. Older runs are not estimated or backfilled.</p>
+        </div>
+        {historyError && <p className="text-xs text-ink-500">{historyError}</p>}
+        {historySnapshots.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-line p-5 text-sm text-ink-500">
+            No completed AEO scorecard snapshots are stored for this domain yet. This history begins as completed audits run after this feature is deployed.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {historySnapshots.map((snap) => {
+              const a = num(snap?.scorecard?.pillar_a_content_readiness?.composite_readiness_score);
+              const b = num(snap?.scorecard?.pillar_b_technical_eligibility?.composite_eligibility_score);
+              return (
+                <div key={snap.analysis_id} className="rounded-lg border border-line p-3 space-y-3">
+                  <div className="flex flex-wrap justify-between gap-2 text-xs">
+                    <span className="font-semibold text-ink">{snap.analysis_id}</span>
+                    <span className="font-mono text-ink-500">{snap.captured_at ? new Date(snap.captured_at).toLocaleString() : 'Timestamp unavailable'}</span>
+                  </div>
+                  {[
+                    { label: 'Content readiness', value: a },
+                    { label: 'Technical eligibility', value: b },
+                  ].map((item) => (
+                    <div key={item.label} className="space-y-1">
+                      <div className="flex justify-between text-[11px]"><span className="text-ink-600">{item.label}</span><span className="font-mono text-ink-500">{item.value === null ? 'Not measured' : `${item.value.toFixed(1)} / 100`}</span></div>
+                      <div className="h-2.5 rounded bg-paper-200 dark:bg-ink-800 overflow-hidden">
+                        {item.value !== null && <div className="h-full rounded bg-pine" style={{ width: `${Math.max(0, Math.min(100, item.value))}%` }} />}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="text-[10px] text-ink-500 font-mono">Formula version: {snap.formula_version || 'unknown'} · No unified AEO total is calculated</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       <section className="space-y-3">
