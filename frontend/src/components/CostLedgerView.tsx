@@ -226,8 +226,7 @@ export function CostLedgerView({ report, telemetry: propTelemetry, onNavigateToT
             AI audit cost ledger
           </h1>
           <p className="text-sm text-ink-500 mt-1 max-w-3xl">
-            Granular dollar accounting for every step and sub-step of the autonomous intelligence pipeline.
-            Distinguishes between <strong className="text-ink-700">Actual Provider Billed</strong> (in-band OpenRouter receipts) and <strong className="text-ink-700">Calculated Token Math</strong> (exact tokens $\times$ official card list rates).
+            Review the cost data returned for each pipeline stage. Provider-billed amounts are separated from estimates calculated using token counts and the selected rate card.
           </p>
         </div>
 
