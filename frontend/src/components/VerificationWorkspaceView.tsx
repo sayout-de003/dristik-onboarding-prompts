@@ -4,7 +4,7 @@ import { VerificationProofCard } from './VerificationProofCard';
 import { RegressionDetectionView } from './RegressionDetectionView';
 import { ComparativeEvidenceMatrix } from './ComparativeEvidenceMatrix';
 import { Card } from './ui';
-import { ShieldCheck, RefreshCw, CheckCircle2, History } from 'lucide-react';
+import { ShieldCheck, RefreshCw, History } from 'lucide-react';
 
 interface VerificationWorkspaceViewProps {
   report: ExecutiveReport;
