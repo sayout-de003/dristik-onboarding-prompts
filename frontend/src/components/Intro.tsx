@@ -21,8 +21,8 @@ const STEPS = [
 
 const SCORES = [
   { title: 'Human', body: 'Can a visitor tell what you sell, at what price, and what to do next in five seconds?' },
-  { title: 'Search', body: 'Can Google crawl, index, and understand the pages without broken structure?' },
-  { title: 'AI readiness', body: 'Can an answer engine extract what you sell from the pages we crawled? Live ChatGPT or Perplexity citations are a separate check and stay unmeasured until those engines are actually queried.' },
+  { title: 'Search', body: 'Can search engines discover and understand the pages we checked?' },
+  { title: 'AI readiness', body: 'Can an answer engine extract what you offer from the pages we checked? Live citations are a separate measurement and remain unmeasured until the relevant engines are actually queried.' },
 ];
 
 const FITS = [
@@ -44,7 +44,7 @@ export function Intro() {
         ))}
       </section>
 
-      <Section title="Three honest scores" description="No invented revenue loss. Each score is 0–100 from what is actually on the site.">
+      <Section title="Three ways to assess readiness" description="Scores are based on the audit evidence and pages checked. Traffic, revenue impact and live AI citations are separate measurements—not assumptions.">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {SCORES.map((score) => (
             <Card key={score.title}>
