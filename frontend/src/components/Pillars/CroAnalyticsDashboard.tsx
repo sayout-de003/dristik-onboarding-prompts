@@ -49,6 +49,7 @@ export function CroAnalyticsDashboard({ report, analysisId }: CroAnalyticsDashbo
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<HistoryRange>('90');
   const [view, setView] = useState<'overview' | 'history' | 'methodology'>('overview');
+  const [selectedMetricKey, setSelectedMetricKey] = useState('');
 
   const intel = report.cro_audit?.intelligence as CroIntelligenceReport | null | undefined;
   const metrics = intel?.metrics || [];
@@ -70,19 +71,20 @@ export function CroAnalyticsDashboard({ report, analysisId }: CroAnalyticsDashbo
     return () => { active = false; };
   }, [analysisId]);
 
-  const comparableHistory = useMemo(() => {
+  const sameDomainHistory = useMemo(() => {
     const now = Date.now();
     const cutoff = range === 'all' ? 0 : now - Number(range) * 24 * 60 * 60 * 1000;
     return history
       .filter((item) => {
-        const itemDomain = (item.domain || item.website_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase();
+        const itemDomain = (item.domain || item.website_url || '').replace(/^https?:\\/\\//, '').replace(/\\/$/, '').toLowerCase();
         const parsed = item.completed_at || item.started_at;
         const timestamp = parsed ? new Date(parsed).getTime() : Number.NaN;
-        return itemDomain === domain && Number.isFinite(timestamp) && timestamp >= cutoff && scoreOf(item) !== null;
+        return itemDomain === domain && Number.isFinite(timestamp) && timestamp >= cutoff;
       })
       .sort((a, b) => new Date(a.completed_at || a.started_at).getTime() - new Date(b.completed_at || b.started_at).getTime());
   }, [history, domain, range]);
 
+  const comparableHistory = sameDomainHistory.filter((item) => scoreOf(item) !== null);
   const kpiCandidates = useMemo(() => {
     const wanted = [
       { label: 'Conversion rate', match: /conversion rate/i, detail: 'Use the denominator shown in the metric definition.' },
@@ -97,6 +99,37 @@ export function CroAnalyticsDashboard({ report, analysisId }: CroAnalyticsDashbo
       return { ...candidate, metric: found };
     });
   }, [metrics]);
+
+  const metricOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options: Array<{ key: string; label: string; formula: string; denominator?: string | null; window?: string | null }> = [];
+    sameDomainHistory.forEach((item) => {
+      (item.cro_metrics || []).forEach((metric) => {
+        if (metric.status !== 'MEASURED' || typeof metric.value !== 'number' || !Number.isFinite(metric.value)) return;
+        const key = [metric.metric, metric.formula, metric.denominator || '', metric.window || ''].join('|||');
+        if (seen.has(key)) return;
+        seen.add(key);
+        options.push({ key, label: metric.metric, formula: metric.formula, denominator: metric.denominator, window: metric.window });
+      });
+    });
+    return options;
+  }, [sameDomainHistory]);
+  const selectedMetric = metricOptions.find((option) => option.key === selectedMetricKey) || metricOptions[0];
+  const metricSeries = selectedMetric ? sameDomainHistory.flatMap((item) =>
+    (item.cro_metrics || [])
+      .filter((metric) => [metric.metric, metric.formula, metric.denominator || '', metric.window || ''].join('|||') === selectedMetric.key && metric.status === 'MEASURED' && typeof metric.value === 'number' && Number.isFinite(metric.value))
+      .map((metric) => ({ item, metric }))
+  ) : [];
+  const metricValues = metricSeries.map((point) => point.metric.value as number);
+  const metricMin = metricValues.length ? Math.min(...metricValues) : 0;
+  const metricMax = metricValues.length ? Math.max(...metricValues) : 0;
+  const metricRange = metricMax - metricMin || 1;
+  const metricChartPoints = metricSeries.map((point, index) => ({
+    ...point,
+    x: metricSeries.length <= 1 ? 300 : 32 + (index / (metricSeries.length - 1)) * 536,
+    y: 165 - (((point.metric.value as number) - metricMin) / metricRange) * 120,
+  }));
+  const metricPolyline = metricChartPoints.map((point) => `${point.x},${point.y}`).join(' ');
 
   const chartPoints = comparableHistory.map((item, index) => {
     const score = scoreOf(item) as number;
@@ -181,9 +214,13 @@ export function CroAnalyticsDashboard({ report, analysisId }: CroAnalyticsDashbo
       )}
 
       {view === 'history' && (
-        <Card className="p-5 space-y-3">
-          <div><h4 className="font-semibold text-ink">Saved audit timeline</h4><p className="mt-1 text-xs text-ink-500">History includes only real saved audits with an explicit CRO score. No interpolated or synthetic values are added.</p></div>
+        <Card className="p-5 space-y-4">
+          <div><h4 className="font-semibold text-ink">Saved audit timeline</h4><p className="mt-1 text-xs text-ink-500">History includes only real saved audits. No interpolated or synthetic values are added.</p></div>
           {loading ? <p className="text-sm text-ink-500">Loading history…</p> : error ? <p className="text-sm text-ink-600">History unavailable: {error}</p> : comparableHistory.length ? <div className="overflow-x-auto"><table className="w-full min-w-[600px] text-left text-sm"><thead><tr className="border-b border-line text-xs text-ink-500"><th className="py-2 pr-3">Audit date</th><th className="py-2 pr-3">Domain</th><th className="py-2 pr-3">CRO rating</th><th className="py-2">Status</th></tr></thead><tbody>{[...comparableHistory].reverse().map((item) => <tr key={item.analysis_id} className="border-b border-line last:border-0"><td className="py-3 pr-3">{dateLabel(item.completed_at || item.started_at)}</td><td className="py-3 pr-3">{item.domain}</td><td className="py-3 pr-3 font-mono">{(scoreOf(item) as number).toFixed(1)} / 100</td><td className="py-3">{item.status}</td></tr>)}</tbody></table></div> : <p className="rounded-lg border border-dashed border-line p-5 text-sm text-ink-500">No historical CRO scores are available for this domain. Run and save another audit to begin a comparable audit timeline.</p>}
+          <div className="space-y-3 border-t border-line pt-5">
+            <div className="flex flex-wrap items-end justify-between gap-3"><div><h4 className="font-semibold text-ink">Historical measured CRO KPIs</h4><p className="mt-1 text-xs text-ink-500">Only observations stored with earlier audits are plotted. Series must match metric, formula, denominator, and measurement window.</p></div>{metricOptions.length ? <label className="text-xs text-ink-500">Metric<select aria-label="Historical KPI metric" value={selectedMetric?.key || ''} onChange={(event) => setSelectedMetricKey(event.target.value)} className="mt-1 block max-w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink">{metricOptions.map((option) => <option key={option.key} value={option.key}>{option.label}{option.window ? ` · ${option.window}` : ''}</option>)}</select></label> : null}</div>
+            {metricChartPoints.length > 0 && selectedMetric ? <div><p className="text-xs text-ink-500">{selectedMetric.formula}{selectedMetric.denominator ? ` · Denominator: ${selectedMetric.denominator}` : ''}</p><svg viewBox="0 0 600 205" role="img" aria-label={`Historical measured values for ${selectedMetric.label}`} className="mt-3 h-52 w-full"><line x1="32" x2="568" y1="165" y2="165" stroke="currentColor" opacity="0.15" />{metricChartPoints.length > 1 ? <polyline points={metricPolyline} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" /> : null}{metricChartPoints.map((point) => <g key={`${point.item.analysis_id}-${point.metric.metric}`}><circle cx={point.x} cy={point.y} r="4.5" fill="currentColor"><title>{`${dateLabel(point.item.completed_at || point.item.started_at)}: ${point.metric.display}`}</title></circle></g>)}<text x="32" y="193" fontSize="10" fill="currentColor" opacity="0.65">{dateLabel(metricChartPoints[0].item.completed_at || metricChartPoints[0].item.started_at)} · {metricChartPoints[0].metric.display}</text><text x="568" y="193" textAnchor="end" fontSize="10" fill="currentColor" opacity="0.65">{dateLabel(metricChartPoints[metricChartPoints.length - 1].item.completed_at || metricChartPoints[metricChartPoints.length - 1].item.started_at)} · {metricChartPoints[metricChartPoints.length - 1].metric.display}</text></svg></div> : <p className="rounded-lg border border-dashed border-line p-5 text-sm text-ink-500">No comparable historical CRO KPI observations were saved for this domain and date range. Audit ratings can still be reviewed above.</p>}
+          </div>
         </Card>
       )}
 
