@@ -202,15 +202,15 @@ export function Overview({
             <div className="space-y-1 text-xs">
               <div className="flex items-center gap-1.5 font-mono">
                 <span className="text-ink-400">Pages:</span>
-                <span className="font-bold text-ink">{report?.crawl_manifest?.pages?.length ?? 0}</span>
+                <span className="font-bold text-ink">{Array.isArray(report?.crawl_manifest?.pages) ? report.crawl_manifest.pages.length : '—'}</span>
               </div>
               <div className="flex items-center gap-1.5 font-mono">
                 <span className="text-ink-400">Issues:</span>
-                <span className="font-bold text-ink">{report?.findings?.length || 0}</span>
+                <span className="font-bold text-ink">{Array.isArray(report?.findings) ? report.findings.length : '—'}</span>
               </div>
               <div className="flex items-center gap-1.5 font-mono">
                 <span className="text-ink-400">Patches:</span>
-                <span className="font-bold text-good">{(report?.code_patches?.length || 0) + (report?.remediation_patches?.length || 0)} ready</span>
+                <span className="font-bold text-good">{Array.isArray(report?.code_patches) || Array.isArray(report?.remediation_patches) ? (report?.code_patches?.length || 0) + (report?.remediation_patches?.length || 0) : '—'} {Array.isArray(report?.code_patches) || Array.isArray(report?.remediation_patches) ? 'ready' : 'not reported'}</span>
               </div>
             </div>
           </div>
