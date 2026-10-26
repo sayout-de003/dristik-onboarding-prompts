@@ -2194,6 +2194,7 @@ export interface AnalysisSummary {
   analysis_id: string;
   score_cro?: number | null;
   cro_score_status?: string;
+  cro_metrics?: CroMetricResult[];
   website_url: string;
   domain: string;
   status: string;
