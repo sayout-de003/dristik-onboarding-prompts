@@ -74,7 +74,7 @@ export function Pipeline({ run, onRefreshRun }: PipelineProps) {
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono font-semibold bg-paper-200 text-ink-700 border border-line">
                 <span>Total AI Cost:</span>
-                <span>{totalCost == null ? 'Not reported' : `{totalCost == null ? 'Not reported' : `${totalCost.toFixed(4)}`}`}</span>
+                <span>{totalCost == null ? 'Not reported' : `${totalCost.toFixed(4)}`}</span>
               </span>
               {isActualBilled && (
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono bg-paper-100 text-ink-700">
@@ -143,7 +143,7 @@ export function Pipeline({ run, onRefreshRun }: PipelineProps) {
                       {telemetry.total_latency_ms == null ? '—' : formatMs(telemetry.total_latency_ms)}
                     </td>
                     <td className="py-1.5 px-2 text-right font-mono text-ink-700">
-                      ${totalCost.toFixed(4)}
+                      {totalCost == null ? 'Not reported' : `${totalCost.toFixed(4)}`}
                     </td>
                   </tr>
                 </tfoot>
