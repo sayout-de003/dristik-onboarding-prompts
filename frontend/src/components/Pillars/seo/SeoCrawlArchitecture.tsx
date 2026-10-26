@@ -99,14 +99,14 @@ export function SeoCrawlArchitecture({ report }: SeoCrawlArchitectureProps) {
               <div
                 style={{ width: `${pct4xx}%` }}
                 className="bg-warn hover:opacity-90 transition-opacity"
-                title={`4xx Client Errors: ${count4xx} URLs (${pct4xx}%)`}
+                title={`4xx Client Errors: ${hasHttpData ? count4xx : '—'} URLs (${pct4xx}%)`}
               />
             )}
             {pct5xx != null && pct5xx > 0 && (
               <div
                 style={{ width: `${pct5xx}%` }}
                 className="bg-bad hover:opacity-90 transition-opacity"
-                title={`5xx Server Errors: ${count5xx} URLs (${pct5xx}%)`}
+                title={`5xx Server Errors: ${hasHttpData ? count5xx : '—'} URLs (${pct5xx}%)`}
               />
             )}
           </div> : <p className="rounded-lg border border-dashed border-line p-4 text-xs text-ink-500">HTTP response codes were not returned for this audit. Run a crawl that records response statuses to populate this chart.</p>}
@@ -131,7 +131,7 @@ export function SeoCrawlArchitecture({ report }: SeoCrawlArchitectureProps) {
               <span className="text-[10px] font-mono text-good uppercase font-bold">2xx Success</span>
               <CheckCircle2 className="w-3.5 h-3.5 text-good" />
             </div>
-            <span className="text-2xl font-mono font-bold text-good block my-1">{count2xx}</span>
+            <span className={`text-2xl font-mono font-bold block my-1 ${hasHttpData ? 'text-good' : 'text-ink-500'}`}>{hasHttpData ? count2xx : '—'}</span>
             <p className="text-[11px] text-ink-500 leading-tight">Indexable valid pages</p>
           </div>
 
@@ -145,7 +145,7 @@ export function SeoCrawlArchitecture({ report }: SeoCrawlArchitectureProps) {
               <span className="text-[10px] font-mono text-pine-600 dark:text-pine-400 uppercase font-bold">3xx Redirects</span>
               <Layers className="w-3.5 h-3.5 text-pine-600 dark:text-pine-400" />
             </div>
-            <span className="text-2xl font-mono font-bold text-ink block my-1">{count3xx}</span>
+            <span className="text-2xl font-mono font-bold text-ink block my-1">{hasHttpData ? count3xx : '—'}</span>
             <p className="text-[11px] text-ink-500 leading-tight">Permanent 301 / 302 hops</p>
           </div>
 
@@ -159,7 +159,7 @@ export function SeoCrawlArchitecture({ report }: SeoCrawlArchitectureProps) {
               <span className="text-[10px] font-mono text-warn uppercase font-bold">4xx Client Errors</span>
               <AlertTriangle className="w-3.5 h-3.5 text-warn" />
             </div>
-            <span className={`text-2xl font-mono font-bold block my-1 ${count4xx > 0 ? 'text-warn' : 'text-good'}`}>
+            <span className={`text-2xl font-mono font-bold block my-1 ${!hasHttpData ? 'text-ink-500' : count4xx > 0 ? 'text-warn' : 'text-good'}`}>
               {count4xx}
             </span>
             <p className="text-[11px] text-ink-500 leading-tight">404 Not Found / 403 Forbidden</p>
@@ -175,7 +175,7 @@ export function SeoCrawlArchitecture({ report }: SeoCrawlArchitectureProps) {
               <span className="text-[10px] font-mono text-bad uppercase font-bold">5xx Server Errors</span>
               <XCircle className="w-3.5 h-3.5 text-bad" />
             </div>
-            <span className={`text-2xl font-mono font-bold block my-1 ${count5xx > 0 ? 'text-bad' : 'text-good'}`}>
+            <span className={`text-2xl font-mono font-bold block my-1 ${!hasHttpData ? 'text-ink-500' : count5xx > 0 ? 'text-bad' : 'text-good'}`}>
               {count5xx}
             </span>
             <p className="text-[11px] text-ink-500 leading-tight">Backend timeouts & 500 crashes</p>
@@ -397,8 +397,8 @@ export function SeoCrawlArchitecture({ report }: SeoCrawlArchitectureProps) {
           {/* Security & Directives Summary Footer */}
           <div className="pt-3 border-t border-line/60 flex items-center justify-between text-xs text-ink-500">
             <span className="flex items-center gap-1.5">
-              <Shield className="w-3.5 h-3.5 text-good" />
-              HTTPS & TLS Enforced
+              <Shield className={`w-3.5 h-3.5 ${security?.score != null ? 'text-ink-500' : 'text-ink-400'}`} />
+              Security audit
             </span>
             <span className="font-mono text-good font-bold">
               Score: {security?.score != null && Number.isFinite(security.score) ? `${Math.round(security.score)}/100` : 'Not measured'}
