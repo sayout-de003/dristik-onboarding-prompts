@@ -40,16 +40,16 @@ export function ContactForm({ user }: { user: AuthUser | null }) {
 
   return (
     <div className="max-w-xl space-y-8 pt-2">
-      <div className="space-y-2">
+      <div data-page-header className="space-y-2">
         <p className="label">Contact</p>
-        <h1 className="font-sans text-4xl leading-[1.12] text-ink tracking-tight">Talk to Dristik.</h1>
+        <h1 className="font-sans text-4xl leading-[1.12] text-ink tracking-tight">Contact the Dristik team.</h1>
         <p className="text-ink-500 leading-relaxed">
           Tell us about the site, the team, and what you want from the audit.
         </p>
       </div>
 
       {done ? (
-        <p className="text-ink-700">{done}</p>
+        <p role="status" className="rounded-lg border border-good/30 bg-good/5 p-4 text-ink-700">{done}</p>
       ) : (
         <form className="card p-6 sm:p-7 space-y-5" onSubmit={submit}>
           <label className="block">
@@ -89,7 +89,7 @@ export function ContactForm({ user }: { user: AuthUser | null }) {
               required
             />
           </label>
-          {error && <p className="text-sm text-bad">{error}</p>}
+          {error && <p role="alert" className="text-sm text-bad">{error}</p>}
           <button type="submit" disabled={busy} className="btn-primary px-5 py-2.5 text-sm tracking-wide disabled:opacity-50">
             {busy ? 'Sending…' : 'Send message'}
           </button>

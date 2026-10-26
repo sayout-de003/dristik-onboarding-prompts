@@ -187,8 +187,8 @@ export function CompetitorDiscoveryView({ websiteUrl, analysisId }: CompetitorDi
 
   if (!matrix) return null;
 
-  const targetScaleTier = matrix.target_scale_tier || 'boutique';
-  const targetScaleScore = matrix.target_scale_score != null ? matrix.target_scale_score : 0.25;
+  const targetScaleTier = matrix.target_scale_tier || 'Not assessed';
+  const targetScaleScore = matrix.target_scale_score ?? null;
 
   return (
     <div className="space-y-6">
@@ -202,7 +202,7 @@ export function CompetitorDiscoveryView({ websiteUrl, analysisId }: CompetitorDi
                 Audited Business Identity & Scale Parity
               </span>
               <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-paper-200 text-ink-700 border border-line font-bold uppercase">
-                {targetScaleTier} Tier ({targetScaleScore}/1.0)
+                {targetScaleTier}{targetScaleScore == null ? '' : ` · ${targetScaleScore}/1.0`}
               </span>
             </div>
             <h3 className="font-sans text-xl md:text-2xl text-ink font-normal">

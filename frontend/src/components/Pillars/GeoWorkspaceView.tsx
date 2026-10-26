@@ -251,9 +251,9 @@ export function GeoWorkspaceView({
 
   return (
     <PillarShell
-      kicker="Discipline 2 · Generative Engine Optimization"
+      kicker="Content readiness for AI search"
       title="Generative Engine Optimization (GEO)"
-      description="On-page extractability is separate from live measurement. The visibility tab lists only engines that returned a response. Google AI Overviews, AI Mode, and Bing Copilot stay not queried unless a run names them."
+      description="Review how clearly the site explains its subject and supports retrieval by AI systems. Page-readiness checks are separate from live citations; only engines actually queried and returned are reported as measured."
       scoreLabel="On-page extractability"
       score={geoScore ?? '—'}
       metaLabel="Live visibility"
@@ -266,18 +266,18 @@ export function GeoWorkspaceView({
         />
       }
       tabs={[
-        { id: 'audit', label: 'Full GEO audit (50 Chapters)' },
+        { id: 'audit', label: 'Full audit index' },
         { id: 'visibility', label: 'Live visibility' },
-        { id: 'engines', label: 'Appendix · writing exercise' },
-        { id: 'som', label: 'Share of Model & Displacement' },
-        { id: 'sentiment', label: 'Sentiment & Hallucinations' },
-        { id: 'retrieval_analysis', label: 'Controlled Retrieval Analysis' },
-        { id: 'offpage', label: 'Off-Page Citation Network' },
-        { id: 'citations', label: 'Live AI Citations (50 Queries)' },
-        { id: 'infogain', label: 'Information Gain & Fluff' },
-        { id: 'queries', label: `Query Matrix (${queries.length})` },
-        { id: 'rewrites', label: 'LLM Passage Rewrites' },
-        { id: 'trends', label: 'Visibility Trends' },
+        { id: 'engines', label: 'Page-readiness examples' },
+        { id: 'som', label: 'Share of model' },
+        { id: 'sentiment', label: 'Sentiment and answer risks' },
+        { id: 'retrieval_analysis', label: 'Content retrieval test' },
+        { id: 'offpage', label: 'External citation sources' },
+        { id: 'citations', label: 'Live citation checks' },
+        { id: 'infogain', label: 'Content usefulness' },
+        { id: 'queries', label: `Query results (${queries.length})` },
+        { id: 'rewrites', label: 'Suggested content rewrites' },
+        { id: 'trends', label: 'Visibility over time' },
       ]}
       activeTab={activeSubTab}
       onTab={(id) => setActiveSubTab(id as GeoSubTab)}

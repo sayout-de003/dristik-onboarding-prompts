@@ -66,7 +66,7 @@ describe('Findings (Evidence Ledger)', () => {
     render(<Findings findings={mockFindings} onSelect={handleSelect} />);
 
     expect(screen.getByText('Evidence Ledger')).toBeInTheDocument();
-    expect(screen.getByText('2 Verified Records')).toBeInTheDocument();
+    expect(screen.getByText('2 Findings')).toBeInTheDocument();
     expect(screen.getByText('Total Findings')).toBeInTheDocument();
     expect(screen.getByText('High & Critical')).toBeInTheDocument();
   });

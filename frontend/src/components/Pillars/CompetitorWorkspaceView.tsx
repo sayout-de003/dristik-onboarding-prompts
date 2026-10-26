@@ -68,13 +68,13 @@ export function CompetitorWorkspaceView({
 
   return (
     <PillarShell
-      kicker="Discipline 5 · Competitor Intelligence"
-      title="Competitor Intelligence & Benchmarks"
-      description="Continuous 2D landscape mapping, empirical evidence tables, causal gap attribution, and commercial inquiry bake-offs."
-      scoreLabel="Win Rate"
+      kicker="Compare your website with competitors"
+      title="Competitor comparison"
+      description="Compare the available evidence for your site and selected competitors. Review search gaps, side-by-side checks and query comparisons; a difference alone does not prove what caused it."
+      scoreLabel="Observed query win rate"
       score={winRate != null ? `${winRate}%` : '—'}
       metaLabel="Competitors"
-      meta={bakeoff?.competitor_domain || compReport?.competitors?.[0]?.company_name || 'Market rivals'}
+      meta={bakeoff?.competitor_domain || compReport?.competitors?.[0]?.company_name || 'Not assessed'}
       actions={
         <SectionExportButtons
           analysisId={analysisId || report.analysis_id || report.report_id}
@@ -83,12 +83,12 @@ export function CompetitorWorkspaceView({
         />
       }
       tabs={[
-        { id: 'landscape_gaps', label: 'Landscape & Evidence Matrix' },
-        { id: 'bakeoff', label: 'Commercial Query Bake-off' },
-        { id: 'benchmark', label: 'Side-by-Side Benchmark' },
-        { id: 'keyword_gap', label: 'Keyword Gap Analysis' },
-        { id: 'discovery', label: 'Market Gap Discovery' },
-        { id: 'perspectives', label: 'Three-Way Perspective' },
+        { id: 'landscape_gaps', label: 'Market comparison' },
+        { id: 'bakeoff', label: 'Query comparison' },
+        { id: 'benchmark', label: 'Side-by-side results' },
+        { id: 'keyword_gap', label: 'Keyword gaps' },
+        { id: 'discovery', label: 'Opportunity discovery' },
+        { id: 'perspectives', label: 'Compare perspectives' },
       ]}
       activeTab={activeSubTab}
       onTab={(id) => setActiveSubTab(id as CompSubTab)}

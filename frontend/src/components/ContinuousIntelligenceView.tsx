@@ -110,8 +110,8 @@ export function ContinuousIntelligenceView() {
 
   return (
     <div className="space-y-7">
-      <PageHeader kicker="Continuous website intelligence" title="Your website, understood month after month."
-        description="Save the niche, audience, market and competitors once. Dristik schedules recurring SEO, GEO, AEO and CRO audits, keeps a run history and compares results where comparable evidence exists." />
+      <PageHeader kicker="Continuous website intelligence" title="Track website changes over time."
+        description="Save your website context and schedule recurring audits. Compare runs only when the underlying evidence is comparable; missing analytics, keyword trends, or AI-engine measurements remain clearly marked as unavailable." />
       {error && <div role="alert" className="rounded-lg border border-bad/30 bg-bad/5 p-3 text-sm text-bad">{error}</div>}
       {notice && <div role="status" className="rounded-lg border border-good/30 bg-good/5 p-3 text-sm text-good">{notice}</div>}
       {entitlement && !entitlement.eligible && (
@@ -123,7 +123,7 @@ export function ContinuousIntelligenceView() {
       )}
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.85fr)] gap-6">
         <section className="rounded-xl border border-line bg-paper p-5 space-y-4">
-          <div className="flex items-center gap-2"><Globe2 className="h-5 w-5 text-ink-600" /><h2 className="text-lg font-semibold text-ink">Website intelligence profile</h2></div>
+          <div className="flex items-center gap-2"><Globe2 className="h-5 w-5 text-ink-600" /><h2 className="text-lg font-semibold text-ink">Website profile and audit settings</h2></div>
           <p className="text-sm text-ink-500">Describe who the business serves and where it operates. Keep the profile current so future audits have useful context.</p>
           <form onSubmit={saveProfile} className="space-y-3">
             <label className="block text-xs font-medium text-ink-600">Website URL<input required type="url" placeholder="https://example.com" value={websiteUrl} onChange={e=>setWebsiteUrl(e.target.value)} className="mt-1 w-full rounded-lg border border-line bg-paper px-3 py-2.5 text-sm" /></label>
@@ -152,7 +152,7 @@ export function ContinuousIntelligenceView() {
           </form>
         </section>
         <section className="rounded-xl border border-line bg-paper p-5 space-y-4">
-          <div className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-ink-600" /><h2 className="text-lg font-semibold text-ink">What each cycle checks</h2></div>
+          <div className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-ink-600" /><h2 className="text-lg font-semibold text-ink">What each monthly review covers</h2></div>
           {[
             ['SEO', 'Technical health, crawlability, content, metadata, internal links and page opportunities.'],
             ['GEO', 'AI-search extractability, entity clarity and measured citations where available.'],
@@ -165,7 +165,7 @@ export function ContinuousIntelligenceView() {
       </div>
 
       <section className="space-y-3">
-        <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold text-ink">Managed websites</h2><p className="text-sm text-ink-500">Monthly schedules and saved business context.</p></div><button onClick={()=>void refresh()} className="inline-flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink"><RefreshCw className="h-3.5 w-3.5" /> Refresh</button></div>
+        <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold text-ink">Websites being monitored</h2><p className="text-sm text-ink-500">Review schedules, saved context and the latest run status.</p></div><button onClick={()=>void refresh()} className="inline-flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink"><RefreshCw className="h-3.5 w-3.5" /> Refresh</button></div>
         {loading ? <div className="rounded-xl border border-line p-8 text-center text-sm text-ink-500"><LoaderCircle className="mx-auto mb-2 h-5 w-5 animate-spin" />Loading intelligence profiles…</div> :
           profiles.length === 0 ? <div className="rounded-xl border border-dashed border-line p-8 text-center"><Search className="mx-auto h-7 w-7 text-ink-400" /><p className="mt-2 font-medium text-ink">No managed websites yet</p><p className="text-sm text-ink-500 mt-1">Create a profile above to start the monthly intelligence cycle.</p></div> :
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{profiles.map(profile=><article key={profile.profile_id} className="rounded-xl border border-line bg-paper p-4 space-y-3">
@@ -177,7 +177,7 @@ export function ContinuousIntelligenceView() {
       </section>
 
       <section className="space-y-3">
-        <div><h2 className="text-lg font-semibold text-ink">Audit history</h2><p className="text-sm text-ink-500">Monthly snapshots, tracked keyword observations and previous-run comparisons.</p></div>
+        <div><h2 className="text-lg font-semibold text-ink">Run history</h2><p className="text-sm text-ink-500">Monthly snapshots, tracked keyword observations and previous-run comparisons.</p></div>
         {runs.length===0 ? <div className="rounded-xl border border-dashed border-line p-6 text-sm text-ink-500">No runs yet. The scheduler checks for due websites and you can also start a run manually.</div> :
           <div className="overflow-x-auto rounded-xl border border-line"><table className="w-full text-left text-sm"><thead className="bg-paper-50 text-[11px] uppercase tracking-wide text-ink-500"><tr><th className="px-4 py-3">Website</th><th className="px-4 py-3">Cycle</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Findings</th><th className="px-4 py-3">Copywriting</th><th className="px-4 py-3">Trend data</th><th className="px-4 py-3">Comparison</th><th className="px-4 py-3">Report</th></tr></thead><tbody>{runs.map(run=><tr key={run.run_id} className="border-t border-line"><td className="px-4 py-3 font-medium text-ink">{run.domain}</td><td className="px-4 py-3 text-xs text-ink-500">{run.scheduled_month}<br/>{run.trigger_type}</td><td className={`px-4 py-3 text-xs font-semibold ${runStatus(run.status)}`}>{run.status}</td><td className="px-4 py-3 tabular-nums">{run.result?.findings_count ?? '—'}</td><td className="px-4 py-3 text-xs text-ink-500">{run.result?.copywriting_status || 'Pending'}</td><td className="px-4 py-3 text-xs text-ink-500">{run.result?.trend_status || 'Pending'}</td><td className="px-4 py-3 text-xs text-ink-500">{run.result?.monthly_comparison?.status==='COMPARABLE_SNAPSHOT' ? <>{run.result.monthly_comparison.findings_count_delta==null?'Compared':`${run.result.monthly_comparison.findings_count_delta>0?'+':''}${run.result.monthly_comparison.findings_count_delta} findings`}<br/>vs {run.result.monthly_comparison.previous_month}</> : 'Baseline pending'}</td><td className="px-4 py-3">{run.result?.report_url ? <a className="inline-flex items-center gap-1 text-xs font-semibold text-ink underline" href={run.result.report_url} target="_blank" rel="noreferrer">Open report <ExternalLink className="h-3 w-3"/></a> : run.analysis_id ? <a className="text-xs underline" href={`/api/v1/analyses/${run.analysis_id}/report`} target="_blank" rel="noreferrer">Open report</a> : '—'}</td></tr>)}</tbody></table></div>}
       </section>

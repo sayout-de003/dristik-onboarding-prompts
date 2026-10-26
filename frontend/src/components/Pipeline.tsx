@@ -27,7 +27,7 @@ export function Pipeline({ run, onRefreshRun }: PipelineProps) {
 
   const telemetry = run.telemetry;
   const stageCosts = telemetry?.stage_costs ? Object.values(telemetry.stage_costs) : [];
-  const totalCost = telemetry?.estimated_cost_usd ?? 0;
+  const totalCost = telemetry?.estimated_cost_usd;
   const actualCost = telemetry?.actual_cost_usd ?? 0;
   const isActualBilled = (telemetry?.has_actual_costs ?? false) && actualCost > 0;
 
@@ -62,7 +62,7 @@ export function Pipeline({ run, onRefreshRun }: PipelineProps) {
                   : 'bg-paper-200 text-ink-700 border-line'
               }`}
             >
-              {done ? '100% Complete' : `${run.progress_percentage ?? 0}%`}
+              {done ? '100% Complete' : run.progress_percentage == null ? 'Progress not reported' : `${run.progress_percentage}%`}
             </span>
           </div>
         </div>
@@ -74,7 +74,7 @@ export function Pipeline({ run, onRefreshRun }: PipelineProps) {
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono font-semibold bg-paper-200 text-ink-700 border border-line">
                 <span>Total AI Cost:</span>
-                <span>${totalCost.toFixed(4)}</span>
+                <span>{totalCost == null ? 'Not reported' : `USD ${totalCost.toFixed(4)}`}</span>
               </span>
               {isActualBilled && (
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono bg-paper-100 text-ink-700">
@@ -82,7 +82,7 @@ export function Pipeline({ run, onRefreshRun }: PipelineProps) {
                 </span>
               )}
               <span className="text-ink-500">
-                {(telemetry.total_tokens || 0).toLocaleString()} tokens • {telemetry.model_calls_count || 0} calls
+                {telemetry.total_tokens == null ? 'Tokens not reported' : `${telemetry.total_tokens.toLocaleString()} tokens`} • {telemetry.model_calls_count == null ? 'Calls not reported' : `${telemetry.model_calls_count} calls`}
               </span>
             </div>
 
@@ -135,15 +135,15 @@ export function Pipeline({ run, onRefreshRun }: PipelineProps) {
                 <tfoot>
                   <tr className="border-t border-line font-bold text-ink-900 bg-paper-100/40">
                     <td className="py-1.5 px-2 font-sans">Total Pipeline Cost</td>
-                    <td className="py-1.5 px-2 text-right font-mono">{telemetry.model_calls_count || 0}</td>
+                    <td className="py-1.5 px-2 text-right font-mono">{telemetry.model_calls_count ?? '—'}</td>
                     <td className="py-1.5 px-2 text-right font-mono">
-                      {(telemetry.total_tokens || 0).toLocaleString()}
+                      {telemetry.total_tokens == null ? '—' : telemetry.total_tokens.toLocaleString()}
                     </td>
                     <td className="py-1.5 px-2 text-right font-mono">
-                      {formatMs(telemetry.total_latency_ms || 0)}
+                      {telemetry.total_latency_ms == null ? '—' : formatMs(telemetry.total_latency_ms)}
                     </td>
                     <td className="py-1.5 px-2 text-right font-mono text-ink-700">
-                      ${totalCost.toFixed(4)}
+                      {totalCost == null ? 'Not reported' : `USD ${totalCost.toFixed(4)}`}
                     </td>
                   </tr>
                 </tfoot>

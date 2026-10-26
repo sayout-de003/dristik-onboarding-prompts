@@ -34,28 +34,28 @@ export const PILLARS_LIST: PillarOption[] = [
   {
     key: 'seo',
     name: 'SEO',
-    description: 'Technical, Crawl, Schema & On-Page',
+    description: 'Crawling, page content, metadata, links and technical issues',
     tag: 'Search Engine Optimization',
     colorClass: 'text-teal-800 bg-teal-50 border-teal-200 dark:text-teal-200 dark:bg-teal-950/40 dark:border-teal-800',
   },
   {
     key: 'geo',
     name: 'GEO',
-    description: 'Entity Knowledge Graphs & Citability',
+    description: 'How clearly content explains entities and supports AI discovery',
     tag: 'Generative Engine Optimization',
     colorClass: 'text-teal-800 bg-teal-50 border-teal-200 dark:text-teal-200 dark:bg-teal-950/40 dark:border-teal-800',
   },
   {
     key: 'aeo',
     name: 'AEO',
-    description: 'Direct AI Answers & Query Simulation',
+    description: 'Answer quality, question coverage and structured data',
     tag: 'Answer Engine Optimization',
     colorClass: 'text-teal-800 bg-teal-50 border-teal-200 dark:text-teal-200 dark:bg-teal-950/40 dark:border-teal-800',
   },
   {
     key: 'cro',
     name: 'CRO',
-    description: 'Conversion Funnels, Copy & UX Friction',
+    description: 'Calls to action, forms, trust signals and conversion friction',
     tag: 'Conversion Rate Optimization',
     colorClass: 'text-teal-800 bg-teal-50 border-teal-200 dark:text-teal-200 dark:bg-teal-950/40 dark:border-teal-800',
   },
@@ -149,7 +149,7 @@ export function AuditForm({
         </label>
 
         <label className="lg:w-24">
-          <span className="label block mb-1.5">Pages</span>
+          <span className="label block mb-1.5">Pages to inspect</span>
           <select
             value={maxPages}
             onChange={(e) => onMaxPagesChange(Number(e.target.value))}
@@ -190,7 +190,7 @@ export function AuditForm({
       <div className="pt-2 border-t border-line/50">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <span className="label text-xs font-semibold uppercase tracking-wider text-ink-700">Audit Scope & Pillars</span>
+            <span className="label text-xs font-semibold uppercase tracking-wider text-ink-700">Choose what to review</span>
             <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold ${
               isAllSelected
                 ? 'bg-good/10 text-good border border-good/30'

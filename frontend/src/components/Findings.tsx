@@ -98,36 +98,36 @@ function getEvidenceSourceBadge(evidenceClass: EvidenceClass, subtype?: string) 
         label: subtype ? `DOM / ${subtype}` : 'Verified DOM Proof',
         shortLabel: subtype || 'DOM',
         style: 'bg-good/10 text-good border-good/30 dark:bg-good/15 dark:text-good dark:border-good/40',
-        hint: 'Directly verified from browser DOM / HTTP response / AST tree. Zero hallucination.',
+        hint: 'Directly observed in the fetched page or response. Review the cited evidence and scope before acting.',
       };
     case 'EXTERNALLY_VERIFIED':
       return {
-        label: subtype ? `External · ${subtype}` : 'External Ground Truth',
+        label: subtype ? `External · ${subtype}` : 'Verified external source',
         shortLabel: subtype || 'External',
         style: 'bg-paper-200 text-ink-800 border-line dark:bg-ink-800 dark:text-ink-200 dark:border-ink-700',
-        hint: 'Corroborated by external authoritative source (GSC, DNS, live search queries).',
+        hint: 'Checked against a connected or external source, when available. Open the source details to confirm coverage.',
       };
     case 'MODEL_INFERRED':
       return {
-        label: 'AI Model Deduction',
+        label: 'AI-assisted interpretation',
         shortLabel: 'AI Synthesis',
         style: 'bg-paper-100 text-ink-700 border-line dark:bg-ink-900 dark:text-ink-300 dark:border-ink-800',
-        hint: 'Cognitive reasoning and semantic synthesis by neural language models.',
+        hint: 'An AI-assisted interpretation, not a direct observation. Validate it against the linked evidence.',
       };
     case 'HYPOTHESIS':
       return {
-        label: 'Provisional Hypothesis',
+        label: 'Hypothesis to verify',
         shortLabel: 'Hypothesis',
         style: 'bg-warn/10 text-warn border-warn/30 dark:bg-warn/15 dark:text-warn dark:border-warn/40',
-        hint: 'Single-source signal or provisional anomaly requiring human confirmation.',
+        hint: 'A possible issue that needs human confirmation or another source before it is treated as fact.',
       };
     case 'RECOMMENDATION':
     default:
       return {
-        label: 'Remediation Directive',
+        label: 'Recommended action',
         shortLabel: 'Directive',
         style: 'bg-paper-100 text-ink-700 border-line dark:bg-ink-900 dark:text-ink-300 dark:border-ink-800',
-        hint: 'Actionable engineering remediation or architectural patch.',
+        hint: 'A suggested change. Review the affected page and verify the result after implementation.',
       };
   }
 }
@@ -216,7 +216,7 @@ export function Findings({ findings, onSelect, patches = [] }: FindingsProps) {
 
     const total = findings.length;
     const empiricalFacts = observedCount + externalCount;
-    const integrityPercent = total > 0 ? Math.round((empiricalFacts / total) * 100) : 100;
+    const integrityPercent = total > 0 ? Math.round((empiricalFacts / total) * 100) : null;
 
     return {
       total,
@@ -443,7 +443,7 @@ export function Findings({ findings, onSelect, patches = [] }: FindingsProps) {
       `**Summary:**`,
       `- Total Findings: ${findings.length}`,
       `- Critical & High Priority: ${metrics.criticalAndHigh}`,
-      `- Deterministic Ground Truth Rate: ${metrics.integrityPercent}%`,
+      `- Findings with observed or external evidence: ${metrics.integrityPercent == null ? 'Not available' : `${metrics.integrityPercent}%`}`,
       `- Resolved: ${metrics.resolvedCount} | Open: ${metrics.openCount}`,
       '',
       `## Key Findings:`,
@@ -457,7 +457,7 @@ export function Findings({ findings, onSelect, patches = [] }: FindingsProps) {
     });
 
     if (filteredAndSorted.length > 15) {
-      lines.push(`- ...and ${filteredAndSorted.length - 15} additional verified findings recorded in the ledger.`);
+      lines.push(`- ...and ${filteredAndSorted.length - 15} additional findings recorded in the ledger.`);
     }
 
     copyToClipboard(lines.join('\n'), 'Markdown Summary');
@@ -481,12 +481,11 @@ export function Findings({ findings, onSelect, patches = [] }: FindingsProps) {
               Evidence Ledger
             </h2>
             <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-paper-200 text-ink-700 border border-line">
-              {findings.length} Verified Records
+              {findings.length} Findings
             </span>
           </div>
           <p className="text-xs text-ink-600 mt-1 max-w-2xl leading-relaxed">
-            Institutional defect register backed by cryptographic DOM selectors, HTTP response headers,
-            and deterministic AST syntax trees. Free of speculative prose.
+            Review each finding's evidence type, scope and recommended fix. Direct observations, external signals, AI-assisted interpretations and hypotheses are labelled separately.
           </p>
         </div>
 
@@ -642,7 +641,7 @@ export function Findings({ findings, onSelect, patches = [] }: FindingsProps) {
           </div>
         </div>
 
-        {/* Metric 3: Deterministic Ground Truth */}
+        {/* Metric 3: Observed / external evidence */}
         <div
           onClick={() => {
             setPresetFilter(presetFilter === 'OBSERVED_PROOF' ? 'ALL' : 'OBSERVED_PROOF');
@@ -654,12 +653,12 @@ export function Findings({ findings, onSelect, patches = [] }: FindingsProps) {
           }`}
         >
           <div className="flex items-center justify-between text-good mb-1">
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider">Ground Truth</span>
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider">Observed / external</span>
             <ShieldCheck className="w-3.5 h-3.5 text-good" />
           </div>
-          <div className="text-2xl font-bold font-mono text-good">{metrics.integrityPercent}%</div>
+          <div className="text-2xl font-bold font-mono text-good">{metrics.integrityPercent == null ? '—' : `${metrics.integrityPercent}%`}</div>
           <div className="text-[10px] text-ink-500 font-mono mt-0.5">
-            {metrics.observedCount + metrics.externalCount} empirical citations
+            {metrics.observedCount + metrics.externalCount} findings with observed or external evidence
           </div>
         </div>
 
@@ -963,7 +962,7 @@ export function Findings({ findings, onSelect, patches = [] }: FindingsProps) {
                   <th className="py-3 px-3 w-24">Severity</th>
                   <th className="py-3 px-3 min-w-[280px]">Finding &amp; Issue</th>
                   <th className="py-3 px-3 w-32">Category</th>
-                  <th className="py-3 px-3 min-w-[200px]">Ground Truth Proof</th>
+                  <th className="py-3 px-3 min-w-[200px]">Evidence details</th>
                   <th className="py-3 px-3 w-28 text-center">Impact / Effort</th>
                   <th className="py-3 px-3 w-24 text-center">Status</th>
                   <th className="py-3 px-3 w-28 text-right">Actions</th>

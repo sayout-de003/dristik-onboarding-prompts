@@ -131,9 +131,9 @@ export function AeoWorkspaceView({ report, analysisId, onOpenPatchPack }: AeoWor
 
   return (
     <PillarShell
-      kicker="Discipline 3 · Answer Engine & Agent Optimization"
+      kicker="Answer quality and structured data"
       title="Answer Engine & Agent Optimization (AEO)"
-      description="Question coverage, answer quality, source eligibility, and observed answer visibility. The header figure is stored schema quality or on-page extractability. It is not a live visibility rate."
+      description="Review whether important questions have clear answers and whether structured data helps machines interpret the site. The score reflects stored schema quality or page extractability—not a live AI visibility rate."
       scoreLabel="Schema / extractability"
       score={aeoScore}
       metaLabel={sandboxEvals.length > 0 ? 'Sandbox Grounding' : 'Q&A Answers'}
@@ -166,10 +166,10 @@ export function AeoWorkspaceView({ report, analysisId, onOpenPatchPack }: AeoWor
       }
       tabs={[
         { id: 'audit', label: 'Full AEO audit' },
-        { id: 'directives', label: 'AI Bots & llms.txt' },
+        { id: 'directives', label: 'AI crawler settings' },
         { id: 'schema', label: `Schema Graph (${schemaTypes.length})` },
         { id: 'questions', label: `AI Question Sandbox (${sandboxEvals.length})` },
-        { id: 'triples', label: 'Entity Triples & Grounding' },
+        { id: 'triples', label: 'Entity facts and evidence' },
       ]}
       activeTab={activeSubTab}
       onTab={(id) => setActiveSubTab(id as AeoSubTab)}

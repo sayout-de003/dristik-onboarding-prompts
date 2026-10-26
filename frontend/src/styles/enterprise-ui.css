@@ -216,3 +216,269 @@ pre, code { border-radius: 6px; }
     transition-duration: .01ms !important;
   }
 }
+
+
+/* --------------------------------------------------------------------------
+   Enterprise UX refinement — shared across application pages.
+   Keep report/print layouts isolated and do not manufacture audit measurements.
+   -------------------------------------------------------------------------- */
+
+:root {
+  --app-content-max: 1440px;
+  --app-page-gutter: clamp(16px, 2.2vw, 32px);
+  --app-control-height: 38px;
+  --app-focus-ring: 0 0 0 3px color-mix(in srgb, var(--app-accent) 22%, transparent);
+}
+
+#main {
+  padding-inline: var(--app-page-gutter);
+  overflow-wrap: anywhere;
+}
+
+#main :is(h1, h2, h3, h4) {
+  color: var(--app-text);
+  text-wrap: pretty;
+}
+
+#main h1 {
+  font-size: clamp(1.55rem, 2vw, 2rem);
+  line-height: 1.2;
+  letter-spacing: -.035em;
+  font-weight: 700;
+}
+
+#main h2 {
+  font-size: clamp(1.15rem, 1.4vw, 1.375rem);
+  line-height: 1.3;
+  letter-spacing: -.025em;
+  font-weight: 650;
+}
+
+#main :is(p, li) {
+  line-height: 1.6;
+}
+
+#main :is(small, .text-xs) {
+  line-height: 1.45;
+}
+
+#main :is(button, [role="button"], input, select, textarea) {
+  min-height: var(--app-control-height);
+}
+
+#main :is(input, select, textarea):focus-visible,
+header.topbar :is(button, a):focus-visible,
+aside[aria-label="Primary"] :is(button, a):focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: 2px;
+  box-shadow: var(--app-focus-ring);
+}
+
+#main :is(input, select, textarea)::placeholder {
+  color: var(--app-muted);
+  opacity: .78;
+}
+
+#main :is(button, a) {
+  text-underline-offset: 3px;
+}
+
+#main :is(.card, .sheet, [data-panel]) {
+  min-width: 0;
+}
+
+#main :is(.card, .sheet) > :is(h2, h3, h4):first-child {
+  margin-top: 0;
+}
+
+#main :is(.text-red-500, .text-red-600, .text-rose-500, .text-rose-600) {
+  overflow-wrap: anywhere;
+}
+
+#main :is(table, [role="table"]) {
+  max-width: 100%;
+}
+
+#main table {
+  width: 100%;
+}
+
+#main :is(th, td) {
+  overflow-wrap: anywhere;
+}
+
+#main [role="status"],
+#main [role="alert"] {
+  overflow-wrap: anywhere;
+}
+
+#main :is(.empty-state, [data-empty-state]) {
+  max-width: 680px;
+  margin-inline: auto;
+  text-align: center;
+}
+
+#main :is(.empty-state, [data-empty-state]) :is(h2, h3) {
+  margin-bottom: 8px;
+}
+
+#main :is(.helper-text, [data-helper-text]) {
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+@media (min-width: 1440px) {
+  #main > .page-content,
+  #main > [data-page-content] {
+    max-width: var(--app-content-max);
+    margin-inline: auto;
+  }
+}
+
+@media (max-width: 767px) {
+  #main {
+    padding-inline: 14px;
+  }
+
+  #main h1 {
+    font-size: 1.5rem;
+  }
+
+  #main :is(table, [role="table"]) {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #main :is(.grid-cols-4, .grid-cols-3, .grid-cols-2) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --app-border: #9ca3af;
+    --app-border-strong: #6b7280;
+    --app-muted: #475569;
+  }
+
+  .dark {
+    --app-border: #64748b;
+    --app-border-strong: #94a3b8;
+    --app-muted: #cbd5e1;
+  }
+}
+
+
+/* Page-level finishing pass: make dense audit workspaces scannable without
+   changing scores, evidence, business logic, or print/PDF presentation. */
+#main .section-title {
+  font-size: clamp(1.1rem, 1.45vw, 1.35rem);
+  line-height: 1.3;
+  letter-spacing: -.025em;
+}
+#main :is(.card, .sheet) {
+  box-shadow: 0 1px 2px rgb(15 23 42 / .035), 0 4px 16px rgb(15 23 42 / .025);
+}
+#main .card:focus-within,
+#main .sheet:focus-within {
+  border-color: color-mix(in srgb, var(--app-accent) 42%, var(--app-border));
+}
+#main :is(.label, .eyebrow, [data-eyebrow]) {
+  color: var(--app-muted);
+}
+#main :is(.prose, .prose-sm) {
+  max-width: 78ch;
+  line-height: 1.7;
+}
+#main :is(.font-mono, code, kbd) {
+  font-variant-numeric: tabular-nums;
+}
+#main :is(.overflow-x-auto, [data-scroll-region]) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-border-strong) transparent;
+}
+#main :is(.overflow-x-auto, [data-scroll-region]) table {
+  min-width: 640px;
+}
+#main :is(button, [role="button"]) {
+  touch-action: manipulation;
+}
+#main :is(input, select, textarea) {
+  max-width: 100%;
+  color: var(--app-text);
+  background-color: var(--app-surface);
+}
+#main :is(input[type="checkbox"], input[type="radio"], input[type="range"]) {
+  accent-color: var(--app-accent);
+}
+#main :is(.text-ink-300, .text-ink-400) {
+  overflow-wrap: anywhere;
+}
+#main :is(.grid, [class*="grid-cols-"]) > * {
+  min-width: 0;
+}
+#main :is(.text-ellipsis, .truncate) {
+  min-width: 0;
+}
+#main :is(.bg-good\/10, .bg-warn\/10, .bg-bad\/10) {
+  border-radius: 6px;
+}
+@media (max-width: 767px) {
+  #main :is(.card, .sheet) {
+    padding-inline: clamp(12px, 4vw, 18px);
+  }
+  #main :is(.flex.items-center.justify-between, .flex.items-start.justify-between) {
+    gap: 12px;
+  }
+  #main :is(.text-4xl, .text-5xl) {
+    overflow-wrap: anywhere;
+  }
+}
+
+
+/* Shared page structure used by public, workspace and pillar views. */
+#main [data-page-header] {
+  padding-bottom: 1.15rem;
+  border-bottom: 1px solid var(--app-border);
+}
+#main [data-page-header] > div:first-child {
+  max-width: 72ch;
+}
+#main [data-page-header] h1 {
+  max-width: 24ch;
+}
+#main [data-page-header] p:not(.label) {
+  max-width: 76ch;
+}
+#main [data-section] > div:first-child {
+  min-width: 0;
+}
+#main [data-section] > div:first-child h2 {
+  margin-bottom: 0;
+}
+#main [data-pillar-shell] > div:first-child > div:last-child {
+  max-width: 100%;
+}
+#main [data-pillar-shell] [role="tablist"] {
+  gap: 4px;
+  padding-bottom: 1px;
+}
+#main [data-pillar-shell] [role="tab"] {
+  min-height: 40px;
+  border-radius: 7px 7px 0 0;
+}
+#main [data-pillar-shell] [role="tab"][aria-selected="true"] {
+  background: var(--app-accent-soft);
+  color: var(--app-accent);
+}
+@media (max-width: 767px) {
+  #main [data-page-header] {
+    padding-bottom: 1rem;
+    margin-bottom: 1.25rem;
+  }
+  #main [data-pillar-shell] > div:first-child > div:last-child {
+    width: 100%;
+  }
+}

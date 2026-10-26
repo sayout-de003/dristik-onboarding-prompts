@@ -80,9 +80,9 @@ export function SeoWorkspaceView({
 
   return (
     <PillarShell
-      kicker="Discipline 1 · Technical & On-Page SEO"
+      kicker="Website search performance"
       title="Search Engine Optimization (SEO)"
-      description="Crawl topology, HTTP status codes, canonical routing, Google SERP truncation, heading hierarchy, local NAP consistency, and international targeting."
+      description="Understand how search engines discover, crawl, interpret and rank the pages checked in this audit. Review technical issues, page content, local and international targeting, and connected Search Console data."
       scoreLabel="SEO Index"
       score={seoScore != null ? `${seoScore}/100` : '—'}
       metaLabel="Issues"
@@ -119,14 +119,14 @@ export function SeoWorkspaceView({
         </div>
       }
       tabs={[
-        { id: 'overview', label: 'Executive Overview' },
-        { id: 'architecture', label: 'Crawl & Architecture' },
-        { id: 'onpage', label: 'On-Page & SERP' },
-        { id: 'market', label: 'Local, Global & Peers' },
+        { id: 'overview', label: 'Overview' },
+        { id: 'architecture', label: 'Crawling and site structure' },
+        { id: 'onpage', label: 'Page content and search snippets' },
+        { id: 'market', label: 'Local, international and competitors' },
         { id: 'gsc', label: 'Search Console' },
         { id: 'issues', label: `Issues & URLs (${seoFindings.length})` },
-        { id: 'index', label: 'Full SEO index' },
-        { id: 'enterprise', label: 'Enterprise assessment' },
+        { id: 'index', label: 'Full audit index' },
+        { id: 'enterprise', label: 'Advanced assessment' },
       ]}
       activeTab={activeTab}
       onTab={handleTabChange}
