@@ -3,6 +3,8 @@ Dristik AI Analysis API Routes
 Endpoints for triggering audits, polling status, and fetching executive reports.
 """
 import asyncio
+import json
+import math
 from urllib.parse import urlparse, quote
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
@@ -37,6 +39,37 @@ def _listed_score(report: Any, fallback: Any) -> Any:
     """History badge uses the same composite as the open audit and the PDF cover."""
     shown = displayed_composite(report)
     return fallback if shown is None else shown
+
+
+def _read_report_path(value: Any, *path: str) -> Any:
+    """Read nested report data from Pydantic objects or stored JSON without guessing."""
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except (TypeError, ValueError):
+            return None
+    for key in path:
+        if isinstance(value, dict):
+            value = value.get(key)
+        else:
+            value = getattr(value, key, None)
+        if value is None:
+            return None
+    return value
+
+
+def _listed_cro_score(report: Any) -> Optional[float]:
+    """Return only an explicitly stored CRO score; never substitute the site-wide score."""
+    candidates = (
+        _read_report_path(report, "cro_audit", "overall_cro_score"),
+        _read_report_path(report, "scores", "category_scores", "UX_CONVERSION", "score"),
+    )
+    for value in candidates:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        if math.isfinite(float(value)) and 0 <= float(value) <= 100:
+            return float(value)
+    return None
 
 _BAKEOFF_PLANS = {
     "diagnostic_bakeoff",
@@ -112,6 +145,8 @@ async def list_analyses(
                     getattr(getattr(r.report, "scores", None), "overall_score", None),
                 ),
                 "score_band": getattr(r, "score_band", None) or getattr(getattr(r.report, "honest_scores", None), "score_band", None),
+                "score_cro": _listed_cro_score(r.report),
+                "cro_score_status": "MEASURED" if _listed_cro_score(r.report) is not None else "UNAVAILABLE",
                 "started_at": r.created_at.isoformat() if hasattr(r.created_at, "isoformat") else str(r.created_at),
                 "completed_at": r.completed_at.isoformat() if getattr(r, "completed_at", None) and hasattr(r.completed_at, "isoformat") else None,
                 "page_count": getattr(r, "max_pages", 1),
@@ -130,6 +165,8 @@ async def list_analyses(
                 "progress": r["progress"],
                 "score_overall": _listed_score(r.get("raw_report_json"), r.get("score_overall")),
                 "score_band": r.get("score_band"),
+                "score_cro": _listed_cro_score(r.get("raw_report_json")),
+                "cro_score_status": "MEASURED" if _listed_cro_score(r.get("raw_report_json")) is not None else "UNAVAILABLE",
                 "started_at": r.get("started_at") or r.get("created_at"),
                 "completed_at": r.get("completed_at"),
                 "page_count": r.get("max_pages", 1),
