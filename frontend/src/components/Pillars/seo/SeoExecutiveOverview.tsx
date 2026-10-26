@@ -1,6 +1,7 @@
 import React from 'react';
 import { ExecutiveReport, Finding } from '../../../types';
 import { Card } from '../../ui';
+import { SeoScoreMethodology } from './SeoScoreMethodology';
 import {
   ShieldCheck,
   CheckCircle2,
@@ -42,7 +43,11 @@ export function SeoExecutiveOverview({
   const intlSeo = report.international_seo;
   const redirects = report.host_and_redirects;
 
-  const rawScore = report.scores?.category_scores?.['TECHNICAL_SEO']?.score;
+  const technicalSeoCategory = report.scores?.category_scores?.['TECHNICAL_SEO'] as ({ score?: number; status?: string } | undefined);
+  const technicalScoreStatus = String(technicalSeoCategory?.status || 'MEASURED').toUpperCase();
+  const rawScore = technicalSeoCategory && !['NOT_MEASURED', 'UNAVAILABLE', 'NOT_CONNECTED', 'NOT_CONFIGURED', 'SIMULATION_ONLY', 'DATA_UNAVAILABLE', 'NOT_TESTED'].includes(technicalScoreStatus)
+    ? technicalSeoCategory.score
+    : null;
   const seoScore = rawScore != null && Number.isFinite(rawScore) ? Math.round(rawScore) : null;
 
   const crawlHealth = httpStatus && httpStatus.total_urls_checked > 0
@@ -68,6 +73,27 @@ export function SeoExecutiveOverview({
   const highFindings = seoFindings.filter((f) => f.severity === 'HIGH');
   const priorityFindings = [...criticalFindings, ...highFindings].slice(0, 3);
 
+  const gapGroups = [
+    {
+      key: 'TECHNICAL_SEO',
+      title: 'Crawlability and indexation',
+      description: 'Can search engines discover the right URLs, access them, and interpret canonical and response directives?',
+    },
+    {
+      key: 'ON_PAGE_SEO',
+      title: 'Page relevance and search snippets',
+      description: 'Do page titles, headings, metadata, and on-page structure accurately describe the page and its search intent?',
+    },
+    {
+      key: 'CONTENT',
+      title: 'Content depth and intent',
+      description: 'Does the checked content satisfy the visitor’s question clearly and cover the page’s intended topic?',
+    },
+  ].map((group) => ({
+    ...group,
+    findings: seoFindings.filter((finding) => finding.category === group.key),
+  }));
+
   const getScoreGrade = (score: number) => {
     if (score >= 90) return { label: 'Optimal', badge: 'bg-good/10 text-good border-good/20' };
     if (score >= 75) return { label: 'Good', badge: 'bg-pine-500/10 text-pine-600 dark:text-pine-400 border-pine-500/20' };
@@ -89,7 +115,7 @@ export function SeoExecutiveOverview({
             <div className="flex items-center justify-between">
               <span className="text-xs font-mono uppercase tracking-[0.05em] text-ink-500 font-semibold flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-pine-600" />
-                Technical SEO Composite Index
+                Technical SEO Rating
               </span>
               <span className={`text-xs font-mono font-bold px-2.5 py-0.5 rounded-full border ${grade.badge}`}>
                 {grade.label}
@@ -104,7 +130,7 @@ export function SeoExecutiveOverview({
             </div>
 
             <p className="text-xs text-ink-600 leading-relaxed">
-              Evaluating crawler traversal, canonical routing, meta pixel boundaries, image CLS vectors, and search engine directives for <strong className="text-ink font-medium">{report.domain}</strong>.
+              Evaluating crawl access, canonical URLs, page metadata, headings, and search directives for <strong className="text-ink font-medium">{report.domain}</strong>.
             </p>
           </div>
 
@@ -137,7 +163,7 @@ export function SeoExecutiveOverview({
                 Discipline Health Breakdown
               </h3>
               <span className="text-[11px] font-mono text-ink-400">
-                Industry Standard Weights
+                Observed sub-metrics · not score weights
               </span>
             </div>
 
@@ -184,6 +210,14 @@ export function SeoExecutiveOverview({
         </Card>
       </div>
 
+      <SeoScoreMethodology
+        score={seoScore}
+        status={technicalSeoCategory?.status}
+        checkedUrls={pages.length}
+        findingCount={seoFindings.length}
+        onNavigate={onNavigateTab}
+      />
+
       {/* ─────────────────────────────────────────────────────────────
           2. ENTERPRISE VITALS GRID (6 Core KPIs)
           ───────────────────────────────────────────────────────────── */}
@@ -210,12 +244,12 @@ export function SeoExecutiveOverview({
               <span className="font-mono text-xl font-bold text-good">
                 {httpStatus && httpStatus.total_urls_checked > 0
                   ? `${Math.round((httpStatus.count_2xx / httpStatus.total_urls_checked) * 100)}%`
-                  : '100%'}
+                  : '—'}
               </span>
               <span className="text-[11px] font-mono text-ink-400">OK</span>
             </div>
             <p className="text-[11px] text-ink-500 truncate group-hover:text-pine-600 transition-colors">
-              {httpStatus?.count_2xx ?? pages.length} clean URLs &rarr;
+              {httpStatus?.count_2xx != null ? `${httpStatus.count_2xx} successful URLs →` : 'HTTP response data unavailable'}
             </p>
           </Card>
 
@@ -229,16 +263,16 @@ export function SeoExecutiveOverview({
             </span>
             <div className="flex items-baseline gap-1.5">
               <span className="font-mono text-xl font-bold text-ink">
-                {canonicalAudit?.canonical_health_score
+                {canonicalAudit?.canonical_health_score != null && Number.isFinite(canonicalAudit.canonical_health_score)
                   ? `${Math.round(canonicalAudit.canonical_health_score)}%`
-                  : '100%'}
+                  : '—'}
               </span>
               <span className="text-[11px] font-mono text-good font-semibold">
-                {canonicalAudit?.broken_canonical_count ? `${canonicalAudit.broken_canonical_count} broken` : 'Clean'}
+                {canonicalAudit?.broken_canonical_count != null ? (canonicalAudit.broken_canonical_count ? `${canonicalAudit.broken_canonical_count} broken` : 'No broken canonicals reported') : 'Not measured'}
               </span>
             </div>
             <p className="text-[11px] text-ink-500 truncate group-hover:text-pine-600 transition-colors">
-              {canonicalAudit?.self_canonical_count ?? pages.length} self-referential &rarr;
+              {canonicalAudit?.self_canonical_count != null ? `${canonicalAudit.self_canonical_count} self-canonical URLs →` : 'Canonical inventory unavailable'}
             </p>
           </Card>
 
@@ -257,11 +291,11 @@ export function SeoExecutiveOverview({
                 <AlertTriangle className="w-4 h-4 text-warn shrink-0" />
               )}
               <span className="font-mono text-sm font-bold text-ink">
-                {crawl?.sitemap_found ? 'Valid' : 'Missing'}
+                {crawl?.sitemap_found == null ? 'Not measured' : crawl.sitemap_found ? 'Found' : 'Not found'}
               </span>
             </div>
             <p className="text-[11px] text-ink-500 truncate font-mono group-hover:text-pine-600 transition-colors">
-              {crawl?.sitemap_url ? 'robots.txt aligned' : 'Declare in robots &rarr;'}
+              {crawl?.sitemap_url ? 'Sitemap URL recorded' : crawl?.sitemap_found === false ? 'Review sitemap discovery' : 'Sitemap data unavailable'}
             </p>
           </Card>
 
@@ -275,14 +309,14 @@ export function SeoExecutiveOverview({
             </span>
             <div className="flex items-baseline gap-1.5">
               <span className="font-mono text-xl font-bold text-ink">
-                {clickDepth?.max_click_depth != null ? `${clickDepth.max_click_depth}` : '2'}
+                {clickDepth?.max_click_depth != null ? `${clickDepth.max_click_depth}` : '—'}
               </span>
               <span className="text-[11px] font-mono text-ink-500">Hops</span>
             </div>
             <p className="text-[11px] text-ink-500 truncate group-hover:text-pine-600 transition-colors">
-              {clickDepth?.high_depth_warning_count
-                ? `${clickDepth.high_depth_warning_count} deep pages (>3) &rarr;`
-                : 'Optimal crawl hierarchy &rarr;'}
+              {clickDepth?.high_depth_warning_count != null
+                ? (clickDepth.high_depth_warning_count ? `${clickDepth.high_depth_warning_count} deep pages (>3) →` : 'No deep-page warnings reported')
+                : 'Click-depth data unavailable'}
             </p>
           </Card>
 
@@ -296,14 +330,14 @@ export function SeoExecutiveOverview({
             </span>
             <div className="flex items-baseline gap-1.5">
               <span className="font-mono text-xl font-bold text-ink">
-                {headings?.h1_health_score ? `${Math.round(headings.h1_health_score)}%` : '100%'}
+                {headings?.h1_health_score != null && Number.isFinite(headings.h1_health_score) ? `${Math.round(headings.h1_health_score)}%` : '—'}
               </span>
               <span className="text-[11px] font-mono text-ink-500">Score</span>
             </div>
             <p className="text-[11px] text-ink-500 truncate group-hover:text-pine-600 transition-colors">
-              {headings?.missing_h1?.length
-                ? `${headings.missing_h1.length} missing H1 &rarr;`
-                : 'Valid single H1 per page &rarr;'}
+              {headings?.missing_h1 != null
+                ? (headings.missing_h1.length ? `${headings.missing_h1.length} missing H1 →` : 'No missing H1 reported')
+                : 'Heading data unavailable'}
             </p>
           </Card>
 
@@ -317,18 +351,71 @@ export function SeoExecutiveOverview({
             </span>
             <div className="flex items-baseline gap-1.5">
               <span className="font-mono text-xl font-bold text-good">
-                {media?.modern_format_count ?? 0}
+                {media?.modern_format_count != null ? media.modern_format_count : '—'}
               </span>
               <span className="text-[11px] font-mono text-ink-400">WebP</span>
             </div>
             <p className="text-[11px] text-ink-500 truncate group-hover:text-pine-600 transition-colors">
-              {media?.missing_alt_count
-                ? `${media.missing_alt_count} missing alt &rarr;`
-                : '100% accessible alts &rarr;'}
+              {media?.missing_alt_count != null
+                ? (media.missing_alt_count ? `${media.missing_alt_count} missing alt →` : 'No missing alt reported')
+                : 'Image alt data unavailable'}
             </p>
           </Card>
         </div>
       </div>
+
+      <Card className="space-y-4 border-line bg-paper-50 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-pine-600">SEO gap analysis</p>
+            <h3 className="mt-1 text-base font-semibold text-ink">Where the checked site needs attention</h3>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-ink-500">
+              These counts come from validated findings in this report, not estimates for pages that were not checked.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigateTab('issues')}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-pine-600 hover:underline"
+          >
+            Open issue ledger <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          {gapGroups.map((group) => (
+            <button
+              type="button"
+              key={group.key}
+              onClick={() => onNavigateTab(group.key === 'TECHNICAL_SEO' ? 'architecture' : 'onpage')}
+              className="rounded-lg border border-line bg-paper-100/60 p-4 text-left transition-colors hover:border-pine-500/40 hover:bg-paper-100"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <h4 className="text-sm font-semibold text-ink">{group.title}</h4>
+                <span className={`rounded-full px-2 py-0.5 font-mono text-xs font-bold ${group.findings.length ? 'bg-warn/10 text-warn' : 'bg-paper-200 text-ink-500'}`}>
+                  {group.findings.length}
+                </span>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-ink-500">{group.description}</p>
+              {group.findings.length > 0 ? (
+                <ul className="mt-3 space-y-2 border-t border-line pt-3">
+                  {group.findings.slice(0, 2).map((finding) => (
+                    <li key={finding.finding_id} className="text-xs leading-5 text-ink-700">
+                      <span className="font-semibold">{finding.severity}:</span> {finding.title}
+                    </li>
+                  ))}
+                  {group.findings.length > 2 && (
+                    <li className="text-[11px] font-medium text-pine-600">+{group.findings.length - 2} more findings in issue ledger</li>
+                  )}
+                </ul>
+              ) : (
+                <p className="mt-3 border-t border-line pt-3 text-[11px] leading-5 text-ink-500">
+                  No validated finding published for this category in the returned report. This is not proof that every URL is issue-free.
+                </p>
+              )}
+            </button>
+          ))}
+        </div>
+      </Card>
 
       {/* ─────────────────────────────────────────────────────────────
           3. TOP PRIORITY ACTION BLOCKERS
