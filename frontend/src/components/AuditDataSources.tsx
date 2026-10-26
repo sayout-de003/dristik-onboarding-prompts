@@ -37,7 +37,7 @@ export function AuditDataSources({ domain }: { domain: string }) {
     <div className="mt-4 pt-3 border-t border-line/60">
       <p className="label mb-2">Data sources and coverage</p>
       <ul className="flex flex-wrap gap-2 text-xs">
-        <li className="px-2 py-1 rounded-md border border-line">Website Crawl ✓</li>
+        <li className="px-2 py-1 rounded-md border border-line">Website crawl · checked when audit runs</li>
         {visible.map((id) => {
           const row = rows.find((item) => item.provider === id);
           const on = row && (row.connection_status === 'CONNECTED' || row.data_state === 'MEASURED' || row.data_state === 'PARTIALLY_MEASURED');
