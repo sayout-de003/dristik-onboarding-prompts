@@ -282,8 +282,7 @@ class GeoPipelineRunner:
         active_engines = [e for e in configured_engines if e.get("active", True) and e.get("api_key")]
 
         if not active_engines:
-            # If no engine keys configured, fall back to whatever configured_engines exist
-            active_engines = configured_engines[:3]
+            raise RuntimeError("No configured live AI answer engines; no GEO snapshot was created.")
 
         # 3. Fire concurrent queries across engines and prompts
         query_records: List[GeoQueryRecord] = []
@@ -347,7 +346,9 @@ class GeoPipelineRunner:
 
                         # Score per query on this engine (0-100)
                         q_engine_score = 100.0 if was_cited else (55.0 if was_mentioned else 0.0)
-                        engine_scores_map[eng_name].append(q_engine_score)
+                        successful_response = bool(raw_text.strip()) and not raw_text.lower().startswith(("api error", "request failed", "error:"))
+                        if successful_response:
+                            engine_scores_map[eng_name].append(q_engine_score)
 
                         # Extractability health
                         health = "EXCELLENT" if was_cited else ("FAIR" if was_mentioned else "POOR")
@@ -383,7 +384,7 @@ class GeoPipelineRunner:
                                 extractability_health="ERROR"
                             )
                         )
-                        engine_scores_map[eng_name].append(0.0)
+                        # Failed requests are retained as error records but never score as negative visibility.
 
                 if not query_mentioned and not query_cited:
                     blindspots.append(f"{intent} ('{q_text[:60]}...')")
@@ -391,10 +392,13 @@ class GeoPipelineRunner:
         # 4. Compute aggregate metrics
         engine_scores: Dict[str, float] = {}
         for eng_name, scores in engine_scores_map.items():
-            engine_scores[eng_name] = round(sum(scores) / max(1, len(scores)), 1)
+            if scores:
+                engine_scores[eng_name] = round(sum(scores) / len(scores), 1)
 
-        all_scores = [s for sublist in engine_scores_map.values() for s in sublist]
-        overall_score = int(round(sum(all_scores) / max(1, len(all_scores)))) if all_scores else 0
+        all_scores = [score for scores in engine_scores_map.values() for score in scores]
+        if not all_scores:
+            raise RuntimeError("No successful live AI responses; no GEO score or snapshot was created.")
+        overall_score = int(round(sum(all_scores) / len(all_scores)))
 
         # 5. Persist snapshot
         snapshot_id = f"snap_{uuid.uuid4().hex[:12]}"
@@ -407,7 +411,7 @@ class GeoPipelineRunner:
             engine_scores=engine_scores,
             critical_blindspots=blindspots,
             query_results=query_records,
-            engines_measured_count=len(active_engines)
+            engines_measured_count=len(engine_scores)
         )
 
         return snapshot_detail

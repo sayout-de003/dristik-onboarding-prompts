@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ExecutiveReport, AiSearchQueryEvaluation, TabId, AnalyzedChunk, ControlledRetrievalReport, AiBotDirectivesReport } from '../../types';
 import { RealAiCitationTracker } from '../RealAiCitationTracker';
 import { GeoAeoTrendTracker } from '../GeoAeoTrendTracker';
+import { GeoKpiAnalytics } from './GeoKpiAnalytics';
 import { PillarShell, Card } from '../ui';
 import { SectionExportButtons } from '../ui/SectionExportButtons';
 import { ControlledRetrievalVisualizer } from './RagChunkVisualizer';
@@ -119,7 +120,8 @@ type GeoSubTab =
   | 'infogain'
   | 'queries'
   | 'rewrites'
-  | 'trends';
+  | 'trends'
+  | 'analytics';
 
 export function GeoWorkspaceView({
   report,
@@ -278,6 +280,7 @@ export function GeoWorkspaceView({
         { id: 'queries', label: `Query results (${queries.length})` },
         { id: 'rewrites', label: 'Suggested content rewrites' },
         { id: 'trends', label: 'Visibility over time' },
+        { id: 'analytics', label: 'GEO KPI analytics & score method' },
       ]}
       activeTab={activeSubTab}
       onTab={(id) => setActiveSubTab(id as GeoSubTab)}
@@ -782,6 +785,10 @@ export function GeoWorkspaceView({
           ───────────────────────────────────────────────────────────── */}
       {activeSubTab === 'trends' && (
         <GeoAeoTrendTracker domain={report.domain} />
+      )}
+
+      {activeSubTab === 'analytics' && (
+        <GeoKpiAnalytics domain={report.domain} />
       )}
     </PillarShell>
   );

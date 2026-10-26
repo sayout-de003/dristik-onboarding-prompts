@@ -20,6 +20,7 @@ from app.api.routes.platform.payments import router as payments_router
 from app.api.routes.platform.system import router as system_router
 from app.api.routes.platform.workspaces import router as workspaces_router
 from app.geo.api.routes import router as geo_pipeline_router
+from app.geo.api.analytics import router as geo_analytics_router
 from app.api.routes.intelligence.keywords import router as keywords_router
 from app.api.routes.intelligence.continuous import router as continuous_intelligence_router
 from app.api.routes.intelligence.outcomes import router as outcomes_router
@@ -57,6 +58,7 @@ _PREFIXED_ROUTERS = (
     intelligence_router,
     outcomes_router,
     geo_pipeline_router,
+    geo_analytics_router,
     keywords_router,
     continuous_intelligence_router,
     meta_router,
