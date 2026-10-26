@@ -216,7 +216,7 @@ export function Findings({ findings, onSelect, patches = [] }: FindingsProps) {
 
     const total = findings.length;
     const empiricalFacts = observedCount + externalCount;
-    const integrityPercent = total > 0 ? Math.round((empiricalFacts / total) * 100) : 100;
+    const integrityPercent = total > 0 ? Math.round((empiricalFacts / total) * 100) : null;
 
     return {
       total,
@@ -443,7 +443,7 @@ export function Findings({ findings, onSelect, patches = [] }: FindingsProps) {
       `**Summary:**`,
       `- Total Findings: ${findings.length}`,
       `- Critical & High Priority: ${metrics.criticalAndHigh}`,
-      `- Deterministic Ground Truth Rate: ${metrics.integrityPercent}%`,
+      `- Findings with observed or external evidence: ${metrics.integrityPercent == null ? 'Not available' : `${metrics.integrityPercent == null ? '—' : `${metrics.integrityPercent}%`}`}`,
       `- Resolved: ${metrics.resolvedCount} | Open: ${metrics.openCount}`,
       '',
       `## Key Findings:`,
@@ -457,7 +457,7 @@ export function Findings({ findings, onSelect, patches = [] }: FindingsProps) {
     });
 
     if (filteredAndSorted.length > 15) {
-      lines.push(`- ...and ${filteredAndSorted.length - 15} additional verified findings recorded in the ledger.`);
+      lines.push(`- ...and ${filteredAndSorted.length - 15} additional findings recorded in the ledger.`);
     }
 
     copyToClipboard(lines.join('\n'), 'Markdown Summary');
@@ -481,7 +481,7 @@ export function Findings({ findings, onSelect, patches = [] }: FindingsProps) {
               Evidence Ledger
             </h2>
             <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-paper-200 text-ink-700 border border-line">
-              {findings.length} Verified Records
+              {findings.length} Findings
             </span>
           </div>
           <p className="text-xs text-ink-600 mt-1 max-w-2xl leading-relaxed">
@@ -642,7 +642,7 @@ export function Findings({ findings, onSelect, patches = [] }: FindingsProps) {
           </div>
         </div>
 
-        {/* Metric 3: Deterministic Ground Truth */}
+        {/* Metric 3: Observed / external evidence */}
         <div
           onClick={() => {
             setPresetFilter(presetFilter === 'OBSERVED_PROOF' ? 'ALL' : 'OBSERVED_PROOF');
@@ -654,12 +654,12 @@ export function Findings({ findings, onSelect, patches = [] }: FindingsProps) {
           }`}
         >
           <div className="flex items-center justify-between text-good mb-1">
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider">Ground Truth</span>
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider">Observed / external</span>
             <ShieldCheck className="w-3.5 h-3.5 text-good" />
           </div>
           <div className="text-2xl font-bold font-mono text-good">{metrics.integrityPercent}%</div>
           <div className="text-[10px] text-ink-500 font-mono mt-0.5">
-            {metrics.observedCount + metrics.externalCount} empirical citations
+            {metrics.observedCount + metrics.externalCount} findings with observed or external evidence
           </div>
         </div>
 
