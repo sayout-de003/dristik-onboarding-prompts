@@ -1,6 +1,7 @@
 import React from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
 import { api } from '../../services/http';
 import { ExecutiveReport } from '../../types';
 import { CroAnalyticsDashboard } from './CroAnalyticsDashboard';
@@ -17,6 +18,10 @@ const emptyReport = {
 describe('CroAnalyticsDashboard', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it('shows unavailable and empty states instead of fabricated analytics', async () => {
