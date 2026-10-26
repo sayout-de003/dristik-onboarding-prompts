@@ -436,3 +436,49 @@ aside[aria-label="Primary"] :is(button, a):focus-visible {
     overflow-wrap: anywhere;
   }
 }
+
+
+/* Shared page structure used by public, workspace and pillar views. */
+#main [data-page-header] {
+  padding-bottom: 1.15rem;
+  border-bottom: 1px solid var(--app-border);
+}
+#main [data-page-header] > div:first-child {
+  max-width: 72ch;
+}
+#main [data-page-header] h1 {
+  max-width: 24ch;
+}
+#main [data-page-header] p:not(.label) {
+  max-width: 76ch;
+}
+#main [data-section] > div:first-child {
+  min-width: 0;
+}
+#main [data-section] > div:first-child h2 {
+  margin-bottom: 0;
+}
+#main [data-pillar-shell] > div:first-child > div:last-child {
+  max-width: 100%;
+}
+#main [data-pillar-shell] [role="tablist"] {
+  gap: 4px;
+  padding-bottom: 1px;
+}
+#main [data-pillar-shell] [role="tab"] {
+  min-height: 40px;
+  border-radius: 7px 7px 0 0;
+}
+#main [data-pillar-shell] [role="tab"][aria-selected="true"] {
+  background: var(--app-accent-soft);
+  color: var(--app-accent);
+}
+@media (max-width: 767px) {
+  #main [data-page-header] {
+    padding-bottom: 1rem;
+    margin-bottom: 1.25rem;
+  }
+  #main [data-pillar-shell] > div:first-child > div:last-child {
+    width: 100%;
+  }
+}
