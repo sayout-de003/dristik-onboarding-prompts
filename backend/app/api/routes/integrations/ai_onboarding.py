@@ -26,7 +26,7 @@ PROVIDERS = ("chatgpt", "claude", "gemini", "grok", "deepseek", "kimi", "openrou
 MAX_RESPONSE_CHARS = 200_000
 MAX_FILE_BYTES = 100_000
 SECRET_PATTERNS = (
-    re.compile(r"(?i)(api[_-]?key|secret|password|access[_-]?token)\\s*[:=]\\s*['\"]?[^\\s'\"]{12,}"),
+    re.compile(r"(?i)(api[_-]?key|secret|password|access[_-]?token)\s*[:=]\s*['\"]?[^\s'\"]{12,}"),
     re.compile(r"(?i)-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
 )
 
@@ -135,7 +135,7 @@ async def submit_ai_response(body: OnboardingResponse,
         for pattern in SECRET_PATTERNS:
             if pattern.search(file.content):
                 raise HTTPException(status_code=422, detail=f"Potential secret detected in {file.path}; remove it and use secure secret configuration.")
-    if any(re.search(r"(?i)(curl\\s+.*\\|\\s*(sh|bash)|rm\\s+-rf\\s+[/~]|sudo\\s+|docker\\s+run\\s+.*--privileged)", cmd) for cmd in body.setup_commands):
+    if any(re.search(r"(?i)(curl\s+.*\|\s*(sh|bash)|rm\s+-rf\s+[/~]|sudo\s+|docker\s+run\s+.*--privileged)", cmd) for cmd in body.setup_commands):
         raise HTTPException(status_code=422, detail="Privileged or pipe-to-shell setup commands are not accepted.")
     now, submission_id = time.time(), "uobs_" + uuid.uuid4().hex
     digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
