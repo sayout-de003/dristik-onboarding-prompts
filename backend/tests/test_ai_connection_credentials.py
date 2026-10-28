@@ -116,3 +116,21 @@ def test_expired_connection_is_rejected(isolated_db):
             session_user=None,
         ))
     assert exc.value.status_code == 401
+
+
+@pytest.mark.parametrize("url", [
+    "http://127.0.0.1",
+    "https://localhost",
+    "http://10.1.2.3",
+    "https://192.168.1.1",
+    "http://169.254.169.254/latest/meta-data",
+    "file:///etc/passwd",
+    "https://user:password@example.com",
+])
+def test_ai_audit_target_rejects_private_or_unsafe_urls(url):
+    with pytest.raises(HTTPException):
+        uc._validate_public_audit_url(url)
+
+
+def test_ai_audit_target_accepts_public_ip_literal():
+    assert uc._validate_public_audit_url("https://8.8.8.8") == "https://8.8.8.8/"
