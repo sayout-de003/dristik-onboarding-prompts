@@ -257,6 +257,8 @@ async def start_analysis(
             ).fetchone()
         if provider_row is None or provider_row["status"] == "revoked":
             raise HTTPException(status_code=404, detail="Selected model provider is not available in this organization.")
+        if provider_row["status"] != "healthy":
+            raise HTTPException(status_code=409, detail="Test the selected model provider successfully before using it for an audit.")
 
     if not settings.has_active_llm_key and not model_provider_id:
         active_prov = settings.get_active_provider()
