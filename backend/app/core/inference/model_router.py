@@ -300,7 +300,7 @@ class ModelRouter:
                 if current_model in tried_missing:
                     break
 
-                response = await self.client.generate_chat_completion(
+                response = await self._generate_chat_completion(
                     model=current_model,
                     system_prompt=prompts["system"],
                     user_prompt=user_prompt,
@@ -469,7 +469,7 @@ class ModelRouter:
         ev_text += " " + analysis_prose
 
         try:
-            resp = await self.client.generate_chat_completion(
+            resp = await self._generate_chat_completion(
                 model=model,
                 system_prompt=serializer_system,
                 user_prompt=serializer_user,
@@ -499,7 +499,7 @@ class ModelRouter:
                     f"Previous attempt produced validation error:\n{ve}\n"
                     "Fix the errors above and return the corrected JSON object."
                 )
-                retry_resp = await self.client.generate_chat_completion(
+                retry_resp = await self._generate_chat_completion(
                     model=model,
                     system_prompt=serializer_system,
                     user_prompt=retry_user,
