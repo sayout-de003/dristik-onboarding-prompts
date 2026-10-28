@@ -169,6 +169,64 @@ def _task_public(row: sqlite3.Row) -> dict[str, Any]:
     return item
 
 
+def _pipeline_status_payload(analysis_id: str, run: Any, graph: dict[str, Any], sections_registry: list[Any]) -> dict[str, Any]:
+    """Normalize live controller state without implying its in-memory node state is durable."""
+    nodes = graph.get("nodes", {})
+    sections = []
+    for section in sections_registry:
+        section_nodes = [nodes[node_id] for node_id in section.node_ids if node_id in nodes]
+        statuses = [node.get("status", "pending") for node in section_nodes]
+        if statuses and all(status == "completed" for status in statuses):
+            section_status = "completed"
+        elif any(status == "running" for status in statuses):
+            section_status = "running"
+        elif any(status == "failed" for status in statuses):
+            section_status = "failed"
+        elif any(status == "completed" for status in statuses):
+            section_status = "partial"
+        else:
+            section_status = "pending"
+        sections.append({
+            "section_id": section.section_id,
+            "title": section.title,
+            "description": section.description,
+            "order": section.order,
+            "status": section_status,
+            "completed_nodes": sum(1 for status in statuses if status == "completed"),
+            "total_nodes": len(section_nodes),
+            "nodes": section_nodes,
+        })
+    return {
+        "analysis_id": analysis_id,
+        "website_url": run.website_url,
+        "audit_status": str(getattr(run.status, "value", run.status)),
+        "audit_progress_percentage": getattr(run, "progress_percentage", None),
+        "controller_progress_percentage": graph.get("progress_percentage", 0),
+        "completed_nodes": graph.get("completed_nodes", 0),
+        "total_nodes": graph.get("total_nodes", 0),
+        "is_paused": graph.get("is_paused", False),
+        "sections": sections,
+        "recent_activity": graph.get("activity_events", []),
+        "controller_state_scope": "process-local; node-level controller state may be empty after a server restart",
+    }
+
+
+def _citation_tracking_unavailable_payload(domain: str, queries: list[str] | None = None, engines: list[str] | None = None) -> dict[str, Any]:
+    """Fail closed until the MCP path is connected to a verified live citation measurement adapter."""
+    clean_domain = domain.strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
+    return {
+        "domain": clean_domain,
+        "requested_queries": queries or [],
+        "requested_engines": engines or ["openai", "gemini", "anthropic", "xai", "deepseek"],
+        "status": "NOT_CONFIGURED",
+        "overall_citation_score": None,
+        "engines": {},
+        "metrics_available": False,
+        "reason": "No verified live citation-tracking adapter is wired to this MCP operation. No citation rates, mentions, or visibility scores were fabricated.",
+        "next_step": "Configure a supported live measurement adapter and persist engine, query, timestamp, response, and citation evidence before reporting metrics.",
+    }
+
+
 @router.get("/connect/connections")
 async def list_connections(user: UserIdentity = Depends(get_current_user)):
     with _db() as conn:
@@ -1281,44 +1339,7 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             from app.orchestration.pipeline_dag import get_pipeline_controller, SECTIONS_REGISTRY
             run = require_analysis(analysis_id, user)
             graph = get_pipeline_controller(analysis_id).get_full_graph_state()
-            nodes = graph.get("nodes", {})
-            sections = []
-            for section in SECTIONS_REGISTRY:
-                section_nodes = [nodes[node_id] for node_id in section.node_ids if node_id in nodes]
-                statuses = [node.get("status", "pending") for node in section_nodes]
-                if statuses and all(status == "completed" for status in statuses):
-                    section_status = "completed"
-                elif any(status == "running" for status in statuses):
-                    section_status = "running"
-                elif any(status == "failed" for status in statuses):
-                    section_status = "failed"
-                elif any(status == "completed" for status in statuses):
-                    section_status = "partial"
-                else:
-                    section_status = "pending"
-                sections.append({
-                    "section_id": section.section_id,
-                    "title": section.title,
-                    "description": section.description,
-                    "order": section.order,
-                    "status": section_status,
-                    "completed_nodes": sum(1 for status in statuses if status == "completed"),
-                    "total_nodes": len(section_nodes),
-                    "nodes": section_nodes,
-                })
-            payload = {
-                "analysis_id": analysis_id,
-                "website_url": run.website_url,
-                "audit_status": str(getattr(run.status, "value", run.status)),
-                "audit_progress_percentage": getattr(run, "progress_percentage", None),
-                "controller_progress_percentage": graph.get("progress_percentage", 0),
-                "completed_nodes": graph.get("completed_nodes", 0),
-                "total_nodes": graph.get("total_nodes", 0),
-                "is_paused": graph.get("is_paused", False),
-                "sections": sections,
-                "recent_activity": graph.get("activity_events", []),
-                "controller_state_scope": "process-local; node-level controller state may be empty after a server restart",
-            }
+            payload = _pipeline_status_payload(analysis_id, run, graph, SECTIONS_REGISTRY)
             result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
         elif name == "dristik_report_artifacts":
             if not _mcp_authorized(user, "report.export", "mission:read"):
@@ -1449,20 +1470,9 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             domain = args.get("domain")
             if not isinstance(domain, str) or not domain.strip():
                 raise HTTPException(status_code=400, detail="domain is required.")
-            clean_domain = domain.strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
-            # Never synthesize citation rates or claim live measurement from a requested engine list.
-            # A live tracker must return provider-attributed query/engine/time evidence before metrics can be emitted.
-            payload = {
-                "domain": clean_domain,
-                "requested_queries": args.get("queries") or [],
-                "requested_engines": args.get("engines") or ["openai", "gemini", "anthropic", "xai", "deepseek"],
-                "status": "NOT_CONFIGURED",
-                "overall_citation_score": None,
-                "engines": {},
-                "metrics_available": False,
-                "reason": "No verified live citation-tracking adapter is wired to this MCP operation. No citation rates, mentions, or visibility scores were fabricated.",
-                "next_step": "Configure a supported live measurement adapter and persist engine, query, timestamp, response, and citation evidence before reporting metrics.",
-            }
+            payload = _citation_tracking_unavailable_payload(
+                domain, args.get("queries"), args.get("engines")
+            )
             result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
         elif name == "dristik_provider_invoke":
             if not _mcp_authorized(user, "provider.invoke", "mission:create"):
