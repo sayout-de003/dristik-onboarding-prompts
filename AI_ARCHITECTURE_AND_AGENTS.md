@@ -6,7 +6,7 @@
 **Source of truth:** live codebase (`backend/app/`), not older marketing copy  
 **Updated:** 20 September 2026
 
-This document is the architecture + product map for how Dristik actually runs: the problem it solves, the solution shape, the feature list, the audit flow, the sealed outputs, the full backend tree, and the 35-agent workforce with live Kahn-wave order.
+This document is the architecture + product map for how Dristik actually runs: the problem it solves, the solution shape, the feature list, the audit flow, the sealed outputs, the full backend tree, and the 105-agent specialist workforce across 12 domains and 7 pipeline workflow sections with live Kahn-wave order.
 
 Companion product report (parameters, APIs, gaps): [`DRISTIK_PRODUCT_REPORT.md`](DRISTIK_PRODUCT_REPORT.md).
 
@@ -48,7 +48,7 @@ The buyer’s actual questions are commercial, not academic:
 
 ## 2. The solution
 
-Dristik is a FastAPI + React platform that **crawls a public site, hashes every observation, runs a 35-specialist agent DAG over a shared blackboard, adversarially verifies claims, then seals an executive report** with scores, findings, a 7/30/90 roadmap, and drop-in patches.
+Dristik is a FastAPI + React platform that **crawls a public site, hashes every observation, runs a 105-specialist agent DAG across 12 domains and 7 pipeline workflow sections over a shared blackboard, adversarially verifies claims, then seals an executive report** with scores, findings, a 7/30/90 roadmap, and drop-in patches.
 
 LLMs are a **replaceable inference engine**, not a source of truth. They operate over:
 
@@ -57,7 +57,7 @@ LLMs are a **replaceable inference engine**, not a source of truth. They operate
 | Deterministic evidence | DOM, headers, schema, links, TTFB, robots/sitemap — `$0` inference |
 | Immutable store | `ev_NNN` (DOM) and `ext_NNN` (external) tokens with `content_sha256` + `snap_<sha256>` bodies |
 | Cognitive blackboard | Shared claims, site facts, findings, contradictions |
-| 35-agent DAG | Kahn topological waves; no canned specialist fallback (`allow_fallback=False`) |
+| 105-agent DAG across 12 domains (7 pipeline workflow sections) | Kahn topological waves; no canned specialist fallback (`allow_fallback=False`) |
 | Integrity + rubric | CERTAIN / LIKELY / GUESSING; GUESSING+CRITICAL held from the executive |
 | Deterministic scoring | Intent-adaptive 8-category engine; guesses do not deduct |
 | Seal | `manifest.json` pins report UUID ↔ evidence ↔ snapshots ↔ agent-call hashes |
@@ -79,7 +79,7 @@ LLMs are a **replaceable inference engine**, not a source of truth. They operate
 | Evidence graph | Pages, H1s, observations, SHA-256, DOM selectors; re-synced at seal |
 | Content-addressed snapshots | Raw bodies under `data/runs/<analysis_id>/snapshots/`; hash mismatch refuses overwrite |
 | Business identity | `BusinessUnderstandingOrchestrator` — declared vs detected site type; contradiction event if they differ |
-| 35-specialist DAG | `AgentPool.execute_all` — 6 Kahn waves, parallel inside a wave |
+| 105-specialist DAG across 12 domains | `AgentPool.execute_all` — Kahn waves across 7 workflow sections, parallel inside a wave |
 | Page intelligence | Per-URL SEO audit + 5 copywriting cards (not in AgentPool) |
 | Integrity gate | Dangling refs purged; synthetic markers flagged |
 | Confidence rubric | CERTAIN (≥2 independent sources), LIKELY (one source), GUESSING (absence / simulation) |
@@ -236,7 +236,7 @@ Website URL
 [BusinessUnderstandingOrchestrator]  (declared vs detected identity)
     │
     ▼
-[AgentPool: 35 specialists in 6 Kahn waves]
+[AgentPool & Modular DAG: 105 specialists in 12 domains across 7 pipeline sections]
     │
     ▼
 [PageIntelligenceAgent]  (per-URL SEO + 5 copywriters)
@@ -281,7 +281,7 @@ Website URL
 | S09 | `HypothesisEngine.generate_initial_hypotheses` | Pre-reasoning hypotheses |
 | S10 | Tier-1 deterministic caps | robots, schema, readability, … |
 | S11 | `BusinessUnderstandingOrchestrator` | Identity vs declared type |
-| S12 | `AgentPool.execute_all` | 35 specialists, 6 waves |
+| S12 | `AgentPool.execute_all` | 105 specialists across 12 domains, Kahn waves |
 | S13 | `PageIntelligenceAgent.run` | Per-URL SEO + 5 copywriters |
 | S14 | Integrity gate + rubric | Purge / downgrade |
 | S15 | Optional adversarial re-run | Held GUESSING+CRITICAL |
@@ -315,7 +315,7 @@ Website URL
 | `ingesting` | 10–25 | Multi-page crawl |
 | `deterministic_analysis` | 25–38 | Analyzers + Wave-0 + enrichment + tier-1 |
 | `planning` | ~38 | MissionDirector selects capabilities |
-| `specialist_execution` | 42–85 | Identity → 35-agent DAG → page intel → causal → AI sim |
+| `specialist_execution` | 42–85 | Identity → 105-agent DAG (7 workflow sections) → page intel → causal → AI sim |
 | `adversarial_verification` | 82–83 | Integrity gate + optional adversarial re-run |
 | `executive_synthesis` | 88 | Narrative |
 | `scoring` | 93 | Scores, patches, roadmap, seal |
@@ -440,7 +440,7 @@ Capability map note: `29_gemini_scenario` routes to `ai_search.google.v3`; `30_c
 
 ### Domain 9 — Copywriting (5) — not in AgentPool
 
-Invoked once per crawled URL inside `PageIntelligenceAgent` after the 35-agent DAG.
+Invoked once per crawled URL inside `PageIntelligenceAgent` after the specialist DAG.
 
 | ID | Name | Production output |
 |---|---|---|
@@ -563,10 +563,10 @@ contradiction → strategy.executive.v3
 
 | Topic | Live behavior |
 |---|---|
-| Agent count | 35 in AgentPool; 5 copywriters are task cards inside `PageIntelligenceAgent` |
+| Agent count | 105 in `AGENT_REGISTRY` across 12 domains; 7 modular workflow sections (33 DAG nodes) |
 | Adversarial | Wave **3** (after ICP/commercial exist). Orchestrator **re-runs** it after the pool for held GUESSING+CRITICAL |
 | Executive | Wave **5**, in parallel with ChatGPT/Perplexity/Google — **before** `ai_search.cross_engine.v3` (wave 6). Post-pool synthesizer/scoring still run after the DAG |
-| Copywriting | After the 35-agent pool, then integrity gate |
+| Copywriting | After the specialist pool, then integrity gate |
 | External ground truth | `ExternalEvidenceEnricher` runs on the production crawl path (DNS/TLS/headers always; CrUX/firmographics `NOT_CONFIGURED` without keys) |
 | `dag.py` | Unused by the main orchestrator |
 | Duplicate business fleet | `BusinessUnderstandingOrchestrator` also runs **before** the 35 |
@@ -575,7 +575,7 @@ contradiction → strategy.executive.v3
 
 ## 8. One-agent internal flow
 
-Every one of the 35 specialists is the same class (`SpecialistAgent.run`).
+Every one of the 105 specialists is unified under the same class (`SpecialistAgent.run`).
 
 ```mermaid
 flowchart TD

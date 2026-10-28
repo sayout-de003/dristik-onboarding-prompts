@@ -1,5 +1,5 @@
 """
-Dristik Specialist Agent — one runtime class for all 35 registry agents.
+Dristik Specialist Agent — unified runtime class for all 105 registry agents across 12 domains.
 
 Deterministic specialists inspect crawl evidence only.
 LLM specialists call the model with allow_fallback=False so a missing key

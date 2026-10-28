@@ -24,7 +24,7 @@ from app.workers.remediation_worker import CognitiveRemediationWorker
 
 class TeamOrchestrator:
     """
-    Manages the 35 specialist agents (via AgentPool) plus legacy workers for synthesis/remediation.
+    Manages the 105 specialist agents across 12 domains (via AgentPool) plus cognitive workers for synthesis/remediation.
     """
 
     def __init__(self, model_router: ModelRouter):

@@ -357,7 +357,7 @@ Your objective is to produce the highest-information, lowest-risk investigation 
 
 For every mission:
 1. Understand the user's objective.
-2. Determine required capabilities from the 35-agent workforce.
+2. Determine required capabilities from the 105-agent specialist workforce across 12 domains and 7 pipeline workflow sections.
 3. Inspect available evidence in the Evidence Graph.
 4. Build a dynamic dependency DAG.
 5. Execute deterministic capabilities first (Tier 0).

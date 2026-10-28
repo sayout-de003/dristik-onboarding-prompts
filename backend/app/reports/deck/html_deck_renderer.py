@@ -444,7 +444,7 @@ class HtmlVectorDeckRenderer:
                 AUTONOMOUS TECHNICAL ASSURANCE &amp; GENERATIVE ANSWER-ENGINE AUDIT
             </div>
             <div style="display: flex; gap: 16px; margin-top: 10px;">
-                <div class="token-badge">35 SPECIALISTS EXECUTED</div>
+                <div class="token-badge">105 SPECIALISTS EXECUTED</div>
                 <div class="token-badge">SEALED EVIDENCE PROVENANCE</div>
                 <div class="token-badge">ZERO-SIMULATION GUARANTEE</div>
             </div>

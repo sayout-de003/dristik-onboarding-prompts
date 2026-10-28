@@ -337,7 +337,7 @@ def test_stage_cost_tracking_accumulates_per_stage(monkeypatch):
     assert tracker.get_current_stage_cost() == 0.1
     
     # Stage 2: Specialist Execution
-    tracker.set_active_stage("specialist_execution", "35-Agent Specialist DAG")
+    tracker.set_active_stage("specialist_execution", "105-Agent Specialist DAG")
     tracker.record_call(1_000_000, 0, 15, "seo_specialist", model="claude-haiku-4-5-20251001", provider="anthropic")
     tracker.record_call(500, 200, 20, "geo_specialist", model="meta-llama/llama-3.3-70b-instruct", provider="openrouter", provider_cost_usd=0.0035)
     

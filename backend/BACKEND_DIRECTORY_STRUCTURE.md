@@ -12,7 +12,7 @@ The Dristik backend is an enterprise-grade intelligence platform that audits web
 
 - **Representative Crawling:** Crawls representative pages (default: 5-page critical path) with Playwright headless rendering, computing content-addressable hashes.
 - **Evidence-First Ledger & Graph:** All claims and findings require raw HTML/DOM evidence snapshots. Unmeasured indicators remain unmeasured (strictly zero fakes/hallucinations).
-- **35-Agent Autonomous Specialist Pool:** Coordinated via a DAG planner (`app/orchestration/dag.py`), leveraging domain specialists for deep technical, semantic, conversational, and competitive analysis.
+- **105-Agent Specialist Workforce Across 12 Domains & 7 Workflows:** Coordinated via a Modular DAG execution engine (`app/orchestration/pipeline_dag.py`), leveraging domain specialists for deep technical, semantic, conversational, competitive, and generative analysis.
 - **Transparent Multi-Engine Scoring:** Calibrated rubric scoring across Google Search, OpenAI Search / SearchGPT, Perplexity, Claude, and Gemini.
 - **Actionable Remediation & Patches:** Generates concrete AST-validated code, markup, and schema patches with automated git/CMS branch and rollback integration.
 
@@ -47,7 +47,7 @@ backend/
 ├── docs/                 # Architectural specifications and engineering contracts
 │   ├── architecture.md   # Domain boundaries, pillar registration, package map
 │   ├── api.md            # HTTP route inventory and contract specifications
-│   ├── agent-catalog.md  # 35-agent specialist registry and responsibilities
+│   ├── agent-catalog.md  # 105-agent specialist registry across 12 domains and responsibilities
 │   ├── scoring-methodology.md # Calibrated composite score formulation
 │   ├── evidence-policy.md# Zero-fake, provenance, and grounding rules
 │   └── report-specification.md # Multi-chapter audit book structure
@@ -180,12 +180,12 @@ Unifies all Answer Engine Optimization (AEO), featured snippet extractability, c
 ---
 
 ### 3.3 Autonomous Specialist Agents (`app/agents/`)
-Houses the 35-agent specialist pool that performs autonomous audit reasoning.
+Houses the 105-agent specialist workforce across 12 domains that performs autonomous audit reasoning.
 
 - **`agents/runtime/`**:
   - `base_agent.py`: Abstract Base Agent enforcing deterministic input/output contracts.
   - `reasoner.py`: Grounded reasoning engine matching findings against evidence ledgers.
-  - `registry.py`: Central 35-agent registry and dynamic lookup by task capability.
+  - `registry.py`: Central 105-agent registry and dynamic lookup by task capability.
   - `execution_context.py`: Thread-safe audit run context holding page snapshots and facts.
   - `task_cards.py`: Standardized agent prompt definitions and scoring rubrics.
 - **`agents/seo/`**:

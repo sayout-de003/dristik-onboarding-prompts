@@ -72,7 +72,7 @@ def test_schema_validator_faq_page():
                 "name": "How does Dristik work?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "It uses deterministic evidence and a 35-specialist DAG."
+                    "text": "It uses deterministic evidence and a 105-specialist DAG across 7 workflows."
                 }
             },
             {

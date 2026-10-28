@@ -35,13 +35,13 @@
    - 4.12 Presentation, Big-4 Reporting & PPTX Compilers
    - 4.13 Multi-Tenancy, RBAC, Security & Monetization
 5. [The AI Agent Workforce Behind Dristik](#5-the-ai-agent-workforce-behind-dristik)
-   - 5.1 The 35 Canonical Specialist Agents
+   - 5.1 The 105 Specialist Agents Across 12 Domains
    - 5.2 The 5 Page-Level Copywriting Agents
    - 5.3 The 3 Presentation Deck Agents
    - 5.4 Auxiliary Autonomous Workers & Reasoners
 6. [AI Agent Flow & Dependency Waves](#6-ai-agent-flow--dependency-waves)
-   - 6.1 Kahn Topological Execution Waves (Wave 1 to Wave 9)
-   - 6.2 35-Agent Kahn Wave Flow Diagram (Mermaid)
+   - 6.1 Kahn Topological Execution Waves
+   - 6.2 105-Agent Kahn Wave Flow Diagram (Mermaid)
    - 6.3 One-Agent Internal Lifecycle Flow (`SpecialistAgent.run`)
 7. [Cryptographic Manifest & Sealing Specification](#7-cryptographic-manifest--sealing-specification)
 
@@ -49,7 +49,7 @@
 
 ## 1. Executive Overview & Core Value Proposition
 
-Dristik AI is an autonomous, evidence-driven website intelligence and growth operating system. It crawls public websites, collects deterministic DOM and network observations, enriches external telemetry, evaluates a 35-specialist agent workforce arranged in a topological dependency graph across a shared cognitive blackboard, adversarially verifies all claims against ground-truth evidence, and produces sealed executive reports accompanied by automated code patches and roadmaps.
+Dristik AI is an autonomous, evidence-driven website intelligence and growth operating system. It crawls public websites, collects deterministic DOM and network observations, enriches external telemetry, evaluates a 105-specialist agent workforce across 12 domains arranged in a 7-section topological dependency graph across a shared cognitive blackboard, adversarially verifies all claims against ground-truth evidence, and produces sealed executive reports accompanied by automated code patches and roadmaps.
 
 ### 1.1 The Industry Problem: Four Fatal Flaws of Legacy Audits
 
@@ -170,7 +170,7 @@ Dristik isolates operations into 10 decoupled system planes:
                                            v
 +---------------------------------------------------------------------------------------+
 | 5. SPECIALIST AI WORKFORCE DAG                                                        |
-|    35 Specialized Agents executing across 9 Kahn Topological Dependency Waves         |
+|    105 Specialist Agents (12 Domains) executing across 7 Modular Pipeline Workflows   |
 +---------------------------------------------------------------------------------------+
                                            |
                                            v
@@ -221,7 +221,7 @@ Every audit executed via `AnalysisOrchestrator.execute_analysis_pipeline` flows 
 7. **Tier-1 Deterministic Capabilities**: Executes rules for title structure, meta descriptions, image alt tags, canonical tags, and status codes.
 8. **Universal Entity Resolution**: Runs `UniversalEntityResolver` to identify canonical business name, category, and legal form.
 9. **Business Understanding Pre-Pass**: Compares user-declared site type with detected site type; logs identity contradictions if a mismatch occurs.
-10. **35-Specialist Agent Workforce Execution**: Deploys `AgentPool` across 9 Kahn topological waves. Independent agents in each wave execute concurrently under an AsyncIO semaphore.
+10. **105-Specialist Agent Workforce Execution**: Deploys `AgentPool` across Kahn topological waves and 7 pipeline workflow sections. Independent agents in each wave execute concurrently under an AsyncIO semaphore.
 11. **Durable Checkpoint 3**: Persists all generated specialist claims.
 12. **Page-Level Intelligence Fleet**: `PageIntelligenceAgent` generates per-URL audits and executes the 5 copywriting specialists.
 13. **Zero-Fake Evidence Integrity Gate & Rubric**: Purges claims referencing missing evidence; applies `CERTAIN`, `LIKELY`, and `GUESSING` tags; routes `GUESSING + CRITICAL` claims to `verification.adversarial.v3`.
@@ -267,7 +267,7 @@ flowchart TD
     ExtEnrich --> EntRes[5. Universal Entity Resolution]:::det
     EntRes --> BizPass[6. Business Understanding & Contradictions]:::det
     
-    BizPass --> DAG[7. Execute 35-Agent Workforce in 9 Kahn Waves]:::agent
+    BizPass --> DAG[7. Execute 105-Agent Workforce across 7 Workflow Sections]:::agent
     
     DAG --> PageIntel[8. Page Intelligence & 5 Copywriters]:::agent
     PageIntel --> Gate[9. Zero-Fake Integrity Gate & Rubric]:::gate
@@ -609,14 +609,15 @@ All external provider integrations live in `backend/app/external_authority/` and
 
 ## 5. The AI Agent Workforce Behind Dristik
 
-Dristik utilizes an ensemble of **43 AI agents** partitioned into:
-1. **35 Canonical Specialist Agents** in the core DAG.
-2. **5 Page-Level Copywriting Agents** inside `PageIntelligenceAgent`.
-3. **3 Executive Presentation Deck Agents** for PowerPoint generation.
+Dristik utilizes an active ensemble of **105 specialist agents across 12 domains**, supported by:
+1. **105 Specialist Agents in 12 Domains** (`AGENT_REGISTRY` in `backend/app/orchestration/runtime/registry.py`).
+2. **7 Modular Pipeline Workflow Sections (33 DAG Nodes)** (`SECTIONS_REGISTRY` & `NODES_REGISTRY`).
+3. **5 Page-Level Copywriting Specialists** inside `PageIntelligenceAgent`.
+4. **3 Executive Presentation Deck Agents** for PowerPoint generation.
 
 ---
 
-### 5.1 The 35 Canonical Specialist Agents
+### 5.1 The 105 Specialist Agents Across 12 Domains
 
 Every specialist agent is defined with typed contracts, capabilities, allowed models, token budgets, risk levels, dependencies, and required evidence in `backend/app/agents/runtime/registry.py`:
 
@@ -698,7 +699,7 @@ Operating in `DECK_AGENTS_V1`, these specialists generate 70+ slide executive Po
 
 ### 6.1 Kahn Topological Execution Waves (Wave 1 to Wave 9)
 
-The 35 specialist agents are scheduled dynamically using **Kahn's Topological Sort Algorithm** (`topological_waves` in `backend/app/orchestration/agent_pool.py`). All agents whose dependencies have resolved are scheduled in the next wave. Independent agents within each wave run concurrently under an AsyncIO semaphore:
+The 105 specialist agents across 12 domains are scheduled dynamically using **Kahn's Topological Sort Algorithm** (`topological_waves` in `backend/app/orchestration/agent_pool.py`) and executed across 7 pipeline workflow sections. All agents whose dependencies have resolved are scheduled in the next wave. Independent agents within each wave run concurrently under an AsyncIO semaphore:
 
 - **Wave 1 (21 Independent Agents - Base Level)**:
   - `business.discovery.v3`
@@ -747,7 +748,7 @@ The 35 specialist agents are scheduled dynamically using **Kahn's Topological So
 
 ---
 
-### 6.2 35-Agent Kahn Wave Flow Diagram (Mermaid)
+### 6.2 105-Agent Kahn Wave Flow Diagram (Mermaid)
 
 ```mermaid
 flowchart TD
@@ -931,8 +932,8 @@ Upon pipeline completion, Dristik seals the audit run using `build_run_manifest`
     "graph_snapshot_id": "snap_9a8b7c6d5e4f3a2b1c0d"
   },
   "agent_execution_pins": {
-    "total_agents": 35,
-    "completed": 35,
+    "total_agents": 105,
+    "completed": 105,
     "unavailable": 0,
     "errors": 0,
     "agents": [

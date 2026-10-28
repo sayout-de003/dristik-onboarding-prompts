@@ -1,6 +1,6 @@
 # Dristik AI: Orchestrator Layer & Agent Flow Architecture
 
-This document provides a comprehensive technical breakdown and visual Mermaid flow diagrams of the **Dristik AI Orchestration Layer**, the **Modular Pipeline DAG**, the **35-Agent Workforce Pool**, and the **Zero-Fake Evidence Integrity Gate**.
+This document provides a comprehensive technical breakdown and visual Mermaid flow diagrams of the **Dristik AI Orchestration Layer**, the **Modular Pipeline DAG (7 Workflow Sections, 33 DAG Nodes)**, the **105-Agent Specialist Workforce Pool across 12 Domains**, and the **Zero-Fake Evidence Integrity Gate**.
 
 ---
 
@@ -172,7 +172,7 @@ flowchart TD
 
 ## 3. Specialist Agent Pool: Topological Wave Execution
 
-The `AgentPool` orchestrates 35 specialist agents using Kahn's topological sort algorithm, ensuring agents whose inputs depend on preceding insights only run when prerequisites are fulfilled. A concurrency semaphore prevents burst limits on underlying LLM inference endpoints.
+The `AgentPool` and Modular DAG orchestrate the 105 specialist agents across 12 domains and 7 pipeline workflow sections (33 DAG nodes) using Kahn's topological sort algorithm, ensuring agents whose inputs depend on preceding insights only run when prerequisites are fulfilled. A concurrency semaphore prevents burst limits on underlying LLM inference endpoints.
 
 ```mermaid
 sequenceDiagram
@@ -346,7 +346,7 @@ The orchestrator enforces failure-resilience and cooperative lifecycle controls 
 |---|---|---|---|
 | **1** | `INGESTING` | Crawled page URLs, status codes, TTFB, DOM observations | Raw pages table, evidence items table |
 | **2** | `DETERMINISTIC_ANALYSIS` | External DNS, SSL/TLS, Security headers, CruX data | External evidence store records |
-| **3** | `SPECIALIST_EXECUTION` | 35-agent workforce results, claim counts, wave stats | Agent claims table, contradiction table |
+| **3** | `SPECIALIST_EXECUTION` | 105-agent workforce results, claim counts, wave stats | Agent claims table, contradiction table |
 | **4** | `VERIFICATION` | Integrity gate audit violations, adjusted claims | Quarantined claims state |
 | **5** | `COMPLETED` | Final ExecutiveReport, honest scores, patch packs | Full audit JSON, PDF report, Patch ZIP |
 

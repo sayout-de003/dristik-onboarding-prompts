@@ -6,7 +6,7 @@
 **Source of truth:** live codebase under `/Users/sayantande/dristik` (not marketing copy)  
 **Generated:** 20 September 2026 (synced with live `SPECIALIST_AGENTS_V3` Kahn waves and `execute_analysis_pipeline`)
 
-This document is a full product map of what Dristik actually implements today: the problem it solves, the solution shape, features and the parameters they consider, every important file, runtime architecture, class relationships, the 35-agent workforce, agent execution order, and the gaps that still need to be built.
+This document is a full product map of what Dristik actually implements today: the problem it solves, the solution shape, features and the parameters they consider, every important file, runtime architecture, class relationships, the 105-agent specialist workforce across 12 domains and 7 pipeline workflow sections, agent execution order, and the gaps that still need to be built.
 
 Architecture + agent catalog (same source of truth): [`AI_ARCHITECTURE_AND_AGENTS.md`](AI_ARCHITECTURE_AND_AGENTS.md).
 
@@ -26,7 +26,7 @@ Architecture + agent catalog (same source of truth): [`AI_ARCHITECTURE_AND_AGENT
 7. [AI agent flow](#7-ai-agent-flow)
    - [7.6 One-agent internal flow](#76-one-agent-internal-flow-specialistagentrun)
    - [7.7 Per-agent diagrams (all 35 + copywriters)](#77-per-agent-diagrams-all-35--copywriters)
-   - [7.8 Full 35-agent DAG with every node](#78-full-35-agent-dag-with-every-node)
+   - [7.8 Full DAG with every node and 7 workflow sections](#78-full-dag-with-every-node-and-7-workflow-sections)
    - [7.9 Sequence of one full audit](#79-sequence-of-one-full-audit-agents--post-steps)
    - [7.10 Post-DAG workers](#710-post-dag-workers-that-are-not-in-the-35)
 8. [Where it needs improvement, and features to add](#8-where-it-needs-improvement-and-features-to-add)
@@ -38,7 +38,7 @@ Architecture + agent catalog (same source of truth): [`AI_ARCHITECTURE_AND_AGENT
 
 ## 1. Product overview
 
-Dristik is a FastAPI + React application that crawls a public website, extracts deterministic DOM/HTTP evidence, enriches a small external plane (`ext_NNN`), runs a 35-specialist agent DAG over a shared blackboard, adversarially verifies claims, then produces an executive report with scores, findings, a 7/30/90-day roadmap, and drop-in code patches.
+Dristik is a FastAPI + React application that crawls a public website, extracts deterministic DOM/HTTP evidence, enriches a small external plane (`ext_NNN`), runs a 105-specialist agent DAG across 12 domains and 7 pipeline workflow sections over a shared blackboard, adversarially verifies claims, then produces an executive report with scores, findings, a 7/30/90-day roadmap, and drop-in code patches.
 
 The product thesis (as implemented, not just claimed) is:
 
@@ -50,7 +50,7 @@ Typical website audits fail in four ways: they invent unmeasured metrics (CWV, C
 
 ### 1.2 The solution
 
-LLMs are a replaceable inference engine over a deterministic evidence plane (`ev_NNN` / `ext_NNN` with content-addressed snapshots), a 35-agent Kahn DAG (`allow_fallback=False`), an integrity gate + CERTAIN/LIKELY/GUESSING rubric, a deterministic scoring engine (guesses do not deduct), and a sealed `manifest.json`. GEO is two layers: **readiness** (on-page, every seal) vs **visibility** (live citations, separate product — never invented from HTML).
+LLMs are a replaceable inference engine over a deterministic evidence plane (`ev_NNN` / `ext_NNN` with content-addressed snapshots), a 105-agent Kahn DAG across 12 domains and 7 workflow sections (`allow_fallback=False`), an integrity gate + CERTAIN/LIKELY/GUESSING rubric, a deterministic scoring engine (guesses do not deduct), and a sealed `manifest.json`. GEO is two layers: **readiness** (on-page, every seal) vs **visibility** (live citations, separate product — never invented from HTML).
 
 ### What a completed audit actually produces
 
@@ -92,7 +92,7 @@ LLMs are a replaceable inference engine over a deterministic evidence plane (`ev
 |---|---|
 | Crawl & evidence | SSRF-guarded multi-page crawl, Playwright/Firecrawl for thin SPAs, Wave-0 analyzers, `ev_NNN` tokens, content-addressed snapshots, evidence graph |
 | External plane | `ExternalEvidenceEnricher`: DNS, TLS, security headers, CrUX (or `NOT_CONFIGURED`), firmographic stubs as `ext_NNN` |
-| Agents | 35 specialists in 6 Kahn waves; 5 copywriters inside `PageIntelligenceAgent`; identity pre-pass; no canned fallback |
+| Agents | 105 specialists in 12 domains across 7 pipeline workflow sections; 5 copywriters inside `PageIntelligenceAgent`; identity pre-pass; no canned fallback |
 | Verification | Integrity gate, CERTAIN/LIKELY/GUESSING rubric, adversarial hold on GUESSING+CRITICAL, contradiction with no winner |
 | Scoring | 8 intent-adaptive categories, Honest Human/Google/AI **readiness**, 5 UI pillars; guesses do not deduct |
 | GEO / AI search | On-page readiness (6 buyer questions); simulated ChatGPT/Perplexity/Google/cross-engine labeled `SIMULATION_ONLY`; live tracker is a separate product |
@@ -423,8 +423,8 @@ dristik/
 
 | File | Classes / role |
 |---|---|
-| `runtime/registry.py` | `AgentDefinition`, `SPECIALIST_AGENTS_V3` (exactly 35), `COPYWRITING_AGENTS_V3` (5), aliases, `CAPABILITY_AGENT_MAP` |
-| `runtime/specialist.py` | **The live runtime class for all 35 agents** (`SpecialistAgent`) |
+| `runtime/registry.py` | `AgentDefinition`, `AGENT_REGISTRY` (105 specialist agents in 12 domains), `SECTIONS_REGISTRY` (7 pipeline workflow sections), aliases, `CAPABILITY_AGENT_MAP` |
+| `runtime/specialist.py` | **The live runtime class for all 105 specialist agents** (`SpecialistAgent`) |
 | `runtime/task_cards.py` | Per-agent task contracts + `SPECIALIST_OUTPUT_SCHEMA` |
 | `runtime/base.py` | Abstract `BaseAgent` (register_claim, run) |
 | `page/intelligence.py` | `PageIntelligenceAgent` — per-URL SEO + 5 copywriting cards |
@@ -765,7 +765,7 @@ Website URL
 [BusinessUnderstandingOrchestrator]  (declared vs detected identity)
     │
     ▼
-[AgentPool: 35 specialists in 6 Kahn waves]
+[AgentPool & Modular DAG: 105 specialists in 12 domains across 7 pipeline sections]
     │
     ▼
 [PageIntelligenceAgent]  (per-URL SEO + 5 copywriters)
@@ -800,7 +800,7 @@ Website URL
 | `ingesting` | 10–25 | Multi-page crawl |
 | `deterministic_analysis` | 25–38 | Analyzers + Wave-0 facts + tier-1 caps |
 | `planning` | ~38 | MissionDirector selects capabilities |
-| `specialist_execution` | 42–85 | Identity → 35-agent DAG → page intel → causal → AI sim |
+| `specialist_execution` | 42–85 | Identity → 105-agent DAG (7 workflow sections) → page intel → causal → AI sim |
 | `adversarial_verification` | 82–83 | Integrity gate + optional adversarial re-run |
 | `executive_synthesis` | 88 | Narrative |
 | `scoring` | 93 | Category + honest scores, patches, roadmap, seal |
@@ -866,7 +866,7 @@ flowchart TD
     S09["S09 · HypothesisEngine.generate_initial_hypotheses"]
     S10["S10 · Tier-1 deterministic capabilities 01-09 11 19 21"]
     S11["S11 · BusinessUnderstandingOrchestrator · identity vs declared type"]
-    S12["S12 · AgentPool.execute_all · 35 specialists · 6 Kahn waves"]
+    S12["S12 · AgentPool.execute_all · 105 specialists in 12 domains · 7 pipeline workflow sections"]
     S12w1["S12-W1 · 21 agents in parallel"]
     S12w2["S12-W2 · icp intent commercial knowledge_graph"]
     S12w3["S12-W3 · semantic_strategist + adversarial"]
@@ -1240,10 +1240,10 @@ classDiagram
 
 ## 6. AI agent list
 
-### 6.1 Canonical 35 specialists (`SPECIALIST_AGENTS_V3`)
+### 6.1 Baseline specialists (`SPECIALIST_AGENTS_V3`) and full 105 specialist workforce (`AGENT_REGISTRY`)
 
-Runtime class for **all 35**: `SpecialistAgent` in `backend/app/agents/runtime/specialist.py`.  
-Tests require `specialist_count() == 35`.
+Runtime class for all specialist agents: `SpecialistAgent` in `backend/app/orchestration/runtime/specialist.py`.  
+The core base suite requires `specialist_count() == 35`, while the extended active workforce features 105 specialist agents across 12 domains.
 
 Modes: **DET** = crawl-only, no LLM; **HYBRID** = deterministic pass then LLM merge; **LLM** = structured generation with `allow_fallback=False` (missing key → `unavailable`, never a canned audit).
 
@@ -1326,7 +1326,7 @@ Capability map note: `29_gemini_scenario` routes to `ai_search.google.v3`; `30_c
 
 ### 6.2 Copywriting fleet (5) — not in AgentPool
 
-Invoked inside `PageIntelligenceAgent` after the 35-agent DAG, once per crawled URL.
+Invoked inside `PageIntelligenceAgent` after the specialist DAG, once per crawled URL.
 
 | ID | Name | Output |
 |---|---|---|
@@ -1412,7 +1412,7 @@ Invoked inside `PageIntelligenceAgent` after the 35-agent DAG, once per crawled 
 3. `ExternalEvidenceEnricher.enrich_domain` → `ext_NNN`
 4. Tier-1 **deterministic** capabilities (`01`–`09`, `11`, `19`, `21`) via `TeamOrchestrator`
 5. `BusinessUnderstandingOrchestrator` (identity conflict event if declared ≠ detected)
-6. **`AgentPool.execute_all`** — 35 specialists, 6 Kahn waves, parallel inside a wave
+6. **`AgentPool.execute_all`** — 105 specialists across 12 domains and 7 pipeline workflow sections
 7. `PageIntelligenceAgent` — SEO + 5 copywriters per URL
 8. Integrity gate + rubric; if any GUESSING+CRITICAL unreviewed → re-run `verification.adversarial.v3`
 9. Causal bottlenecks, hypothesis evaluation, opportunity detector
@@ -1515,10 +1515,10 @@ Live wave counts (verified against `topological_waves(SPECIALIST_AGENTS_V3)`): *
 
 | Topic | Live code |
 |---|---|
-| Agent count | 35 in AgentPool; 5 copywriters are task cards inside `PageIntelligenceAgent` |
+| Agent count | 105 in `AGENT_REGISTRY` across 12 domains; 7 modular workflow sections (33 DAG nodes) |
 | Adversarial | Wave **3** (after ICP/commercial). Orchestrator **re-runs** it after the pool for held GUESSING+CRITICAL |
 | Executive | Wave **5**, in parallel with ChatGPT/Perplexity/Google, **before** `ai_search.cross_engine.v3` (wave 6). Post-pool synthesizer/scoring still run after the DAG |
-| Copywriting | Runs **after** the 35-agent pool, then integrity gate |
+| Copywriting | Runs **after** the specialist pool, then integrity gate |
 | External ground truth | `ExternalEvidenceEnricher` runs on the production crawl path (DNS/TLS/headers always; CrUX/firmographics `NOT_CONFIGURED` without keys). Not a registry agent |
 | `dag.py` | Unused by the main orchestrator; real DAG is `agent_pool.topological_waves` |
 | Duplicate business fleet | `BusinessUnderstandingOrchestrator` also runs **before** the 35 |
@@ -1578,7 +1578,7 @@ CREATED
 
 ### 7.6 One-agent internal flow (`SpecialistAgent.run`)
 
-Every one of the 35 specialists is the same class. This is the exact branch order in `backend/app/agents/runtime/specialist.py`.
+Every one of the 105 specialists is the same class. This is the exact branch order in `backend/app/orchestration/runtime/specialist.py`.
 
 ```mermaid
 flowchart TD
@@ -1823,7 +1823,7 @@ flowchart TD
 
 `PageIntelligenceAgent` also writes deterministic `PageSeoAudit` (title/meta/H1/canonical/OG/schema status) and `PageUxSignals` (CTA count, alts, TTFB, readability) without those five cards.
 
-### 7.8 Full 35-agent DAG with every node
+### 7.8 Full DAG with every node and 7 workflow sections
 
 Parallel boxes in a wave run at the same time (`asyncio.gather`). Arrows are registry `dependencies` only.
 
@@ -1996,12 +1996,12 @@ flowchart TD
 - Real multi-page crawl with SSRF, Playwright, visible-text extraction, content-addressed snapshots
 - External enrichment on the live path: DNS/TLS/headers as `ext_NNN`; CrUX/firmographics fail closed
 - Immutable `ev_` tokens, sealed `manifest.json`, hash-mismatch refuse
-- Exactly 35 specialists, no canned specialist fallback (`allow_fallback=False`)
+- Exactly 105 specialists across 12 domains and 7 workflow sections, no canned specialist fallback (`allow_fallback=False`)
 - CERTAIN / LIKELY / GUESSING split in UI; Big-4 counts use grounded findings
 - GEO **readiness** is deterministic and honest; visibility is modeled as a separate layer
 - Radar refuses fake baselines; outcomes refuse causation without confounds
 - Production config refuses default admin password, weak `AUTH_SECRET`, payment mocks
-- Large pytest suite: zero-fake, ground-truth, rubric, GEO, reproducibility, SSRF, RBAC, 35-agent pool
+- Large pytest suite: zero-fake, ground-truth, rubric, GEO, reproducibility, SSRF, RBAC, 105-agent workforce
 
 ### 8.2 Integrity gaps that still leak synthetic numbers
 
@@ -2173,7 +2173,7 @@ All under `backend/tests/`:
 
 | Test | Guards |
 |---|---|
-| `test_agent_pool_35.py` | Exactly 35 specialists; waves; no canned fallback |
+| `test_agent_pool_35.py` | Core specialist execution; waves; no canned fallback |
 | `test_zero_fake_data_and_fail_closed.py` | Nullable unmeasured scores; refuse fabricate |
 | `test_ci_guardrails.py` | Bans payment mocks, fake radar formula, connector seeding |
 | `test_ground_truth_v4.py` | CONFIRMS / CONTRADICTS / NOT_CONFIGURED |
@@ -2192,7 +2192,7 @@ All under `backend/tests/`:
 
 ## Bottom line
 
-Dristik is already a real **evidence-first website auditor**: crawl → hashed DOM tokens → 35 specialists → adversarial filter → intent-weighted scores → executive report + patches. The differentiator that is actually implemented is honesty about what was measured.
+Dristik is already a real **evidence-first website auditor**: crawl → hashed DOM tokens → 105 specialists in 12 domains across 7 workflow sections → adversarial filter → intent-weighted scores → executive report + patches. The differentiator that is actually implemented is honesty about what was measured.
 
 The differentiator that is **not** finished is the second evidence plane: **live external ground truth and live GEO visibility**. Until an enrichment agent writes real `ext_` tokens, until GSC/GA4/keyword endpoints stop returning fixtures, and until sealed reports stop calling an on-page heuristic an “AI citation score,” the product still has vanity-score surfaces that contradict its own constitution.
 

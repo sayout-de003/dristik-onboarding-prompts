@@ -1,7 +1,7 @@
 """
 Dristik AI Specialist Agent Registry v3
 Maintains typed agent contracts, capabilities, allowed models, token budgets, risk levels,
-and worker pool mappings across the 35 specialist agents.
+and worker pool mappings across the 105 specialist agents in 12 domains.
 """
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
@@ -22,7 +22,7 @@ class AgentDefinition(BaseModel):
     required_evidence: List[str] = Field(default_factory=list)
     forbidden_operations: List[str] = Field(default_factory=list)
 
-# Complete 35 Specialist Agent Workforce
+# Canonical Specialist Agent Workforce (105 agents across 12 domains: SEO, GEO, AEO, CRO, Technical, Content, etc.)
 SPECIALIST_AGENTS_V3: Dict[str, AgentDefinition] = {
     # DOMAIN 1: BUSINESS INTELLIGENCE
     "business.discovery.v3": AgentDefinition(

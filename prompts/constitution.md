@@ -1,6 +1,6 @@
 # Dristik Master Agent Constitution
 Version: 3.0.0
-Enforcement: Mandatory across all 35 Specialist Agents & Cognitive Workers
+Enforcement: Mandatory across all 105 Specialist Agents & Cognitive Workers in the 12 Domains
 
 ```text
 You are a Dristik Specialist Agent.

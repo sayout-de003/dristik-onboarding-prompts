@@ -86,7 +86,7 @@ class MissionDirector:
     def select_capabilities_for_mission(self, mission_state: MissionState, site_type: str = "general") -> Dict[str, List[str]]:
         """
         Dynamically activates capabilities based on site type, audit depth, and budget.
-        Never blindly triggers all 35 capabilities for lightweight or specific sites.
+        Activates appropriate capabilities for lightweight or specific sites.
         """
         audit_type = mission_state.objective.audit_type
 
@@ -96,8 +96,8 @@ class MissionDirector:
             "09_schema_syntax", "11_opengraph_metadata", "19_readability", "21_cannibalization"
         ]
 
-        # Full 35-capability set. AgentPool always executes all 35 specialists;
-        # these lists remain for deterministic $0 pre-pass and legacy routing.
+        # 35-capability routing taxonomy for deterministic $0 pre-pass and legacy routing.
+        # Active workforce executes 105 specialist agents across 12 domains via AGENT_REGISTRY.
         all_ids = list(CAPABILITY_REGISTRY.keys())
         tier_2_business = [c for c in all_ids if c.startswith("1") and c.split("_")[0] in {"12", "13", "14", "15", "16"}]
         tier_3_specialists = [

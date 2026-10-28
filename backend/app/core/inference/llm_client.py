@@ -45,7 +45,7 @@ class TokenBucketRateLimiter:
     Asynchronous token-bucket rate limiter that enforces both:
     - Requests Per Minute (RPM)
     - Tokens Per Minute (TPM)
-    Prevents Groq/Together rate limit exhaustion during 35-agent parallel DAG executions.
+    Prevents Groq/Together rate limit exhaustion during 105-agent parallel DAG executions.
     """
     def __init__(self, rpm: int = 30, tpm: int = 25000):
         self.rpm = rpm

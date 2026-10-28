@@ -9,8 +9,7 @@ Older maps in `AI_ARCHITECTURE_AND_AGENTS.md`, `README.md`, and `DRISTIK_PRODUCT
 
 ## 1. What Dristik is
 
-Dristik is a FastAPI + React website-intelligence auditor. A run crawls a public site, stores hashed observations, runs deterministic analyzers and a 35-specialist agent pool, then seals an executive repor
-t with findings, scores, a 7/30/90 roadmap, and a developer patch pack.
+Dristik is a FastAPI + React website-intelligence auditor. A run crawls a public site, stores hashed observations, runs deterministic analyzers and a 105-specialist agent pool across 12 domains and 7 pipeline workflow sections, then seals an executive report with findings, scores, a 7/30/90 roadmap, and a developer patch pack.
 
 The product rule is evidence. An LLM may interpret stored observations. It may not invent Core Web Vitals, backlinks, Search Console clicks, live ChatGPT citations, or a universal authority score. Unmeasured pillars stay unmeasured. Trust is omitted and the other category weights are renormalized when no external-authority evidence is connected. AI visibility stays blank unless a live engine measurement exists.
 
@@ -27,7 +26,7 @@ The crawl is a **representative sample**, not a full-site crawl. The crawler fil
 | External telemetry | `backend/app/evidence/enrichment.py` | DNS, TLS, security headers, CrUX when a key exists. Writes `ext_NNN`. Fail open. |
 | External authority | `backend/app/external_authority/` | GSC, GA4, Bing, Ahrefs, Semrush, Majestic, DataForSEO, SerpAPI, Google Business Profile, citations, brand mentions. Separate SQLite. No universal score. |
 | Cognitive blackboard | `backend/app/cognition/` | Shared claims, site facts, findings, contradictions for one run |
-| Specialist workforce | `backend/app/agents/runtime/` | 35 registered agents, 9 Kahn waves |
+| Specialist workforce | `backend/app/orchestration/runtime/` | 105 registered agents in 12 domains, 7 pipeline workflow sections |
 | Page copy fleet | `backend/app/agents/page/intelligence.py` | Per-URL SEO report plus 5 copywriting task cards. Not in the pool. |
 | Scoring | `backend/app/scoring/engine.py`, `weights.py`, `calibration.py` | Eight categories. Guesses do not deduct. Floor 20. |
 | Report seal | `backend/app/audit/manifest.py`, `backend/app/reports/validation_gate.py` | `manifest.json` pins report UUID, evidence, snapshots, and agent-call hashes |
@@ -56,7 +55,7 @@ This is the order in `AnalysisOrchestrator.execute_analysis_pipeline`. The user 
 
 | Step | Name | What happens |
 |---|---|---|
-| 1 | Mission | `MissionDirector.create_mission` with `audit_type=standard_growth`. Capability lists are selected. The pool still runs all 35 agents. |
+| 1 | Mission | `MissionDirector.create_mission` with `audit_type=standard_growth`. Capability lists are selected. The workforce runs 105 specialist agents across 12 domains and 7 pipeline workflow sections. |
 | 2 | Crawl | SSRF check, then `CrawlerService.crawl_site_and_analyze`. httpx first. Playwright or Firecrawl when the HTML is thin and rendering is enabled. Robots and sitemap are fetched. Role slots are filled before the rest of the budget. |
 | 3 | Evidence graph | Site, page, and H1 nodes. Every observation is copied in with a SHA-256 and a selector. |
 | 4 | Checkpoint 1 | Pages and evidence items are written. A failure here is logged and the run continues. |
@@ -65,7 +64,7 @@ This is the order in `AnalysisOrchestrator.execute_analysis_pipeline`. The user 
 | 7 | Tier-1 capabilities | `$0` pre-pass: discovery, semantic structure, indexability, links, performance, security, assets, mobile, schema syntax, Open Graph, readability, cannibalization. |
 | 8 | Entity resolve | `UniversalEntityResolver` sets a canonical name and industry from crawled pages. |
 | 9 | Business understanding | `BusinessUnderstandingOrchestrator` compares the declared site type with the detected one and can emit an identity contradiction. |
-| 10 | 35-agent pool | `AgentPool.execute_all`. Nine Kahn waves. Parallel inside a wave. `allow_fallback=False`. A missing model key yields `unavailable`, not a canned claim. |
+| 10 | 105-agent workforce & 7 workflow sections | `AgentPool.execute_all` and Modular DAG. Kahn waves. Parallel inside a wave. `allow_fallback=False`. A missing model key yields `unavailable`, not a canned claim. |
 | 11 | Checkpoint 3 | Claims are persisted. |
 | 12 | Page intelligence | `PageIntelligenceAgent` writes a per-URL SEO report and runs the five copywriting cards. |
 | 13 | Integrity and rubric | Dangling evidence refs are purged. Each claim becomes CERTAIN, LIKELY, or GUESSING. A GUESSING claim that is also CRITICAL is sent back through `verification.adversarial.v3` before it can enter the executive narrative. |
@@ -365,7 +364,7 @@ Hashed snapshots, `ev_NNN` / `ext_NNN`, a rubric, and a validation gate are the 
 
 | Subsection | Drawback |
 |---|---|
-| Cost and latency | Up to 35 model calls, then copywriting per URL, then a simulator, then a synthesizer. Groq caps routine agents at 1,000 tokens, which makes the reasoning agents shallow exactly when the cheap provider is selected. |
+| Cost and latency | Up to 105 model calls (across 12 domains), then copywriting per URL, then a simulator, then a synthesizer. Groq caps routine agents at 1,000 tokens, which makes the reasoning agents shallow exactly when the cheap provider is selected. |
 | Wave 1 blindness | Twenty-one agents cannot read the business strategist. SEO and content findings are not conditioned on ICP. |
 | Quick audits | `MissionDirector` can shrink capability lists for `audit_type=quick`. `AgentPool.execute_all` still runs every specialist. |
 | Duplicate business layer | Entity resolver, business-understanding orchestrator, and five business agents all name the company. |
@@ -600,7 +599,7 @@ Each item names the change and the main files. Ship P0 before P2. P0 is what mak
 14. **Delete duplicate work on the hot path.** Pick one business-identity writer. Pick one causal pass, after competitive data exists. Pick one narrative writer. Route tier-1 capability ids through the same rules the SEO agents use, or stop running both. Archive `agents/legacy/` once tests import the registry.
     Files: `orchestration/orchestrator.py`, `intelligence/business/understanding.py`, `agents/legacy/`.
 
-15. **Respect quick mode.** When the mission is quick, run the deterministic analyzers, business discovery, GEO readiness, and the executive step. Skip the full 35. Record which agents were skipped.
+15. **Respect quick mode.** When the mission is quick, run the deterministic analyzers, business discovery, GEO readiness, and the executive step. Skip the full 105-agent workforce. Record which agents were skipped.
     Files: `mission/director.py`, `orchestration/agent_pool.py`.
 
 16. **Evidence window.** For crawls over a few dozen pages, retrieve evidence by agent and by page sample, not the first 60 rows in the store.

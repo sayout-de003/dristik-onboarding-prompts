@@ -411,7 +411,7 @@ Prioritization is a decision aid, not a guarantee of ranking, revenue, or conver
 
 ## 6. Agent workforce and execution model
 
-Dristik's documented baseline includes a **35-specialist core DAG** executed through dependency-aware topological waves. Companion documents also describe extended catalogs, page-copy specialists, and presentation/reporting agents. Treat the live registry in the checked-out code as the authority for the exact agents enabled in a deployment.
+Dristik features an active workforce of **105 specialist agents across 12 domains** executed through **7 modular pipeline workflow sections (33 DAG nodes)** and dependency-aware topological waves. Companion documents also describe extended catalogs, page-copy specialists, and presentation/reporting agents. Treat the live registry in the checked-out code as the authority for the exact agents enabled in a deployment.
 
 ### 6.1 Core specialist domains
 

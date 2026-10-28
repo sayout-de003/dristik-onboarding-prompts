@@ -89,7 +89,7 @@ class AIChapterExplanation(BaseModel):
 class AgenticChapterSynthesizer:
     """
     Centralized agentic synthesis engine for audit book chapters.
-    Binds chapters directly to Dristik's 35 specialist agents and empirical crawl evidence.
+    Binds chapters directly to Dristik's 105 specialist agents across 12 domains and empirical crawl evidence.
     """
 
     # Authoritative Specialist Agent Registry for SEO Chapters (01-55 & Appendices)
