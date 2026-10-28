@@ -220,7 +220,7 @@ async def performance_data_status(user: UserIdentity = Depends(get_current_user)
     return {
         "crux": {"configured": bool(os.getenv("GOOGLE_CRUX_API_KEY") or os.getenv("GOOGLE_API_KEY")),
                  "provider": "Chrome UX Report API", "data_type": "field_data"},
-        "pagespeed": {"configured": True, "provider": "Google PageSpeed Insights API", "api_key_configured": bool(os.getenv("GOOGLE_PAGESPEED_API_KEY") or os.getenv("GOOGLE_API_KEY")),
+        "pagespeed": {"configured": bool(os.getenv("GOOGLE_PAGESPEED_API_KEY") or os.getenv("GOOGLE_API_KEY")), "provider": "Google PageSpeed Insights API", "api_key_configured": bool(os.getenv("GOOGLE_PAGESPEED_API_KEY") or os.getenv("GOOGLE_API_KEY")), "can_attempt_without_key": True,
                       "data_type": "lighthouse_lab_data"},
         "google_programmable_search": {"configured": bool((os.getenv("GOOGLE_CSE_API_KEY") or os.getenv("GOOGLE_API_KEY")) and os.getenv("GOOGLE_CSE_CX")), "provider": "Google Programmable Search JSON API", "data_type": "configured_search_results_not_universal_serp"},
     }
