@@ -31,6 +31,7 @@ from app.api.routes.integrations.universal_connect import router as universal_co
 from app.api.routes.integrations.provider_adapters import router as provider_adapters_router
 from app.api.routes.integrations.external_authority import router as external_authority_router
 from app.api.routes.integrations.google import router as integrations_router
+from app.api.routes.integrations.performance_data import router as performance_data_router
 from app.api.routes.remediation.patches import router as remediation_router
 from app.aeo.router import router as aeo_reports_router
 from app.core.security.enterprise_audit_logger import router as audit_logs_router
@@ -68,6 +69,7 @@ _PREFIXED_ROUTERS = (
     continuous_intelligence_router,
     meta_router,
     integrations_router,
+    performance_data_router,
     workspaces_router,
     live_ai_citation_router,
     developer_sync_router,

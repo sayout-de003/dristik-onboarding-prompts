@@ -270,7 +270,7 @@ def _score_citation_readiness(passage_res) -> GeoDimensionScore:
             band="unmeasured",
             confidence=0.0,
             summary="Passage analysis unavailable; citation readiness was not measured.",
-            evidence_notes=[],
+            evidence_notes=["status=NOT_MEASURED", "reason=passage_analysis_unavailable"],
             is_measured=False,
             measurement_note="Run passage analysis against successfully crawled page content.",
         )

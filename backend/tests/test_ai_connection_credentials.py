@@ -470,8 +470,10 @@ def test_external_ai_brain_pipeline_inspect_and_citations(isolated_db):
     assert cite_resp.status_code == 200
     cite_data = cite_resp.json()["result"]["structuredContent"]
     assert cite_data["domain"] == "dristik.org"
-    assert "perplexity" in cite_data["engines"]
-    assert cite_data["overall_citation_score"] > 0
+    assert cite_data["status"] == "NOT_CONFIGURED"
+    assert cite_data["metrics_available"] is False
+    assert cite_data["overall_citation_score"] is None
+    assert "perplexity" in cite_data["requested_engines"]
 
 
 def test_external_ai_tasks_messaging_and_listing(isolated_db):
