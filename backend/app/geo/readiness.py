@@ -514,6 +514,29 @@ def evaluate_geo_readiness(
         )
 
     blob = _corpus(pages)
+    if not pages:
+        visibility_is_measured = visibility_measured and visibility_score is not None
+        return GeoReadinessReport(
+            visibility_status="MEASURED" if visibility_is_measured else "NOT_CONFIGURED",
+            visibility_message=visibility_detail or (
+                "Live visibility measured separately." if visibility_is_measured
+                else "No analyzed pages; readiness and live visibility are not measured."
+            ),
+            entity_name=name,
+            questions_total=0,
+            questions_supported=0,
+            questions_partial=0,
+            questions_unsupported=0,
+            questions_conflicting=0,
+            headline="No analyzed pages are available. GEO readiness is unmeasured; no readiness score was calculated.",
+            questions=[],
+            dimensions=[],
+            dimension_scores={},
+            schema_types=[],
+            market_country=(country or "Global").strip() or "Global",
+            market_language=(language or "en").strip() or "en",
+            extractability_score=None,
+        )
 
     # ------------------------------------------------------------------
     # 1. Canonical 6-Question Evaluation

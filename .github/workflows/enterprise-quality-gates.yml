@@ -8,6 +8,7 @@ on:
       - master
       - fix/evidence-first-enterprise-audits
       - fix/geo-measurement-integrity
+      - fix/geo-phase2-evidence-integrity
       - feat/complete-integration-platform
 
 permissions:

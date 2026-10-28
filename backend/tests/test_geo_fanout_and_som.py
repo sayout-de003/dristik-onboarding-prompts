@@ -125,7 +125,7 @@ def test_share_of_model_calculation_and_displacement():
     # Target and competitor shares use observed target + tracked competitor mentions:
     # target=2, Dynatrace=2, New Relic=1, total=5.
     assert som.share_of_model_pct == 40.0
-    # Competitor names lack domains, so competitor citation share is not measurable.
+    # Competitor citation share is unmeasured because the competitor universe has no domains.
     assert som.first_party_citation_share_pct is None
     assert som.ordinal_distribution["rank_1"] == 1
     assert som.ordinal_distribution["rank_2_3"] == 1
@@ -210,6 +210,7 @@ def test_api_endpoints_fanout_som_crawler():
     data2 = resp2.json()
     # Linear and Jira are both mentioned, so Linear has half of the tracked mentions.
     assert data2["share_of_model_pct"] == 50.0
+    assert data2["competitor_shares"]["jira"] == 50.0
     # Citation share requires a competitor domain, not a brand name only.
     assert data2["first_party_citation_share_pct"] is None
     assert data2["ordinal_distribution"]["rank_1"] == 1
