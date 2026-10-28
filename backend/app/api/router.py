@@ -82,3 +82,5 @@ def mount_http(app: FastAPI) -> None:
     for prefix in ("/api/v1", "/api"):
         for router in _PREFIXED_ROUTERS:
             app.include_router(router, prefix=prefix)
+    # Also mount universal_connect_router at root so /mcp and /connect are directly accessible
+    app.include_router(universal_connect_router)

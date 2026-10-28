@@ -1,10 +1,35 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Activity, Bot, CheckCircle2, CircleAlert, Loader2, PlugZap, Send, ShieldCheck } from 'lucide-react';
+import { Activity, Bot, CheckCircle2, CircleAlert, ChevronDown, ChevronRight, History, Layers, Loader2, PlugZap, Send, ShieldCheck } from 'lucide-react';
 
 type Provider = { id: string; provider: string; label: string; model: string; status: string; created_at: number };
 type Task = { id: string; goal: string; status: string; created_at: number; execution_started?: boolean };
 type AIConnection = { id: string; name: string; connection_email: string; grant_profile: string; status: string; expires_at?: number | null; last_used_at?: number | null };
 type IssuedCredential = { id: string; name?: string; connection_email: string; api_key: string; grant_profile?: string; mcp_endpoint?: string; mcp_endpoint_is_absolute?: boolean; mcp_config?: { url: string; headers: Record<string, string> }; key_display_policy?: string };
+type ConnectionEvent = { id: string; event: string; created_at: number; metadata: Record<string, unknown> };
+type CapabilityItem = { name: string; status: string; description: string };
+
+const PROFILE_DETAILS: Record<string, { label: string; description: string; scopeSummary: string }> = {
+  read_only: {
+    label: 'Read only',
+    description: 'Read-only access: discover capabilities/templates/agents, read audit state, view evidence graph, findings, and completed reports.',
+    scopeSummary: 'capabilities.list, templates.list, agents.list, audit.read, report.read, findings.read, evidence.read, connector.read',
+  },
+  audit_operator: {
+    label: 'Audit operator',
+    description: 'Launch canonical website audits, monitor progress, retrieve findings, export reports in CSV, and record collaboration tasks.',
+    scopeSummary: 'audit.create, audit.read, audit.cancel, report.read, report.export, findings.read, evidence.read, tasks.create',
+  },
+  workflow_admin: {
+    label: 'Workflow admin',
+    description: 'Full audit operator capabilities plus executing specific DAG nodes and pipeline workflow sections.',
+    scopeSummary: 'agent.execute, workflow.execute, audit.cancel, connector.read, providers.list + all operator permissions',
+  },
+  full_access: {
+    label: 'Full Dristik access',
+    description: 'All canonical capabilities across templates, 35 specialist agents, workflows, connectors, evidence, and reports within your organization.',
+    scopeSummary: '* (Complete organization-scoped access across all audit capabilities)',
+  },
+};
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { credentials: 'include', ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } });
@@ -29,6 +54,10 @@ export function UniversalConnectView() {
   const [connectionName, setConnectionName] = useState('Claude — Full Audit Access');
   const [grantProfile, setGrantProfile] = useState('full_access');
   const [issuedCredential, setIssuedCredential] = useState<IssuedCredential | null>(null);
+  const [activeActivityId, setActiveActivityId] = useState<string | null>(null);
+  const [activityEvents, setActivityEvents] = useState<ConnectionEvent[]>([]);
+  const [capabilities, setCapabilities] = useState<CapabilityItem[]>([]);
+  const [showCapabilities, setShowCapabilities] = useState(false);
   const [provider, setProvider] = useState('anthropic');
   const [label, setLabel] = useState('My AI provider');
   const [model, setModel] = useState('claude-sonnet-4-20250514');
@@ -106,6 +135,35 @@ export function UniversalConnectView() {
     catch { setError('Clipboard access is unavailable. Select and copy the credential manually.'); }
   };
 
+  const viewActivity = async (id: string) => {
+    if (activeActivityId === id) {
+      setActiveActivityId(null);
+      setActivityEvents([]);
+      return;
+    }
+    setBusy(true); setError('');
+    try {
+      const res = await request<{ events: ConnectionEvent[] }>(`/api/v1/connect/ai-connections/${id}/activity`);
+      setActiveActivityId(id);
+      setActivityEvents(res.events);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not load connection activity.'); }
+    finally { setBusy(false); }
+  };
+
+  const loadCapabilities = async () => {
+    if (capabilities.length > 0) {
+      setShowCapabilities(!showCapabilities);
+      return;
+    }
+    setBusy(true); setError('');
+    try {
+      const res = await request<{ capabilities: CapabilityItem[] }>('/api/v1/connect/capabilities');
+      setCapabilities(res.capabilities);
+      setShowCapabilities(true);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not load capabilities.'); }
+    finally { setBusy(false); }
+  };
+
   const chooseProvider = (value: string) => {
     setProvider(value);
     const item = PROVIDERS.find((p) => p.value === value);
@@ -170,6 +228,10 @@ export function UniversalConnectView() {
         <label className="block space-y-1 text-sm"><span className="text-ink-600">Connection name</span><input className="input w-full" value={connectionName} onChange={(e) => setConnectionName(e.target.value)} required maxLength={120}/></label>
         <label className="block space-y-1 text-sm"><span className="text-ink-600">Permission profile</span><select className="input w-full" value={grantProfile} onChange={(e) => setGrantProfile(e.target.value)}><option value="read_only">Read only</option><option value="audit_operator">Audit operator</option><option value="workflow_admin">Workflow admin</option><option value="full_access">Full Dristik access</option></select></label>
         <button disabled={busy} className="inline-flex items-center justify-center gap-2 rounded-lg bg-ink px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">{busy ? <Loader2 className="animate-spin" size={16}/> : <PlugZap size={16}/>} Generate credentials</button>
+        <div className="col-span-full rounded-lg border border-line bg-surface/50 p-3 text-xs">
+          <p className="font-semibold text-ink">{PROFILE_DETAILS[grantProfile]?.label}: <span className="font-normal text-ink-500">{PROFILE_DETAILS[grantProfile]?.description}</span></p>
+          <p className="mt-1 text-ink-400 font-mono text-[11px]">Scopes: {PROFILE_DETAILS[grantProfile]?.scopeSummary}</p>
+        </div>
       </form>
       {issuedCredential && <div className="space-y-3 rounded-xl border border-emerald-300 bg-emerald-50/40 p-4">
         <div><p className="font-semibold text-ink">Copy these credentials into your AI client now</p><p className="text-xs text-ink-500">The API key is only returned at creation or rotation and cannot be retrieved later.</p></div>
@@ -182,10 +244,38 @@ export function UniversalConnectView() {
       </div>}
       <div className="space-y-2">
         <h3 className="text-sm font-semibold text-ink">AI connections</h3>
-        {aiConnections.length === 0 ? <p className="text-sm text-ink-500">No external AI credentials created yet.</p> : aiConnections.map((c) => <div key={c.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line p-3">
-          <div><p className="text-sm font-medium text-ink">{c.name}</p><p className="text-xs text-ink-500">{c.connection_email} · {c.grant_profile.replace(/_/g, ' ')} · {c.status}</p><p className="text-xs text-ink-500">{c.last_used_at ? `Last used ${new Date(c.last_used_at * 1000).toLocaleString()}` : 'Not used yet'}</p></div>
-          {c.status === 'active' && <div className="flex gap-2"><button type="button" disabled={busy} onClick={() => void rotateAIConnection(c.id)} className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink disabled:opacity-50">Rotate key</button><button type="button" disabled={busy} onClick={() => void revokeAIConnection(c.id)} className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 disabled:opacity-50">Revoke</button></div>}
+        {aiConnections.length === 0 ? <p className="text-sm text-ink-500">No external AI credentials created yet.</p> : aiConnections.map((c) => <div key={c.id} className="space-y-2 rounded-lg border border-line p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><p className="text-sm font-medium text-ink">{c.name}</p><p className="text-xs text-ink-500">{c.connection_email} · {c.grant_profile.replace(/_/g, ' ')} · {c.status}</p><p className="text-xs text-ink-500">{c.last_used_at ? `Last used ${new Date(c.last_used_at * 1000).toLocaleString()}` : 'Not used yet'}</p></div>
+            <div className="flex gap-2">
+              <button type="button" disabled={busy} onClick={() => void viewActivity(c.id)} className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink disabled:opacity-50"><History size={12}/> {activeActivityId === c.id ? 'Hide activity' : 'Activity'}</button>
+              {c.status === 'active' && <>
+                <button type="button" disabled={busy} onClick={() => void rotateAIConnection(c.id)} className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink disabled:opacity-50">Rotate key</button>
+                <button type="button" disabled={busy} onClick={() => void revokeAIConnection(c.id)} className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 disabled:opacity-50">Revoke</button>
+              </>}
+            </div>
+          </div>
+          {activeActivityId === c.id && <div className="rounded-lg border border-line bg-surface/50 p-3 text-xs">
+            <p className="font-semibold text-ink mb-1.5">Security & authentication events</p>
+            {activityEvents.length === 0 ? <p className="text-ink-500">No events recorded for this connection yet.</p> : <div className="divide-y divide-line">
+              {activityEvents.map((evt) => <div key={evt.id} className="flex justify-between py-1 text-ink-500">
+                <span className="font-mono text-ink font-medium">{evt.event}</span>
+                <span>{new Date(evt.created_at * 1000).toLocaleString()}</span>
+              </div>)}
+            </div>}
+          </div>}
         </div>)}
+      </div>
+      <div className="border-t border-line pt-3">
+        <button type="button" onClick={() => void loadCapabilities()} className="inline-flex items-center gap-2 text-xs font-semibold text-ink hover:text-emerald-600">
+          <Layers size={14}/> Browse capabilities & registered tools {showCapabilities ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
+        </button>
+        {showCapabilities && <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {capabilities.map((cap) => <div key={cap.name} className="rounded-lg border border-line p-2.5 text-xs">
+            <p className="font-semibold text-ink">{cap.name}</p>
+            <p className="text-ink-500">{cap.description}</p>
+          </div>)}
+        </div>}
       </div>
     </section>
     <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">

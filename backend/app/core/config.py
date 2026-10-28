@@ -482,6 +482,20 @@ class Settings(BaseSettings):
         default=False,
         description="Strictly for isolated automated tests in non-production environments"
     )
+
+    # Universal AI Connect & External AI Integration
+    DRISTIK_CONNECT_FERNET_KEY: Optional[str] = Field(
+        default=None,
+        description="Fernet symmetric encryption key for secure tenant provider credential storage",
+    )
+    DRISTIK_MCP_PUBLIC_URL: Optional[str] = Field(
+        default=None,
+        description="Public internet-accessible HTTPS endpoint for external AI MCP connections",
+    )
+    DRISTIK_CONNECT_IDENTITY_DOMAIN: str = Field(
+        default="connect.dristik.ai",
+        description="Domain for issued AI connection identities",
+    )
     
     model_config = SettingsConfigDict(
         env_file=(".env", "backend/.env", "../backend/.env"),
