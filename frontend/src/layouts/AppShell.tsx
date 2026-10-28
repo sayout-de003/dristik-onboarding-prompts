@@ -131,6 +131,7 @@ export function AppShell(props: AppShellProps) {
   const actions = useMemo<CommandAction[]>(() => {
     const items: CommandAction[] = [
       { id: 'home', label: 'New audit', group: 'Workspace', onSelect: onNewAudit },
+      ...(user ? [{ id: 'connect', label: 'Universal AI Connect', group: 'Workspace', onSelect: () => onNavigate('connect') }] : []),
       { id: 'analytics', label: 'Delta Analytics', group: 'Workspace', onSelect: () => onNavigate('analytics') },
       ...(user ? [{ id: 'continuous', label: 'Continuous Intelligence', group: 'Workspace', onSelect: () => onNavigate('continuous') }] : []),
       { id: 'grader', label: 'Public grader', group: 'Workspace', onSelect: () => onNavigate('grader') },
