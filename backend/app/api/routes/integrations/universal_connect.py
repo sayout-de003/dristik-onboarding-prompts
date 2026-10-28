@@ -42,6 +42,7 @@ def _db():
         conn.executescript("""
         CREATE TABLE IF NOT EXISTS uc_ai_connections (
           id TEXT PRIMARY KEY, org_id TEXT NOT NULL, created_by TEXT NOT NULL,
+          name TEXT NOT NULL DEFAULT 'Dristik AI connection',
           connection_email TEXT NOT NULL UNIQUE, key_hash TEXT NOT NULL UNIQUE,
           grant_profile TEXT NOT NULL, scopes_json TEXT NOT NULL, status TEXT NOT NULL,
           expires_at REAL, created_at REAL NOT NULL, updated_at REAL NOT NULL,
@@ -74,6 +75,10 @@ def _db():
         );
         CREATE INDEX IF NOT EXISTS idx_uc_artifacts_org ON uc_artifacts(org_id);
         """)
+        # Safe additive migration for databases created by the earlier Connect slice.
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(uc_ai_connections)").fetchall()}
+        if "name" not in columns:
+            conn.execute("ALTER TABLE uc_ai_connections ADD COLUMN name TEXT NOT NULL DEFAULT 'Dristik AI connection'")
         yield conn
         conn.commit()
     finally:
@@ -291,7 +296,7 @@ def _connection_domain() -> str:
 
 def _public_ai_connection(row: sqlite3.Row) -> dict[str, Any]:
     return {
-        "id": row["id"], "connection_email": row["connection_email"],
+        "id": row["id"], "name": row["name"], "connection_email": row["connection_email"],
         "grant_profile": row["grant_profile"], "scopes": json.loads(row["scopes_json"]),
         "status": row["status"], "expires_at": row["expires_at"],
         "created_at": row["created_at"], "updated_at": row["updated_at"],
@@ -350,7 +355,7 @@ async def get_mcp_user(
     }
     return UserIdentity(
         user_id=row["id"], org_id=row["org_id"], email=row["connection_email"],
-        full_name=row["name"] if "name" in row.keys() else "Dristik AI connection",
+        full_name=row["name"],
         role=role_by_profile.get(row["grant_profile"], UserRole.VIEWER),
         auth_provider="dristik_connect", is_active=True,
     )
@@ -374,8 +379,8 @@ async def create_ai_connection(
     scopes = AI_GRANT_SCOPES[body.grant_profile]
     with _db() as conn:
         conn.execute(
-            "INSERT INTO uc_ai_connections (id,org_id,created_by,connection_email,key_hash,grant_profile,scopes_json,status,expires_at,created_at,updated_at,last_used_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,NULL)",
-            (connection_id, user.org_id, user.user_id, email, key_hash, body.grant_profile,
+            "INSERT INTO uc_ai_connections (id,org_id,created_by,name,connection_email,key_hash,grant_profile,scopes_json,status,expires_at,created_at,updated_at,last_used_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,NULL)",
+            (connection_id, user.org_id, user.user_id, body.name, email, key_hash, body.grant_profile,
              _json(scopes), "active", expires_at, now, now),
         )
     return {
@@ -392,7 +397,7 @@ async def create_ai_connection(
 async def list_ai_connections(user: UserIdentity = Depends(require_permission("org:manage"))):
     with _db() as conn:
         rows = conn.execute(
-            "SELECT id,org_id,created_by,connection_email,grant_profile,scopes_json,status,expires_at,created_at,updated_at,last_used_at FROM uc_ai_connections WHERE org_id=? ORDER BY created_at DESC",
+            "SELECT id,org_id,created_by,name,connection_email,grant_profile,scopes_json,status,expires_at,created_at,updated_at,last_used_at FROM uc_ai_connections WHERE org_id=? ORDER BY created_at DESC",
             (user.org_id,),
         ).fetchall()
     return {"connections": [_public_ai_connection(row) for row in rows]}
