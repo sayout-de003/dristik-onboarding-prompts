@@ -2462,6 +2462,7 @@ export interface WebsiteIntelligenceRollup {
 }
 
 export type AppView =
+  | 'connect'
   | 'home'
   | 'analytics'
   | 'continuous'
