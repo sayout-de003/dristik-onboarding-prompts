@@ -142,6 +142,13 @@ def _get_org_run(analysis_id: str, user: Optional[UserIdentity] = None) -> Analy
         raise HTTPException(status_code=401, detail="Sign in to continue.")
     return require_analysis(analysis_id, user)
 
+
+async def _execute_analysis_with_provider(provider_id: str, org_id: str, *pipeline_args: Any) -> None:
+    """Run the canonical pipeline with a task-local selected-provider override."""
+    from app.core.inference.model_router import use_provider_override
+    with use_provider_override(provider_id, org_id):
+        await orchestrator.execute_analysis_pipeline(*pipeline_args)
+
 @router.get("", response_model=List[Dict[str, Any]])
 async def list_analyses(
     limit: int = 25,
@@ -224,6 +231,7 @@ async def start_analysis(
     request: AnalysisRequest,
     background_tasks: BackgroundTasks,
     user: UserIdentity = Depends(require_permission("mission:create")),
+    model_provider_id: Optional[str] = None,
 ):
     """
     Submits a website URL to start an autonomous audit run.
@@ -240,7 +248,17 @@ async def start_analysis(
     if not parsed.netloc or "." not in parsed.netloc:
         raise HTTPException(status_code=400, detail=f"Invalid website URL '{request.website_url}'. Please provide a valid domain (e.g., https://example.com).")
 
-    if not settings.has_active_llm_key:
+    if model_provider_id:
+        from app.api.routes.integrations import provider_adapters
+        with provider_adapters._db() as conn:
+            provider_row = conn.execute(
+                "SELECT id,status FROM uc_provider_credentials WHERE id=? AND org_id=?",
+                (model_provider_id, user.org_id),
+            ).fetchone()
+        if provider_row is None or provider_row["status"] == "revoked":
+            raise HTTPException(status_code=404, detail="Selected model provider is not available in this organization.")
+
+    if not settings.has_active_llm_key and not model_provider_id:
         active_prov = settings.get_active_provider()
         raise HTTPException(
             status_code=400,
@@ -306,19 +324,21 @@ async def start_analysis(
         status=run.status.value if hasattr(run.status, "value") else str(run.status),
         page_count=max_pages,
     )
-    # Launch async orchestration pipeline in background
+    # Launch the same canonical orchestration pipeline. A selected provider is
+    # applied only to this background task through a ContextVar, avoiding
+    # cross-tenant/provider leakage when audits run concurrently.
     site_type = request.site_type or request.industry
-    background_tasks.add_task(
-        orchestrator.execute_analysis_pipeline,
-        run.analysis_id,
-        url,
-        max_pages,
-        site_type,
-        request.declared_site_type_notes,
-        request.country,
-        request.language,
-        request.target_pillars,
+    pipeline_args = (
+        run.analysis_id, url, max_pages, site_type,
+        request.declared_site_type_notes, request.country,
+        request.language, request.target_pillars,
     )
+    if model_provider_id:
+        background_tasks.add_task(
+            _execute_analysis_with_provider, model_provider_id, user.org_id, *pipeline_args
+        )
+    else:
+        background_tasks.add_task(orchestrator.execute_analysis_pipeline, *pipeline_args)
     return run
 
 
