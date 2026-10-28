@@ -28,6 +28,7 @@ from app.api.routes.intelligence.radar import router as radar_router
 from app.api.routes.intelligence.strategic import router as intelligence_router
 from app.api.routes.integrations.connectors import router as connectors_router
 from app.api.routes.integrations.universal_connect import router as universal_connect_router
+from app.api.routes.integrations.provider_adapters import router as provider_adapters_router
 from app.api.routes.integrations.external_authority import router as external_authority_router
 from app.api.routes.integrations.google import router as integrations_router
 from app.api.routes.remediation.patches import router as remediation_router
@@ -56,6 +57,7 @@ _PREFIXED_ROUTERS = (
     radar_router,
     connectors_router,
     universal_connect_router,
+    provider_adapters_router,
     external_authority_router,
     remediation_router,
     intelligence_router,
