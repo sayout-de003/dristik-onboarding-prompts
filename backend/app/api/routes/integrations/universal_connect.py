@@ -215,7 +215,7 @@ async def create_task(body: TaskCreate, user: UserIdentity = Depends(require_per
 
 
 @router.post("/connect/tasks/{task_id}/execute-audit")
-async def execute_task_audit(task_id: str, background_tasks: BackgroundTasks, user: UserIdentity = Depends(require_permission("mission:create"))):
+async def execute_task_audit(task_id: str, background_tasks: BackgroundTasks, model_provider_id: str | None = None, user: UserIdentity = Depends(require_permission("mission:create"))):
     """Submit a collaboration task to Dristik's existing audit pipeline."""
     with _db() as conn:
         task = _require_org(conn.execute("SELECT * FROM uc_tasks WHERE id=?", (task_id,)).fetchone(), user)
@@ -228,7 +228,7 @@ async def execute_task_audit(task_id: str, background_tasks: BackgroundTasks, us
         from app.domain.models import AnalysisRequest
         from app.api.routes.audits.analyses import start_analysis
         request = AnalysisRequest(website_url=url, max_crawl_pages=1)
-        run = await start_analysis(request, background_tasks, user)
+        run = await start_analysis(request, background_tasks, user, model_provider_id)
     except HTTPException:
         raise
     except Exception as exc:
@@ -529,7 +529,7 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             {"name": "dristik_agents_list", "description": "List the actual registered specialist agents.",
              "inputSchema": {"type": "object", "properties": {}}},
             {"name": "dristik_audit_start", "description": "Start a canonical Dristik website audit with the normal entitlement and validation gates.",
-             "inputSchema": {"type": "object", "required": ["website_url"], "properties": {"website_url": {"type": "string"}, "max_crawl_pages": {"type": "integer", "minimum": 1, "maximum": 100}, "target_pillars": {"type": "array", "items": {"type": "string"}}}}},
+             "inputSchema": {"type": "object", "required": ["website_url"], "properties": {"website_url": {"type": "string"}, "max_crawl_pages": {"type": "integer", "minimum": 1, "maximum": 100}, "target_pillars": {"type": "array", "items": {"type": "string"}}, "model_provider_id": {"type": "string", "description": "Optional tenant-owned configured provider ID for all compatible model-router calls in this run."}}}},
             {"name": "dristik_audit_status", "description": "Read the status of a tenant-owned canonical audit.",
              "inputSchema": {"type": "object", "required": ["analysis_id"], "properties": {"analysis_id": {"type": "string"}}}},
             {"name": "dristik_report_get", "description": "Retrieve the persisted report for a completed tenant-owned audit.",
@@ -613,7 +613,7 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
                 max_crawl_pages=args.get("max_crawl_pages", 1),
                 target_pillars=args.get("target_pillars"),
             )
-            run = await start_analysis(request_model, background_tasks, user)
+            run = await start_analysis(request_model, background_tasks, user, args.get("model_provider_id"))
             audit = {"analysis_id": run.analysis_id, "website_url": run.website_url,
                      "status": str(getattr(run.status, "value", run.status))}
             result = {"content": [{"type": "text", "text": _json(audit)}], "structuredContent": audit}
