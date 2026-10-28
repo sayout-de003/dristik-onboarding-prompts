@@ -88,13 +88,13 @@ async def create_provider(body: ProviderCreate, user: UserIdentity = Depends(req
     return {"id": provider_id, "provider": body.provider, "label": body.label, "model": body.model, "status": "configured_not_tested", "created_at": now}
 
 
-async def _invoke(provider: str, model: str, key: str, prompt: str, system: str | None, max_tokens: int) -> dict[str, Any]:
+async def _invoke(provider: str, model: str, key: str, prompt: str, system: str | None, max_tokens: int, temperature: float = 0.1) -> dict[str, Any]:
     base, style = PROVIDERS[provider]
     async with httpx.AsyncClient(timeout=httpx.Timeout(45, connect=8), follow_redirects=False) as client:
         if style == "openai":
             messages = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": prompt}]
             response = await client.post(base + "/chat/completions", headers={"Authorization": "Bearer " + key},
-                json={"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": 0.1})
+                json={"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature})
             response.raise_for_status()
             data = response.json()
             choices = data.get("choices") or []

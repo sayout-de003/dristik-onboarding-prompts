@@ -3,6 +3,8 @@ import { Activity, Bot, CheckCircle2, CircleAlert, Loader2, PlugZap, Send, Shiel
 
 type Provider = { id: string; provider: string; label: string; model: string; status: string; created_at: number };
 type Task = { id: string; goal: string; status: string; created_at: number; execution_started?: boolean };
+type AIConnection = { id: string; name: string; connection_email: string; grant_profile: string; status: string; expires_at?: number | null; last_used_at?: number | null };
+type IssuedCredential = { id: string; name?: string; connection_email: string; api_key: string; grant_profile?: string; mcp_endpoint?: string; mcp_endpoint_is_absolute?: boolean; mcp_config?: { url: string; headers: Record<string, string> }; key_display_policy?: string };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { credentials: 'include', ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } });
@@ -23,6 +25,10 @@ const PROVIDERS = [
 export function UniversalConnectView() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [aiConnections, setAiConnections] = useState<AIConnection[]>([]);
+  const [connectionName, setConnectionName] = useState('Claude — Full Audit Access');
+  const [grantProfile, setGrantProfile] = useState('full_access');
+  const [issuedCredential, setIssuedCredential] = useState<IssuedCredential | null>(null);
   const [provider, setProvider] = useState('anthropic');
   const [label, setLabel] = useState('My AI provider');
   const [model, setModel] = useState('claude-sonnet-4-20250514');
@@ -37,16 +43,69 @@ export function UniversalConnectView() {
 
   const refresh = useCallback(async () => {
     try {
-      const [p, t] = await Promise.all([
+      const [p, t, c] = await Promise.all([
         request<{ providers: Provider[] }>('/api/v1/connect/providers'),
         request<{ tasks: Task[] }>('/api/v1/connect/tasks'),
+        request<{ connections: AIConnection[] }>('/api/v1/connect/ai-connections'),
       ]);
-      setProviders(p.providers); setTasks(t.tasks);
-      if (!selected && p.providers[0]) setSelected(p.providers[0].id);
+      setProviders(p.providers); setTasks(t.tasks); setAiConnections(c.connections);
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not load Connect data.'); }
   }, [selected]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+  const createAIConnection = async (event: React.FormEvent) => {
+    event.preventDefault(); setBusy(true); setError(''); setNotice(''); setIssuedCredential(null);
+    try {
+      const created = await request<IssuedCredential>('/api/v1/connect/ai-connections', {
+        method: 'POST', body: JSON.stringify({ name: connectionName, grant_profile: grantProfile, expires_in_days: 90 }),
+      });
+      setIssuedCredential(created);
+      setNotice('Dristik connection created. Copy the identity and API key now; the key is shown only once.');
+      await refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not create AI connection.'); }
+    finally { setBusy(false); }
+  };
+
+  const rotateAIConnection = async (id: string) => {
+    setBusy(true); setError(''); setNotice(''); setIssuedCredential(null);
+    try {
+      const rotated = await request<IssuedCredential>(`/api/v1/connect/ai-connections/${id}/rotate`, { method: 'POST' });
+      setIssuedCredential(rotated);
+      setNotice('Connection key rotated. The previous key is invalid; update the AI client now.');
+      await refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not rotate connection key.'); }
+    finally { setBusy(false); }
+  };
+
+  const revokeAIConnection = async (id: string) => {
+    if (!window.confirm('Revoke this AI connection? Its API key will stop working immediately.')) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await request(`/api/v1/connect/ai-connections/${id}/revoke`, { method: 'POST' });
+      setNotice('AI connection revoked.');
+      if (issuedCredential?.id === id) setIssuedCredential(null);
+      await refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not revoke connection.'); }
+    finally { setBusy(false); }
+  };
+
+  const validateAIConnection = async () => {
+    if (!issuedCredential) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await request<{ valid: boolean }>('/api/v1/connect/ai-connections/validate', {
+        method: 'POST', body: JSON.stringify({ connection_email: issuedCredential.connection_email, api_key: issuedCredential.api_key }),
+      });
+      setNotice('Dristik validated this connection identity and key. This validates credentials, not external MCP-client compatibility.');
+    } catch (e) { setError(e instanceof Error ? e.message : 'Credential validation failed.'); }
+    finally { setBusy(false); }
+  };
+
+  const copyCredential = async (value: string) => {
+    try { await navigator.clipboard.writeText(value); setNotice('Copied to clipboard. Treat connection credentials as secrets.'); }
+    catch { setError('Clipboard access is unavailable. Select and copy the credential manually.'); }
+  };
+
   const chooseProvider = (value: string) => {
     setProvider(value);
     const item = PROVIDERS.find((p) => p.value === value);
@@ -57,7 +116,7 @@ export function UniversalConnectView() {
     event.preventDefault(); setBusy(true); setError(''); setNotice('');
     try {
       const created = await request<Provider>('/api/v1/connect/providers', { method: 'POST', body: JSON.stringify({ provider, label, model, api_key: apiKey }) });
-      setApiKey(''); setSelected(created.id); setNotice('Credential encrypted and saved. Run a test prompt to verify connectivity.');
+      setApiKey(''); setSelected(''); setNotice('Credential encrypted and saved. Select the provider, then run a test prompt before choosing it for an audit.');
       await refresh();
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not save provider.'); }
     finally { setBusy(false); }
@@ -88,7 +147,8 @@ export function UniversalConnectView() {
   const executeAudit = async (taskId: string) => {
     setBusy(true); setError(''); setNotice('');
     try {
-      const response = await request<{ audit: { analysis_id: string; website_url: string } }>('/api/v1/connect/tasks/' + taskId + '/execute-audit', { method: 'POST' });
+      const providerQuery = selected ? '?model_provider_id=' + encodeURIComponent(selected) : '';
+      const response = await request<{ audit: { analysis_id: string; website_url: string } }>('/api/v1/connect/tasks/' + taskId + '/execute-audit' + providerQuery, { method: 'POST' });
       setNotice('Dristik audit started for ' + response.audit.website_url + '. Analysis ID: ' + response.audit.analysis_id);
       await refresh();
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not start audit.'); }
@@ -103,6 +163,31 @@ export function UniversalConnectView() {
     </header>
     {error && <div role="alert" className="flex gap-2 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800"><CircleAlert size={18}/>{error}</div>}
     {notice && <div role="status" className="flex gap-2 rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800"><CheckCircle2 size={18}/>{notice}</div>}
+    <section className="card space-y-4 p-5">
+      <div className="flex items-center gap-2"><ShieldCheck size={20}/><h2 className="text-lg font-semibold text-ink">Connect an external AI to Dristik</h2></div>
+      <p className="max-w-3xl text-sm leading-6 text-ink-500">Dristik issues a connection identity and a one-time API key. Give both to your compatible MCP client. The key authenticates the AI to Dristik; it is separate from any model-provider API key configured below.</p>
+      <form onSubmit={createAIConnection} className="grid gap-3 md:grid-cols-[1fr_190px_auto] md:items-end">
+        <label className="block space-y-1 text-sm"><span className="text-ink-600">Connection name</span><input className="input w-full" value={connectionName} onChange={(e) => setConnectionName(e.target.value)} required maxLength={120}/></label>
+        <label className="block space-y-1 text-sm"><span className="text-ink-600">Permission profile</span><select className="input w-full" value={grantProfile} onChange={(e) => setGrantProfile(e.target.value)}><option value="read_only">Read only</option><option value="audit_operator">Audit operator</option><option value="workflow_admin">Workflow admin</option><option value="full_access">Full Dristik access</option></select></label>
+        <button disabled={busy} className="inline-flex items-center justify-center gap-2 rounded-lg bg-ink px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">{busy ? <Loader2 className="animate-spin" size={16}/> : <PlugZap size={16}/>} Generate credentials</button>
+      </form>
+      {issuedCredential && <div className="space-y-3 rounded-xl border border-emerald-300 bg-emerald-50/40 p-4">
+        <div><p className="font-semibold text-ink">Copy these credentials into your AI client now</p><p className="text-xs text-ink-500">The API key is only returned at creation or rotation and cannot be retrieved later.</p></div>
+        <label className="block space-y-1 text-sm"><span className="text-ink-600">Connection email / identity</span><div className="flex gap-2"><input className="input min-w-0 flex-1" readOnly value={issuedCredential.connection_email}/><button type="button" onClick={() => void copyCredential(issuedCredential.connection_email)} className="rounded-lg border border-line px-3 text-sm">Copy</button></div></label>
+        <label className="block space-y-1 text-sm"><span className="text-ink-600">Dristik API key</span><div className="flex gap-2"><input className="input min-w-0 flex-1 font-mono" type="password" readOnly value={issuedCredential.api_key}/><button type="button" onClick={() => void copyCredential(issuedCredential.api_key)} className="rounded-lg border border-line px-3 text-sm">Copy key</button></div></label>
+        <label className="block space-y-1 text-sm"><span className="text-ink-600">MCP endpoint</span><div className="flex gap-2"><input className="input min-w-0 flex-1" readOnly value={issuedCredential.mcp_endpoint || '/api/v1/mcp'}/><button type="button" onClick={() => void copyCredential(issuedCredential.mcp_endpoint || '/api/v1/mcp')} className="rounded-lg border border-line px-3 text-sm">Copy</button></div></label>
+        {!issuedCredential.mcp_endpoint_is_absolute && <p className="text-sm text-amber-800">Deployment setup required: set DRISTIK_MCP_PUBLIC_URL to the absolute HTTPS URL of this MCP endpoint before configuring an external AI client.</p>}
+        <div className="flex flex-wrap gap-2"><button type="button" disabled={busy} onClick={() => void validateAIConnection()} className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-ink disabled:opacity-50">Validate credentials</button><button type="button" onClick={() => void copyCredential(JSON.stringify(issuedCredential.mcp_config || { url: issuedCredential.mcp_endpoint || '/api/v1/mcp', headers: { Authorization: 'Bearer ' + issuedCredential.api_key, 'X-Dristik-Connection-Email': issuedCredential.connection_email } }, null, 2))} className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-ink">Copy MCP config</button></div>
+        <button type="button" onClick={() => setIssuedCredential(null)} className="text-xs font-medium text-ink-500 underline">Hide credentials</button>
+      </div>}
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-ink">AI connections</h3>
+        {aiConnections.length === 0 ? <p className="text-sm text-ink-500">No external AI credentials created yet.</p> : aiConnections.map((c) => <div key={c.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line p-3">
+          <div><p className="text-sm font-medium text-ink">{c.name}</p><p className="text-xs text-ink-500">{c.connection_email} · {c.grant_profile.replace(/_/g, ' ')} · {c.status}</p><p className="text-xs text-ink-500">{c.last_used_at ? `Last used ${new Date(c.last_used_at * 1000).toLocaleString()}` : 'Not used yet'}</p></div>
+          {c.status === 'active' && <div className="flex gap-2"><button type="button" disabled={busy} onClick={() => void rotateAIConnection(c.id)} className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink disabled:opacity-50">Rotate key</button><button type="button" disabled={busy} onClick={() => void revokeAIConnection(c.id)} className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 disabled:opacity-50">Revoke</button></div>}
+        </div>)}
+      </div>
+    </section>
     <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
       <section className="card space-y-4 p-5">
         <div className="flex items-center gap-2"><Bot size={20}/><h2 className="text-lg font-semibold text-ink">Add a provider</h2></div>
@@ -113,7 +198,7 @@ export function UniversalConnectView() {
           <label className="block space-y-1 text-sm"><span className="text-ink-600">API key (never displayed again)</span><input className="input w-full" type="password" autoComplete="new-password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} required minLength={8}/></label>
           <button disabled={busy} className="inline-flex items-center justify-center gap-2 rounded-lg bg-ink px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">{busy ? <Loader2 className="animate-spin" size={16}/> : <PlugZap size={16}/>} Save encrypted connection</button>
         </form>
-        <div className="border-t border-line pt-4"><h3 className="mb-2 text-sm font-semibold text-ink">Saved providers</h3>{providers.length === 0 ? <p className="text-sm text-ink-500">No providers configured yet.</p> : <div className="space-y-2">{providers.map((p) => <button key={p.id} onClick={() => setSelected(p.id)} className={`flex w-full items-center justify-between rounded-lg border p-3 text-left ${selected === p.id ? 'border-emerald-500 bg-emerald-50/40' : 'border-line'}`}><span><span className="block text-sm font-medium text-ink">{p.label}</span><span className="text-xs text-ink-500">{p.provider} · {p.model}</span></span><span className="text-xs text-ink-500">{p.status.replace(/_/g, ' ')}</span></button>)}</div>}</div>
+        <div className="border-t border-line pt-4"><div className="mb-2 flex items-center justify-between gap-2"><h3 className="text-sm font-semibold text-ink">Saved providers</h3><button type="button" onClick={() => setSelected('')} className={`rounded-lg border px-2 py-1 text-xs ${!selected ? 'border-emerald-500 text-emerald-700' : 'border-line text-ink-500'}`}>Use platform default</button></div><p className="mb-3 text-xs text-ink-500">Choose a saved provider explicitly to route compatible audit model calls through it. Test the provider successfully first; platform default is used when none is selected.</p>{providers.length === 0 ? <p className="text-sm text-ink-500">No providers configured yet.</p> : <div className="space-y-2">{providers.map((p) => <button key={p.id} onClick={() => setSelected(p.id)} className={`flex w-full items-center justify-between rounded-lg border p-3 text-left ${selected === p.id ? 'border-emerald-500 bg-emerald-50/40' : 'border-line'}`}><span><span className="block text-sm font-medium text-ink">{p.label}</span><span className="text-xs text-ink-500">{p.provider} · {p.model}</span></span><span className="text-xs text-ink-500">{p.status.replace(/_/g, ' ')}</span></button>)}</div>}</div>
       </section>
       <section className="card space-y-4 p-5">
         <div className="flex items-center gap-2"><Send size={20}/><h2 className="text-lg font-semibold text-ink">Test a live model call</h2></div>
