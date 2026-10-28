@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -137,8 +137,7 @@ async def list_capabilities(user: UserIdentity = Depends(get_current_user)):
         {"name": "tasks.get", "status": "available", "description": "Read a tenant-owned collaboration task"},
         {"name": "tasks.messages", "status": "available", "description": "Persist messages against a tenant-owned task"},
         {"name": "artifacts.upload", "status": "available", "description": "Store opaque bytes with a SHA-256 digest"},
-        {"name": "audit.website", "status": "not_wired", "description": "Start the canonical Dristik website-audit workflow",
-         "reason": "This capability stays disabled until wired to the canonical audit orchestrator."}
+        {"name": "audit.website", "status": "available", "description": "Start the canonical Dristik website-audit workflow with normal entitlement and evidence gates"}
     ]}
 
 
@@ -152,6 +151,32 @@ async def create_task(body: TaskCreate, user: UserIdentity = Depends(require_per
     return {"id": task_id, "goal": body.goal, "status": "accepted", "created_at": now,
             "execution_started": False,
             "note": "Durably accepted; no agent execution is claimed until a worker adapter is connected."}
+
+
+
+@router.post("/connect/tasks/{task_id}/execute-audit")
+async def execute_task_audit(task_id: str, background_tasks: BackgroundTasks, user: UserIdentity = Depends(require_permission("mission:create"))):
+    """Submit a collaboration task to Dristik's existing audit pipeline."""
+    with _db() as conn:
+        task = _require_org(conn.execute("SELECT * FROM uc_tasks WHERE id=?", (task_id,)).fetchone(), user)
+        inputs = json.loads(task["input_json"])
+    url = inputs.get("url") or inputs.get("website_url")
+    if not isinstance(url, str) or not url.strip():
+        raise HTTPException(status_code=422, detail="Task inputs must include a website url.")
+    try:
+        from app.domain.models import AnalysisRequest
+        from app.api.routes.audits.analyses import start_analysis
+        request = AnalysisRequest(website_url=url, max_crawl_pages=1)
+        run = await start_analysis(request, background_tasks, user)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Could not submit task to canonical audit pipeline.") from exc
+    now = time.time()
+    audit = {"analysis_id": run.analysis_id, "website_url": run.website_url, "status": str(getattr(run.status, "value", run.status))}
+    with _db() as conn:
+        conn.execute("UPDATE uc_tasks SET status='running',result_json=?,updated_at=? WHERE id=?", (_json(audit), now, task_id))
+    return {"task_id": task_id, "status": "running", "execution_started": True, "audit": audit}
 
 
 @router.get("/connect/tasks")

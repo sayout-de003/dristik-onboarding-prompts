@@ -15,6 +15,7 @@ import { ContactForm } from './components/ContactForm';
 import { ConnectorsModal } from './components/ConnectorsModal';
 import { ExternalAuthorityPanel } from './components/ExternalAuthorityPanel';
 import { AuditDataSources } from './components/AuditDataSources';
+import { UniversalConnectView } from './components/UniversalConnectView';
 import { OperatingWorkflow } from './components/OperatingWorkflow';
 import { PublicGrader } from './components/PublicGrader';
 import { RemediationFlowModal } from './components/RemediationFlowModal';
@@ -710,6 +711,8 @@ export function App() {
               <SystemPanel />
             </Suspense>
           )}
+          {view === 'connect' && user && <UniversalConnectView />}
+          {view === 'connect' && !user && <LoginScreen onAuthed={async () => { setUser(await fetchMe()); go('connect'); }} onView={go} />}
           {view === 'analytics' && user && <DeltaAnalyticsDashboard />}
           {view === 'continuous' && user && <Suspense fallback={<LoadingBlock label="Loading continuous intelligence" />}><ContinuousIntelligenceView /></Suspense>}
           {view === 'continuous' && !user && <LoginScreen onAuthed={async () => { setUser(await fetchMe()); go('continuous'); }} onView={go} />}

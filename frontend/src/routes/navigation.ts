@@ -1,6 +1,7 @@
 import { AppView, TabId } from '../types';
 
 export const VIEWS = new Set<AppView>([
+  'connect',
   'home',
   'continuous',
   'analytics',
@@ -17,6 +18,7 @@ export const VIEWS = new Set<AppView>([
 ]);
 
 export const VIEW_LABELS: Record<AppView, string> = {
+  connect: 'AI Connect',
   home: 'Audits',
   continuous: 'Continuous Intelligence',
   analytics: 'Delta Analytics',
