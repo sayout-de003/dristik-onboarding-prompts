@@ -24,6 +24,7 @@ def _row(*, query_id="q1", engine_id="engine-a", locale="en-US", model_version="
         was_first_party_cited=cited,
         mention_position=rank,
         error_message=error_message,
+        is_live=True,
     )
 
 
@@ -59,7 +60,7 @@ def test_unavailable_passage_analysis_is_not_scored_as_neutral():
 def test_unmeasured_external_authority_has_no_neutral_credit():
     dimension = _score_external_authority(None)
     assert dimension.is_measured is False
-    assert dimension.score == 0.0
+    assert dimension.score is None
     assert "cannot be measured" in dimension.summary.lower()
 
 
