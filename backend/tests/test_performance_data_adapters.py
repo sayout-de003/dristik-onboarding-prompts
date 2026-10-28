@@ -48,3 +48,16 @@ def test_crux_normalizes_only_metrics_returned_by_google():
     assert result["largest_contentful_paint"]["percentiles"]["p75"] == 2100
     assert result["largest_contentful_paint"]["category"] == "FAST"
     assert "interaction_to_next_paint" not in result
+
+
+def test_google_search_without_credentials_is_not_configured(monkeypatch):
+    monkeypatch.delenv("GOOGLE_CSE_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_CSE_CX", raising=False)
+    result = __import__("asyncio").run(
+        __import__("app.api.routes.integrations.performance_data", fromlist=["fetch_google_search"]).fetch_google_search("site:example.com")
+    )
+    assert result["status"] == "NOT_CONFIGURED"
+    assert result["metrics_available"] is False
+    assert result["results"] == []
+    assert "not a guaranteed universal Google SERP" in result["reason"]
