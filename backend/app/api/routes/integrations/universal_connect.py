@@ -282,7 +282,7 @@ AI_GRANT_SCOPES: dict[str, list[str]] = {
 class AIConnectionCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     grant_profile: Literal["read_only", "audit_operator", "workflow_admin", "full_access"] = "full_access"
-    expires_in_days: int | None = Field(default=90, ge=1, le=365)
+    expires_in_days: int = Field(default=90, ge=1, le=365)
 
 
 class AIConnectionValidate(BaseModel):
@@ -377,7 +377,7 @@ async def create_ai_connection(
     email = f"ai-{connection_id[-12:]}@{domain}"
     api_key = "drk_live_" + secrets.token_urlsafe(36)
     key_hash = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
-    expires_at = now + body.expires_in_days * 86400 if body.expires_in_days else None
+    expires_at = now + body.expires_in_days * 86400
     scopes = AI_GRANT_SCOPES[body.grant_profile]
     with _db() as conn:
         conn.execute(
@@ -479,7 +479,15 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             {"name": "dristik_audit_status", "description": "Read the status of a tenant-owned canonical audit.",
              "inputSchema": {"type": "object", "required": ["analysis_id"], "properties": {"analysis_id": {"type": "string"}}}},
             {"name": "dristik_report_get", "description": "Retrieve the persisted report for a completed tenant-owned audit.",
-             "inputSchema": {"type": "object", "required": ["analysis_id"], "properties": {"analysis_id": {"type": "string"}}}}
+             "inputSchema": {"type": "object", "required": ["analysis_id"], "properties": {"analysis_id": {"type": "string"}}}},
+            {"name": "dristik_findings_list", "description": "List persisted findings from a tenant-owned audit report.",
+             "inputSchema": {"type": "object", "required": ["analysis_id"], "properties": {"analysis_id": {"type": "string"}}}},
+            {"name": "dristik_evidence_list", "description": "Retrieve the evidence graph for a tenant-owned audit when available.",
+             "inputSchema": {"type": "object", "required": ["analysis_id"], "properties": {"analysis_id": {"type": "string"}}}},
+            {"name": "dristik_agent_execute", "description": "Execute one registered audit DAG node using the canonical orchestrator after dependency checks.",
+             "inputSchema": {"type": "object", "required": ["analysis_id", "node_id"], "properties": {"analysis_id": {"type": "string"}, "node_id": {"type": "string"}}}},
+            {"name": "dristik_workflow_execute", "description": "Execute a canonical audit pipeline section for a tenant-owned run.",
+             "inputSchema": {"type": "object", "required": ["analysis_id", "section_id"], "properties": {"analysis_id": {"type": "string"}, "section_id": {"type": "string"}}}}
         ]}
         scope_for_tool = {
             "dristik_list_capabilities": "capabilities.list",
@@ -490,6 +498,10 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             "dristik_audit_start": "audit.create",
             "dristik_audit_status": "audit.read",
             "dristik_report_get": "report.read",
+            "dristik_findings_list": "findings.read",
+            "dristik_evidence_list": "evidence.read",
+            "dristik_agent_execute": "agent.execute",
+            "dristik_workflow_execute": "workflow.execute",
         }
         result["tools"] = [tool for tool in result["tools"]
                            if _mcp_authorized(user, scope_for_tool[tool["name"]]) ]
@@ -577,6 +589,56 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
                 raise HTTPException(status_code=409, detail="Report is not ready yet.")
             report = run.report.model_dump(mode="json") if hasattr(run.report, "model_dump") else run.report
             result = {"content": [{"type": "text", "text": _json(report)}], "structuredContent": report}
+        elif name == "dristik_findings_list":
+            if not _mcp_authorized(user, "findings.read", "mission:read"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit findings access.")
+            analysis_id = args.get("analysis_id")
+            from app.identity.access import require_analysis
+            run = require_analysis(analysis_id, user) if isinstance(analysis_id, str) and analysis_id else None
+            if run is None:
+                raise HTTPException(status_code=400, detail="analysis_id is required.")
+            report = getattr(run, "report", None)
+            if not report:
+                raise HTTPException(status_code=409, detail="Report is not ready yet.")
+            findings = [item.model_dump(mode="json") if hasattr(item, "model_dump") else item
+                        for item in (getattr(report, "findings", None) or [])]
+            payload = {"analysis_id": analysis_id, "count": len(findings), "findings": findings}
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
+        elif name == "dristik_evidence_list":
+            if not _mcp_authorized(user, "evidence.read", "mission:read"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit evidence access.")
+            analysis_id = args.get("analysis_id")
+            from app.identity.access import require_analysis
+            run = require_analysis(analysis_id, user) if isinstance(analysis_id, str) and analysis_id else None
+            if run is None:
+                raise HTTPException(status_code=400, detail="analysis_id is required.")
+            graph = getattr(getattr(run, "report", None), "evidence_graph", None)
+            if graph is None:
+                raise HTTPException(status_code=409, detail="Evidence graph is not available for this run.")
+            payload = graph.model_dump(mode="json") if hasattr(graph, "model_dump") else graph
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
+        elif name == "dristik_agent_execute":
+            if not _mcp_authorized(user, "agent.execute", "mission:create"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit agent execution.")
+            analysis_id, node_id = args.get("analysis_id"), args.get("node_id")
+            if not isinstance(analysis_id, str) or not analysis_id or not isinstance(node_id, str) or not node_id:
+                raise HTTPException(status_code=400, detail="analysis_id and node_id are required.")
+            from app.identity.access import require_analysis
+            from app.orchestration.orchestrator import orchestrator
+            require_analysis(analysis_id, user)
+            payload = await orchestrator.run_pipeline_node(analysis_id, node_id)
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
+        elif name == "dristik_workflow_execute":
+            if not _mcp_authorized(user, "workflow.execute", "mission:create"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit workflow execution.")
+            analysis_id, section_id = args.get("analysis_id"), args.get("section_id")
+            if not isinstance(analysis_id, str) or not analysis_id or not isinstance(section_id, str) or not section_id:
+                raise HTTPException(status_code=400, detail="analysis_id and section_id are required.")
+            from app.identity.access import require_analysis
+            from app.orchestration.orchestrator import orchestrator
+            require_analysis(analysis_id, user)
+            payload = await orchestrator.run_pipeline_section(analysis_id, section_id)
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
         else:
             return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": "Unknown tool."}}
         if not (isinstance(result, dict) and "content" in result):
