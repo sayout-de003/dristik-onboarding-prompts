@@ -49,7 +49,6 @@ export function UniversalConnectView() {
         request<{ connections: AIConnection[] }>('/api/v1/connect/ai-connections'),
       ]);
       setProviders(p.providers); setTasks(t.tasks); setAiConnections(c.connections);
-      if (!selected && p.providers[0]) setSelected(p.providers[0].id);
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not load Connect data.'); }
   }, [selected]);
 
@@ -148,7 +147,8 @@ export function UniversalConnectView() {
   const executeAudit = async (taskId: string) => {
     setBusy(true); setError(''); setNotice('');
     try {
-      const response = await request<{ audit: { analysis_id: string; website_url: string } }>('/api/v1/connect/tasks/' + taskId + '/execute-audit', { method: 'POST' });
+      const providerQuery = selected ? '?model_provider_id=' + encodeURIComponent(selected) : '';
+      const response = await request<{ audit: { analysis_id: string; website_url: string } }>('/api/v1/connect/tasks/' + taskId + '/execute-audit' + providerQuery, { method: 'POST' });
       setNotice('Dristik audit started for ' + response.audit.website_url + '. Analysis ID: ' + response.audit.analysis_id);
       await refresh();
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not start audit.'); }
@@ -198,7 +198,7 @@ export function UniversalConnectView() {
           <label className="block space-y-1 text-sm"><span className="text-ink-600">API key (never displayed again)</span><input className="input w-full" type="password" autoComplete="new-password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} required minLength={8}/></label>
           <button disabled={busy} className="inline-flex items-center justify-center gap-2 rounded-lg bg-ink px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">{busy ? <Loader2 className="animate-spin" size={16}/> : <PlugZap size={16}/>} Save encrypted connection</button>
         </form>
-        <div className="border-t border-line pt-4"><h3 className="mb-2 text-sm font-semibold text-ink">Saved providers</h3>{providers.length === 0 ? <p className="text-sm text-ink-500">No providers configured yet.</p> : <div className="space-y-2">{providers.map((p) => <button key={p.id} onClick={() => setSelected(p.id)} className={`flex w-full items-center justify-between rounded-lg border p-3 text-left ${selected === p.id ? 'border-emerald-500 bg-emerald-50/40' : 'border-line'}`}><span><span className="block text-sm font-medium text-ink">{p.label}</span><span className="text-xs text-ink-500">{p.provider} · {p.model}</span></span><span className="text-xs text-ink-500">{p.status.replace(/_/g, ' ')}</span></button>)}</div>}</div>
+        <div className="border-t border-line pt-4"><div className="mb-2 flex items-center justify-between gap-2"><h3 className="text-sm font-semibold text-ink">Saved providers</h3><button type="button" onClick={() => setSelected('')} className={`rounded-lg border px-2 py-1 text-xs ${!selected ? 'border-emerald-500 text-emerald-700' : 'border-line text-ink-500'}`}>Use platform default</button></div><p className="mb-3 text-xs text-ink-500">Choose a saved provider explicitly to route compatible audit model calls through it. Platform default is used when none is selected.</p>{providers.length === 0 ? <p className="text-sm text-ink-500">No providers configured yet.</p> : <div className="space-y-2">{providers.map((p) => <button key={p.id} onClick={() => setSelected(p.id)} className={`flex w-full items-center justify-between rounded-lg border p-3 text-left ${selected === p.id ? 'border-emerald-500 bg-emerald-50/40' : 'border-line'}`}><span><span className="block text-sm font-medium text-ink">{p.label}</span><span className="text-xs text-ink-500">{p.provider} · {p.model}</span></span><span className="text-xs text-ink-500">{p.status.replace(/_/g, ' ')}</span></button>)}</div>}</div>
       </section>
       <section className="card space-y-4 p-5">
         <div className="flex items-center gap-2"><Send size={20}/><h2 className="text-lg font-semibold text-ink">Test a live model call</h2></div>
