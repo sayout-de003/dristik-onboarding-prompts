@@ -13,7 +13,7 @@ import re
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional, Tuple
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit
 import httpx
 from pydantic import BaseModel, Field
 
@@ -57,7 +57,8 @@ class EvaluatedQueryRun(BaseModel):
     cost_usd: float = 0.0
     source_domains: List[str] = Field(default_factory=list)
     source_quality: SourceQuality = "unsourced"
-    status: str = "SUCCESS"  # SUCCESS | KEY_MISSING | TIMEOUT | ERROR
+    status: str = "SUCCESS"  # SUCCESS | KEY_MISSING | TIMEOUT | RATE_LIMITED | ERROR
+    is_live: bool = False
     error_message: Optional[str] = None
     run_index: int = 1
 
@@ -94,10 +95,10 @@ class ShareOfModelMetric(BaseModel):
     target_domain: str
     brand_name: str
     total_evaluated_queries: int
-    share_of_model_pct: float
-    funnel_weighted_som_pct: float = 0.0
-    first_party_citation_share_pct: float
-    recommendation_rank_score: float  # 0 to 100 based on position weighting
+    share_of_model_pct: Optional[float] = None
+    funnel_weighted_som_pct: Optional[float] = None
+    first_party_citation_share_pct: Optional[float] = None
+    recommendation_rank_score: Optional[float] = None  # unmeasured when no successful evaluations
     ordinal_distribution: Dict[str, int] = Field(default_factory=dict)  # rank_1, rank_2_3, rank_4_plus, unranked
     stage_breakdown: Dict[str, Dict[str, Any]] = Field(default_factory=dict)  # awareness, consideration, decision
     competitor_shares: Dict[str, float] = Field(default_factory=dict)
@@ -111,7 +112,10 @@ class GeoBenchmarkReport(BaseModel):
     locale: str = "en-US"
     run_date: str
     total_queries: int
-    engines_tested: List[str] = Field(default_factory=list)
+    engines_tested: List[str] = Field(default_factory=list)  # engines with successful live responses
+    engines_requested: List[str] = Field(default_factory=list)
+    engines_attempted: List[str] = Field(default_factory=list)
+    engines_configured: List[str] = Field(default_factory=list)
     engine_aggregates: Dict[str, EngineBenchmarkAggregate] = Field(default_factory=dict)
     overall_mention_rate_pct: Optional[float] = None
     overall_mention_rate_ci: Optional[Tuple[float, float]] = None
@@ -133,7 +137,7 @@ class GeoBenchmarkReport(BaseModel):
     evaluations: List[EvaluatedQueryRun] = Field(default_factory=list)
     critical_blindspots: List[str] = Field(default_factory=list)
     reproducibility_hash: str
-    is_live_measurement: bool = True
+    is_live_measurement: bool = False
     summary: str = ""
     sentiment_audit: Optional[Dict[str, Any]] = None
     offpage_citation_summary: Optional[Dict[str, Any]] = None
@@ -149,100 +153,104 @@ class GeoBenchmarkRunner:
 
     @staticmethod
     def _normalize_hostname(value: str) -> str:
-        """Normalize a URL or hostname without allowing substring domain matches."""
-        candidate = (value or "").strip()
-        if not candidate:
+        """Normalize a URL or hostname without accepting substring lookalikes."""
+        raw = (value or "").strip().lower()
+        if not raw:
             return ""
-        parsed = urlparse(candidate if "://" in candidate else f"//{candidate}")
-        hostname = (parsed.hostname or "").rstrip(".").lower()
-        if hostname.startswith("www."):
-            hostname = hostname[4:]
         try:
-            hostname = hostname.encode("idna").decode("ascii")
-        except (UnicodeError, AttributeError):
+            parsed = urlsplit(raw if "://" in raw else f"//{raw}")
+            host = (parsed.hostname or "").rstrip(".").lower()
+        except ValueError:
             return ""
-        return hostname
+        return host[4:] if host.startswith("www.") else host
+
+    @classmethod
+    def _is_first_party_host(cls, candidate: str, target_domain: str) -> bool:
+        host = cls._normalize_hostname(candidate)
+        target = cls._normalize_hostname(target_domain)
+        return bool(host and target and (host == target or host.endswith("." + target)))
+
+    @staticmethod
+    def _contains_term(text: str, term: str) -> bool:
+        """Match a whole brand/domain token, not a substring of another word."""
+        if not text or not term:
+            return False
+        return re.search(r"(?<!\w)" + re.escape(term) + r"(?!\w)", text, flags=re.IGNORECASE) is not None
+
+    @staticmethod
+    def _contains_domain(text: str, domain: str) -> bool:
+        """Match a hostname or its subdomain, but not a deceptive suffix host."""
+        if not text or not domain:
+            return False
+        host = GeoBenchmarkRunner._normalize_hostname(domain)
+        if not host:
+            return False
+        pattern = r"(?<![\w-])(?:[\w-]+\.)*" + re.escape(host) + r"(?![\w.-])"
+        return re.search(pattern, text, flags=re.IGNORECASE) is not None
 
     def _classify_sources(self, citations: List[str], raw_text: str, target_domain: str) -> Tuple[List[str], SourceQuality, bool]:
-        target_host = self._normalize_hostname(target_domain)
         extracted_domains = set()
+        for citation in citations or []:
+            host = self._normalize_hostname(str(citation))
+            if host:
+                extracted_domains.add(host)
 
-        for citation in citations:
-            hostname = self._normalize_hostname(str(citation))
-            if hostname:
-                extracted_domains.add(hostname)
-
-        for match in re.finditer(r"https?://([^\s\]\)\>,\"']+)", raw_text or "", re.IGNORECASE):
-            hostname = self._normalize_hostname(match.group(1).rstrip(".,;"))
-            if hostname:
-                extracted_domains.add(hostname)
+        for match in re.finditer(r"""https?://([^\s/<>\"'?#]+)""", raw_text or "", flags=re.IGNORECASE):
+            host = self._normalize_hostname(match.group(1).rstrip(".,);]"))
+            if host:
+                extracted_domains.add(host)
 
         domain_list = sorted(extracted_domains)
-        # A first-party match is an exact hostname or a valid DNS subdomain.
-        was_first_party = bool(target_host) and any(
-            host == target_host or host.endswith("." + target_host)
+        was_first_party = any(self._is_first_party_host(host, target_domain) for host in domain_list)
+        social_domains = ("linkedin.com", "twitter.com", "x.com", "crunchbase.com", "github.com", "clutch.co", "g2.com")
+        is_social = any(
+            any(host == social or host.endswith("." + social) for social in social_domains)
             for host in domain_list
         )
-
         if was_first_party:
             quality: SourceQuality = "first_party"
-        elif any(
-            set(d.split(".")) & {"linkedin", "twitter", "x", "crunchbase", "github", "clutch", "g2"}
-            for d in domain_list
-        ):
-            quality = "social_directory"
-        elif len(domain_list) > 0:
-            quality = "third_party"
+        elif is_social:
+            quality: SourceQuality = "social_directory"
+        elif domain_list:
+            quality: SourceQuality = "third_party"
         else:
-            quality = "unsourced"
-
+            quality: SourceQuality = "unsourced"
         return domain_list, quality, was_first_party
 
     def _detect_mention_and_position(self, raw_text: str, brand: str, domain: str) -> Tuple[bool, Optional[int]]:
-        low_text = (raw_text or "").lower()
-        low_brand = (brand or "").lower().strip()
-        low_domain = (domain or "").lower().strip()
-
-        if not low_text or raw_text.startswith("API Error") or "Missing API key" in raw_text:
+        text = raw_text or ""
+        if not text or text.startswith("API Error") or "Missing API key" in text:
             return False, None
 
-        brand_pattern = (
-            re.compile(rf"(?<!\w){re.escape(low_brand)}(?!\w)", re.IGNORECASE)
-            if low_brand else None
-        )
-        domain_pattern = (
-            re.compile(rf"(?:^|[./\s]){re.escape(low_domain)}(?:$|[/\s:?#])", re.IGNORECASE)
-            if low_domain else None
-        )
-        has_mention = bool(
-            (brand_pattern and brand_pattern.search(raw_text or ""))
-            or (domain_pattern and domain_pattern.search(raw_text or ""))
-        )
+        low_text = text.lower()
+        low_brand = (brand or "").strip().lower()
+        low_domain = self._normalize_hostname(domain)
+        has_mention = self._contains_term(text, low_brand) or self._contains_domain(text, low_domain)
+        if not has_mention:
+            return False, None
 
         position = None
-        if has_mention:
-            # Check ordinal rankings in recommendation lists
-            lines = raw_text.split("\n")
-            for line in lines:
-                low_line = line.lower()
-                if (brand_pattern and brand_pattern.search(line)) or (domain_pattern and domain_pattern.search(line)):
-                    m_hash = re.search(r"#([0-9]+)", line)
-                    if m_hash:
-                        position = int(m_hash.group(1))
-                        break
-                    m_num = re.match(r"^\s*([0-9]+)[\.\)]", line)
-                    if m_num:
-                        position = int(m_num.group(1))
-                        break
+        for line in text.splitlines():
+            if not (self._contains_term(line, low_brand) or self._contains_domain(line, low_domain)):
+                continue
+            match = re.search(r"#([0-9]+)", line)
+            if match:
+                position = int(match.group(1))
+                break
+            match = re.match(r"^\s*([0-9]+)[\.\)]", line)
+            if match:
+                position = int(match.group(1))
+                break
 
-            if position is None:
-                if re.search(rf"(?:1\.|#1|first|top choice|primary).*?{re.escape(low_brand)}", low_text):
-                    position = 1
-                elif re.search(rf"(?:2\.|#2|second).*?{re.escape(low_brand)}", low_text):
-                    position = 2
-                elif re.search(rf"(?:3\.|#3|third).*?{re.escape(low_brand)}", low_text):
-                    position = 3
-
+        if position is None and low_brand:
+            for pattern, rank in (
+                (rf"(?:1\.|#1|first|top choice|primary).*?{re.escape(low_brand)}", 1),
+                (rf"(?:2\.|#2|second).*?{re.escape(low_brand)}", 2),
+                (rf"(?:3\.|#3|third).*?{re.escape(low_brand)}", 3),
+            ):
+                if re.search(pattern, low_text):
+                    position = rank
+                    break
         return has_mention, position
 
     async def execute_benchmark(
@@ -337,29 +345,50 @@ class GeoBenchmarkRunner:
                             )
                             disabled_engines[ad.engine_id] = resp
 
-            has_mention, pos = self._detect_mention_and_position(resp.raw_content, brand, clean_domain)
-            sources, quality, is_1p = self._classify_sources(resp.citations, resp.raw_content, clean_domain)
-
-            # Compute Aggarwal et al. continuous impression metrics & sentence breakdown
-            imp_res = calculate_response_impressions(
-                raw_response=resp.raw_content or "",
-                citations=resp.citations or [],
-                target_domain=clean_domain,
-                brand_name=brand,
-            )
-
-            # Cost estimation (~$0.003/1k input words, ~$0.015/1k output words)
-            in_words = len((q.query_text or "").split())
-            out_words = len((resp.raw_content or "").split())
-            run_cost = round((in_words * 0.000003) + (out_words * 0.000015), 6)
-
-            status = "SUCCESS"
-            if resp.status_code == 401 or "Missing" in (resp.error or ""):
+            # Classify provider outcome before extracting evidence. Error payloads must
+            # never become successful negative mentions or citation observations.
+            error_text = (resp.error or "").lower()
+            raw_text = resp.raw_content or ""
+            if resp.status_code == 401 or "missing api key" in error_text or "missing api key" in raw_text.lower():
                 status = "KEY_MISSING"
-            elif resp.status_code == 504:
+            elif resp.status_code == 429:
+                status = "RATE_LIMITED"
+            elif resp.status_code in (408, 504):
                 status = "TIMEOUT"
-            elif resp.error:
+            elif resp.status_code < 200 or resp.status_code >= 300 or resp.error:
                 status = "ERROR"
+            else:
+                status = "SUCCESS"
+
+            if status == "SUCCESS":
+                has_mention, pos = self._detect_mention_and_position(raw_text, brand, clean_domain)
+                sources, quality, is_1p = self._classify_sources(resp.citations, raw_text, clean_domain)
+                imp_res = calculate_response_impressions(
+                    raw_response=raw_text,
+                    citations=resp.citations or [],
+                    target_domain=clean_domain,
+                    brand_name=brand,
+                )
+                word_count_impression_pct = imp_res.word_count_impression_pct
+                position_adjusted_impression_pct = imp_res.position_adjusted_impression_pct
+                dristik_adjusted_impression_pct = imp_res.dristik_adjusted_impression_pct
+                unlinked_brand_mentions = imp_res.unlinked_brand_sentences
+                sentence_count = imp_res.total_sentences
+                total_words = imp_res.total_words
+            else:
+                has_mention, pos = False, None
+                sources, quality, is_1p = [], "unsourced", False
+                word_count_impression_pct = 0.0
+                position_adjusted_impression_pct = 0.0
+                dristik_adjusted_impression_pct = 0.0
+                unlinked_brand_mentions = 0
+                sentence_count = 0
+                total_words = 0
+
+            # Cost estimate is retained for budget accounting, including failed attempts.
+            in_words = len((q.query_text or "").split())
+            out_words = len(raw_text.split())
+            run_cost = round((in_words * 0.000003) + (out_words * 0.000015), 6)
 
             return EvaluatedQueryRun(
                 query_id=q.query_id,
@@ -371,22 +400,26 @@ class GeoBenchmarkRunner:
                 timestamp=resp.queried_at,
                 locale=locale,
                 latency_ms=resp.latency_ms,
-                raw_response=resp.raw_content,
+                raw_response=raw_text,
                 citations=resp.citations,
                 was_mentioned=has_mention,
                 mention_position=pos,
                 was_first_party_cited=is_1p,
-                word_count_impression_pct=imp_res.word_count_impression_pct,
-                position_adjusted_impression_pct=imp_res.position_adjusted_impression_pct,
-                dristik_adjusted_impression_pct=imp_res.dristik_adjusted_impression_pct,
-                unlinked_brand_mentions=imp_res.unlinked_brand_sentences,
-                sentence_count=imp_res.total_sentences,
-                total_words=imp_res.total_words,
+                word_count_impression_pct=word_count_impression_pct,
+                position_adjusted_impression_pct=position_adjusted_impression_pct,
+                dristik_adjusted_impression_pct=dristik_adjusted_impression_pct,
+                unlinked_brand_mentions=unlinked_brand_mentions,
+                sentence_count=sentence_count,
+                total_words=total_words,
                 cost_usd=run_cost,
                 source_domains=sources,
                 source_quality=quality,
                 status=status,
-                error_message=resp.error,
+                is_live=bool(getattr(resp, "is_live", False)) and status == "SUCCESS",
+                error_message=resp.error or (
+                    None if status == "SUCCESS"
+                    else "Provider response was not a successful live measurement."
+                ),
                 run_index=run_index,
             )
 
@@ -405,7 +438,7 @@ class GeoBenchmarkRunner:
             if not st:
                 continue
             st["tested"] += 1
-            if ev.status == "SUCCESS":
+            if ev.status == "SUCCESS" and ev.is_live:
                 st["succeeded"] += 1
                 if ev.latency_ms > 0:
                     st["latencies"].append(ev.latency_ms)
@@ -437,7 +470,7 @@ class GeoBenchmarkRunner:
             c_ci = wilson_score_interval(c_cnt, s_cnt) if s_cnt > 0 else None
 
             # Continuous impression metrics across successful evaluations for this engine
-            eng_successes = [ev for ev in evaluations if ev.engine_id == eid and ev.status == "SUCCESS"]
+            eng_successes = [ev for ev in evaluations if ev.engine_id == eid and ev.status == "SUCCESS" and ev.is_live]
             wc_list = [ev.word_count_impression_pct for ev in eng_successes]
             pwc_list = [ev.position_adjusted_impression_pct for ev in eng_successes]
             dristik_list = [ev.dristik_adjusted_impression_pct for ev in eng_successes]
@@ -484,7 +517,7 @@ class GeoBenchmarkRunner:
         overall_1p_citation_ci = wilson_score_interval(total_1p_citations, total_succeeded) if total_succeeded > 0 else None
 
         # Overall continuous impression metrics across all successes
-        all_successes = [ev for ev in evaluations if ev.status == "SUCCESS"]
+        all_successes = [ev for ev in evaluations if ev.status == "SUCCESS" and ev.is_live]
         all_wc = [ev.word_count_impression_pct for ev in all_successes]
         all_pwc = [ev.position_adjusted_impression_pct for ev in all_successes]
         all_dristik = [ev.dristik_adjusted_impression_pct for ev in all_successes]
@@ -505,7 +538,7 @@ class GeoBenchmarkRunner:
         # Blindspots only when a successful response omitted the brand. Errors are not omissions.
         blindspots: List[str] = []
         for q in suite.queries:
-            success_runs = [e for e in evaluations if e.query_id == q.query_id and e.status == "SUCCESS"]
+            success_runs = [e for e in evaluations if e.query_id == q.query_id and e.status == "SUCCESS" and e.is_live]
             if success_runs and not any(r.was_mentioned for r in success_runs):
                 blindspots.append(f"{q.category_label}: '{q.query_text}'")
 
@@ -537,6 +570,14 @@ class GeoBenchmarkRunner:
             "confidence_level": 0.95,
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
             "engines_configured": [ad.engine_id for ad in active_adapters if ad.is_configured()],
+            "engine_response_counts": {
+                ad.engine_id: {
+                    "attempted": sum(1 for ev in evaluations if ev.engine_id == ad.engine_id),
+                    "successful_live": sum(1 for ev in evaluations if ev.engine_id == ad.engine_id and ev.status == "SUCCESS" and ev.is_live),
+                    "failed_or_non_live": sum(1 for ev in evaluations if ev.engine_id == ad.engine_id and not (ev.status == "SUCCESS" and ev.is_live)),
+                }
+                for ad in active_adapters
+            },
             "cost_tracking_enabled": True,
             "budget_cap_usd": budget_cap_usd,
             "cost_cap_exceeded": cost_cap_exceeded,
@@ -587,7 +628,16 @@ class GeoBenchmarkRunner:
             locale=locale,
             run_date=datetime.now(timezone.utc).isoformat(),
             total_queries=len(suite.queries),
-            engines_tested=[ad.display_name for ad in active_adapters],
+            engines_tested=[
+                ad.display_name for ad in active_adapters
+                if any(ev.engine_id == ad.engine_id and ev.status == "SUCCESS" and ev.is_live for ev in evaluations)
+            ],
+            engines_requested=[str(engine) for engine in engines] if engines else [ad.engine_id for ad in active_adapters],
+            engines_attempted=[
+                ad.display_name for ad in active_adapters
+                if any(ev.engine_id == ad.engine_id for ev in evaluations)
+            ],
+            engines_configured=[ad.engine_id for ad in active_adapters if ad.is_configured()],
             engine_aggregates=engine_aggregates,
             overall_mention_rate_pct=overall_mention_rate,
             overall_mention_rate_ci=overall_mention_ci,
@@ -621,48 +671,92 @@ class GeoBenchmarkRunner:
         brand_name: str,
         competitors: Optional[List[str]] = None,
     ) -> ShareOfModelMetric:
-        """
-        Calculates enterprise Share of Model (SoM), ordinal position distributions,
-        and competitor displacement instances where rivals stole top recommendations.
-        """
-        clean_domain = (target_domain or "").lower().replace("https://", "").replace("http://", "").split("/")[0]
-        brand = (brand_name or clean_domain.split(".")[0]).lower().strip()
-        comp_list = [c.lower().strip() for c in (competitors or []) if c and c.strip()]
+        """Calculate an explicitly defined share among observed tracked entities.
 
-        successes = [e for e in evaluations if e.status == "SUCCESS"]
+        This is not market share. It is the target's fraction of observed target
+        plus supplied-competitor mentions in successful live responses. Without a
+        competitor universe, mention rate must not be relabeled as Share of Model.
+        """
+        clean_domain = self._normalize_hostname(target_domain)
+        brand = (brand_name or clean_domain.split(".")[0]).strip()
+        comp_list = list(dict.fromkeys(
+            str(c).strip().lower() for c in (competitors or [])
+            if c and str(c).strip()
+        ))
+        successes = [
+            row for row in evaluations
+            if row.status == "SUCCESS" and getattr(row, "is_live", False)
+        ]
         total = len(successes)
+
         if total == 0:
             return ShareOfModelMetric(
                 target_domain=clean_domain,
                 brand_name=brand_name,
                 total_evaluated_queries=0,
-                share_of_model_pct=0.0,
-                first_party_citation_share_pct=0.0,
-                recommendation_rank_score=0.0,
+                share_of_model_pct=None,
+                funnel_weighted_som_pct=None,
+                first_party_citation_share_pct=None,
+                recommendation_rank_score=None,
                 ordinal_distribution={"rank_1": 0, "rank_2_3": 0, "rank_4_plus": 0, "unranked": 0},
                 competitor_shares={},
                 competitor_displacements=[],
             )
 
+        competitor_hits = {comp: 0 for comp in comp_list}
         target_mentions = 0
         target_first_party_citations = 0
-        rank_1 = 0
-        rank_2_3 = 0
-        rank_4_plus = 0
-        unranked = 0
+        competitor_citations = 0
+        competitor_domain_universe = {
+            comp: self._normalize_hostname(comp)
+            for comp in comp_list
+            if "." in self._normalize_hostname(comp)
+        }
+        citation_universe_measurable = bool(competitor_domain_universe)
+        rank_1 = rank_2_3 = rank_4_plus = unranked = 0
         position_weight_sum = 0.0
+        displacements: List[Dict[str, Any]] = []
+        stages = {
+            "awareness": {"total": 0, "mentions": 0, "weight": 1.0},
+            "consideration": {"total": 0, "mentions": 0, "weight": 2.5},
+            "decision": {"total": 0, "mentions": 0, "weight": 4.0},
+        }
+        target_weighted_mentions = 0.0
+        all_entity_weighted_mentions = 0.0
 
         for ev in successes:
+            raw = ev.raw_response or ""
+            target_hit = bool(ev.was_mentioned)
+            target_mentions += int(target_hit)
+            target_first_party_citations += int(bool(ev.was_first_party_cited))
+
+            this_competitors = []
+            for comp in comp_list:
+                comp_host = self._normalize_hostname(comp)
+                if "." in comp_host:
+                    comp_hit = self._contains_domain(raw, comp_host)
+                else:
+                    comp_hit = self._contains_term(raw, comp.lower())
+                if comp_hit:
+                    competitor_hits[comp] += 1
+                    this_competitors.append(comp)
+
+            if citation_universe_measurable:
+                cited_domains = [self._normalize_hostname(d) for d in (ev.source_domains or [])]
+                competitor_citations += sum(
+                    1 for host in cited_domains
+                    if any(self._is_first_party_host(host, comp_domain)
+                           for comp_domain in competitor_domain_universe.values())
+                )
+
             if ev.was_mentioned:
-                target_mentions += 1
-                pos = ev.mention_position
-                if pos == 1:
+                if ev.mention_position == 1:
                     rank_1 += 1
                     position_weight_sum += 1.0
-                elif pos in (2, 3):
+                elif ev.mention_position in (2, 3):
                     rank_2_3 += 1
                     position_weight_sum += 0.75
-                elif pos and pos >= 4:
+                elif ev.mention_position is not None and ev.mention_position >= 4:
                     rank_4_plus += 1
                     position_weight_sum += 0.40
                 else:
@@ -671,90 +765,68 @@ class GeoBenchmarkRunner:
             else:
                 unranked += 1
 
-            if ev.was_first_party_cited:
-                target_first_party_citations += 1
+            if this_competitors and (not target_hit or (ev.mention_position is not None and ev.mention_position > 1)):
+                for comp in this_competitors:
+                    displacements.append({
+                        "query_id": ev.query_id,
+                        "query_text": ev.query_text,
+                        "engine": ev.engine_name,
+                        "displacing_competitor": comp,
+                        "target_mentioned": target_hit,
+                        "target_position": ev.mention_position,
+                        "reason": (
+                            f"Competitor '{comp}' appeared in the answer while "
+                            f"'{brand_name}' was {'omitted' if not target_hit else f'ranked #{ev.mention_position}'}."
+                        ),
+                    })
 
-        # Competitor shares & displacements
-        competitor_shares: Dict[str, float] = {}
-        displacements: List[Dict[str, Any]] = []
-
-        for comp in comp_list:
-            comp_mentions = 0
-            for ev in successes:
-                raw_lower = (ev.raw_response or "").lower()
-                c_hit = comp in raw_lower or any(comp in s for s in ev.source_domains)
-                if c_hit:
-                    comp_mentions += 1
-                    if not ev.was_mentioned:
-                        displacements.append({
-                            "query_id": ev.query_id,
-                            "query_text": ev.query_text,
-                            "engine": ev.engine_name,
-                            "displacing_competitor": comp,
-                            "target_mentioned": False,
-                            "reason": f"Competitor '{comp}' was recommended while '{brand_name}' was omitted from the answer.",
-                        })
-                    elif ev.mention_position and ev.mention_position > 1:
-                        displacements.append({
-                            "query_id": ev.query_id,
-                            "query_text": ev.query_text,
-                            "engine": ev.engine_name,
-                            "displacing_competitor": comp,
-                            "target_mentioned": True,
-                            "target_position": ev.mention_position,
-                            "reason": f"Competitor '{comp}' led the recommendation list while '{brand_name}' was ranked #{ev.mention_position}.",
-                        })
-
-            competitor_shares[comp] = round((comp_mentions / total) * 100.0, 1)
-
-        som_pct = round((target_mentions / total) * 100.0, 1)
-        cit_share_pct = round((target_first_party_citations / total) * 100.0, 1)
-        rank_score = round((position_weight_sum / total) * 100.0, 1)
-
-        # Stage-weighted metrics
-        # Decision: commercial, comparative, high_intent (weight 4.0)
-        # Consideration: services, problem (weight 2.5)
-        # Awareness: entity, audience, geographic, other (weight 1.0)
-        stages = {
-            "awareness": {"total": 0, "mentions": 0, "weight": 1.0},
-            "consideration": {"total": 0, "mentions": 0, "weight": 2.5},
-            "decision": {"total": 0, "mentions": 0, "weight": 4.0},
-        }
-
-        weighted_mentions = 0.0
-        weighted_total = 0.0
-
-        for ev in successes:
-            cat = (getattr(ev, "category", "") or "").lower()
-            if cat in ("commercial", "comparative", "high_intent"):
+            category = (getattr(ev, "category", "") or "").lower()
+            if category in ("commercial", "comparative", "high_intent"):
                 stage_key = "decision"
-            elif cat in ("services", "problem"):
+            elif category in ("services", "problem"):
                 stage_key = "consideration"
             else:
                 stage_key = "awareness"
+            stage = stages[stage_key]
+            stage["total"] += 1
+            weight = stage["weight"]
+            if target_hit:
+                stage["mentions"] += 1
+                target_weighted_mentions += weight
+                all_entity_weighted_mentions += weight
+            all_entity_weighted_mentions += weight * len(this_competitors)
 
-            st = stages[stage_key]
-            st["total"] += 1
-            w = st["weight"]
-            weighted_total += w
-
-            if ev.was_mentioned:
-                st["mentions"] += 1
-                weighted_mentions += w
+        total_competitor_hits = sum(competitor_hits.values())
+        entity_mention_denominator = target_mentions + total_competitor_hits
+        som_pct = (
+            round(target_mentions / entity_mention_denominator * 100.0, 1)
+            if comp_list and entity_mention_denominator > 0 else None
+        )
+        competitor_shares = {
+            comp: round(count / entity_mention_denominator * 100.0, 1)
+            for comp, count in competitor_hits.items()
+            if entity_mention_denominator > 0
+        }
+        funnel_som = (
+            round(target_weighted_mentions / all_entity_weighted_mentions * 100.0, 1)
+            if comp_list and all_entity_weighted_mentions > 0 else None
+        )
+        citation_denominator = target_first_party_citations + competitor_citations
+        citation_share = (
+            round(target_first_party_citations / citation_denominator * 100.0, 1)
+            if citation_universe_measurable and citation_denominator > 0 else None
+        )
 
         stage_breakdown: Dict[str, Dict[str, Any]] = {}
-        for s_name, s_data in stages.items():
-            s_tot = s_data["total"]
-            s_men = s_data["mentions"]
-            rate = round((s_men / max(1, s_tot)) * 100.0, 1) if s_tot > 0 else None
-            stage_breakdown[s_name] = {
-                "total_queries": s_tot,
-                "mentions": s_men,
-                "mention_rate_pct": rate,
-                "commercial_weight": s_data["weight"],
+        for name, data in stages.items():
+            count = data["total"]
+            mentions = data["mentions"]
+            stage_breakdown[name] = {
+                "total_queries": count,
+                "mentions": mentions,
+                "mention_rate_pct": round(mentions / count * 100.0, 1) if count else None,
+                "commercial_weight": data["weight"],
             }
-
-        funnel_som = round((weighted_mentions / max(0.1, weighted_total)) * 100.0, 1) if weighted_total > 0 else som_pct
 
         return ShareOfModelMetric(
             target_domain=clean_domain,
@@ -762,8 +834,8 @@ class GeoBenchmarkRunner:
             total_evaluated_queries=total,
             share_of_model_pct=som_pct,
             funnel_weighted_som_pct=funnel_som,
-            first_party_citation_share_pct=cit_share_pct,
-            recommendation_rank_score=rank_score,
+            first_party_citation_share_pct=citation_share,
+            recommendation_rank_score=round(position_weight_sum / total * 100.0, 1),
             ordinal_distribution={
                 "rank_1": rank_1,
                 "rank_2_3": rank_2_3,
@@ -817,7 +889,7 @@ def build_visibility_scorecard(
     from app.domain.models import AiVisibilityScorecard
     from app.geo.buyer_surfaces import surfaces_not_queried
 
-    successes = [ev for ev in report.evaluations if ev.status == "SUCCESS"]
+    successes = [ev for ev in report.evaluations if ev.status == "SUCCESS" and ev.is_live]
     failures = [ev for ev in report.evaluations if ev.status != "SUCCESS"]
     engine_names = _queried_engine_names(report, successes)
     missing_surfaces = surfaces_not_queried(engine_names)
@@ -832,7 +904,7 @@ def build_visibility_scorecard(
         return AiVisibilityScorecard(
             status="NOT_MEASURED",
             measurement_kind="NOT_MEASURED",
-            engines_requested=len(report.engines_tested),
+            engines_requested=len(report.engines_requested or report.engines_attempted),
             engines_queried=engine_names,
             surfaces_not_queried=missing_surfaces,
             queries=report.total_queries,

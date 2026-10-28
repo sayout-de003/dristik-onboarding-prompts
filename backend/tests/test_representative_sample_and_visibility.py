@@ -174,6 +174,7 @@ class SequenceAdapter(BaseGeoEngineAdapter):
             citations=[],
             status_code=200,
             latency_ms=10,
+            is_live=True,
         )
 
 
@@ -207,6 +208,7 @@ class TimeoutThenMentionAdapter(BaseGeoEngineAdapter):
             citations=["https://alienhouse.ai/"],
             status_code=200,
             latency_ms=20,
+            is_live=True,
         )
 
 

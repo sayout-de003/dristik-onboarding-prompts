@@ -1,9 +1,8 @@
-"""
-Compatibility wrapper for the canonical GEO readiness evaluator.
+"""Compatibility wrapper for canonical, evidence-backed GEO readiness.
 
-This agent deliberately does not maintain a second, weaker readiness formula.
-It surfaces the canonical report if the orchestration layer supplied one; otherwise
-it reports that readiness is not measured and emits no unsupported factual claim.
+This agent does not infer extractability or live visibility from heading presence
+or page length. It forwards a canonical readiness report when one is supplied;
+otherwise it returns an explicit unmeasured state and no factual claims.
 """
 from typing import Any, Dict
 
@@ -12,7 +11,7 @@ from app.cognition.blackboard import CognitiveBlackboard
 
 
 class GeoReadinessAgent(BaseAgent):
-    """Expose canonical evidence-backed GEO readiness without proxy scoring."""
+    """Expose canonical readiness without maintaining a second scoring formula."""
 
     def __init__(self, model_router=None):
         super().__init__(
@@ -28,20 +27,44 @@ class GeoReadinessAgent(BaseAgent):
             or getattr(blackboard, "geo_readiness", None)
         )
 
-        if canonical is not None:
-            if hasattr(canonical, "model_dump"):
-                payload = canonical.model_dump()
-            elif isinstance(canonical, dict):
-                payload = canonical
-            else:
-                payload = {}
-            dimensions = payload.get("dimension_scores", {}) or {}
-            measured = [
-                item for item in dimensions.values()
-                if isinstance(item, dict) and item.get("is_measured") is True
-            ]
-            status = "completed" if measured else "UNMEASURED"
-            observations = {
+        if canonical is None:
+            return {
+                "agent_id": self.agent_id,
+                "domain": "geo",
+                "specialty": "geo_readiness",
+                "status": "UNMEASURED",
+                "observations": {
+                    "total_analyzed_pages": len(pages),
+                    "readiness_status": "UNMEASURED",
+                    "canonical_report_available": False,
+                    "measurement_note": (
+                        "No canonical GEO readiness report was supplied. Heading presence "
+                        "and word count alone do not establish answer extractability or live AI visibility."
+                    ),
+                },
+                "claims": [],
+            }
+
+        if hasattr(canonical, "model_dump"):
+            payload = canonical.model_dump()
+        elif isinstance(canonical, dict):
+            payload = canonical
+        else:
+            payload = {}
+
+        dimensions = payload.get("dimension_scores", {}) or {}
+        measured = [
+            item for item in dimensions.values()
+            if isinstance(item, dict) and item.get("is_measured") is True
+        ]
+        status = "completed" if measured else "UNMEASURED"
+
+        return {
+            "agent_id": self.agent_id,
+            "domain": "geo",
+            "specialty": "geo_readiness",
+            "status": status,
+            "observations": {
                 "total_analyzed_pages": len(pages),
                 "readiness_status": status,
                 "canonical_report_available": True,
@@ -51,25 +74,6 @@ class GeoReadinessAgent(BaseAgent):
                     "interpretation_disclaimer",
                     "Readiness is not a live AI citation or recommendation rank.",
                 ),
-            }
-        else:
-            status = "UNMEASURED"
-            observations = {
-                "total_analyzed_pages": len(pages),
-                "readiness_status": "UNMEASURED",
-                "canonical_report_available": False,
-                "measurement_note": (
-                    "No canonical GEO readiness report was provided to this compatibility "
-                    "agent. Page length and heading presence are not sufficient to infer "
-                    "AI extractability or live AI visibility."
-                ),
-            }
-
-        return {
-            "agent_id": self.agent_id,
-            "domain": "geo",
-            "specialty": "geo_readiness",
-            "status": status,
-            "observations": observations,
+            },
             "claims": [],
         }

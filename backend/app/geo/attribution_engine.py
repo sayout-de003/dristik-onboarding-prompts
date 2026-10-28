@@ -62,8 +62,12 @@ class GeoAttributionEngine:
 
     @staticmethod
     def _is_successful(row: Any) -> bool:
-        status = str(getattr(row, "status", "SUCCESS") or "SUCCESS").upper()
-        return status in {"SUCCESS", "SUCCEEDED", "COMPLETED"} and not getattr(row, "error_message", None)
+        status = str(getattr(row, "status", "") or "").upper()
+        return (
+            status in {"SUCCESS", "SUCCEEDED", "COMPLETED"}
+            and not getattr(row, "error_message", None)
+            and bool(getattr(row, "is_live", False))
+        )
 
     @staticmethod
     def _key(row: Any) -> Tuple[str, str, str, str, str]:

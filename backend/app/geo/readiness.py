@@ -134,28 +134,28 @@ def _score_entity_clarity(
 ) -> GeoDimensionScore:
     low = blob.lower()
     fluff_hits = [w for w in _FLUFF if w in low]
-    named = bool(name and name.lower() in low)
+    named = name.lower() in low if name else False
     profile_terms = [
-        str(term).strip().lower()
-        for term in (
-            [profile.industry, profile.niche]
-            + list(profile.products or [])
-            + list(profile.services or [])
-        )
-        if term and str(term).strip()
+        *(profile.products or []),
+        *(profile.services or []),
+        *([profile.industry] if profile.industry else []),
+        *([profile.niche] if profile.niche else []),
     ]
-    # Business-profile metadata alone is not proof that the website explains
-    # the entity. Require the category/offer to appear in the crawled content.
-    specific = any(term in low for term in profile_terms)
+    # Profile metadata is context, not evidence that the crawler observed the offer.
+    specific = any(term and str(term).lower() in low for term in profile_terms)
 
     base_score = 0.0
     if named:
-        base_score += 30.0
+        base_score += 35.0
     if specific:
-        base_score += 30.0
-    if entity_res and not entity_res.is_fragmented:
-        base_score += 25.0
-    elif entity_res and entity_res.is_fragmented:
+        base_score += 35.0
+    if not fluff_hits and (named or specific):
+        base_score += 10.0
+    elif fluff_hits:
+        base_score -= 10.0
+    if entity_res and not entity_res.is_fragmented and (named or specific):
+        base_score += 20.0
+    elif entity_res and entity_res.is_fragmented and (named or specific):
         base_score -= 15.0
     base_score -= min(20.0, len(fluff_hits) * 5.0)
 
@@ -241,6 +241,8 @@ def _score_content_extractability(
         )
     if passage_res:
         summary += f" {passage_res.highly_citable_count} highly citation-ready passages."
+    else:
+        summary += " Passage analysis unavailable; no fallback passage points were added."
 
     return GeoDimensionScore(
         key=GeoDimensionKey.CONTENT_EXTRACTABILITY.value,
@@ -260,22 +262,20 @@ def _score_content_extractability(
 
 
 def _score_citation_readiness(passage_res) -> GeoDimensionScore:
-    if passage_res:
-        raw = passage_res.citation_readiness_score
-        count = passage_res.highly_citable_count
-    else:
+    if not passage_res:
         return GeoDimensionScore(
             key=GeoDimensionKey.CITATION_READINESS.value,
             label="Citation-ready passage density",
-            score=0.0,
-            band="low",
+            score=None,
+            band="unmeasured",
             confidence=0.0,
             summary="Passage analysis unavailable; citation readiness was not measured.",
-            evidence_notes=["highly_citable_count=NOT_MEASURED", "raw_score=NOT_MEASURED"],
+            evidence_notes=[],
             is_measured=False,
-            measurement_note="A successful passage analysis is required to score citation readiness.",
+            measurement_note="Run passage analysis against successfully crawled page content.",
         )
-
+    raw = passage_res.citation_readiness_score
+    count = passage_res.highly_citable_count
     score = max(0.0, min(100.0, raw))
     return GeoDimensionScore(
         key=GeoDimensionKey.CITATION_READINESS.value,
@@ -283,7 +283,7 @@ def _score_citation_readiness(passage_res) -> GeoDimensionScore:
         score=round(score, 1),
         band=_band(score),
         confidence=0.75,
-        summary=f"{count} highly citation-ready passages detected." if passage_res else "Passage analysis unavailable.",
+        summary=f"{count} highly citation-ready passages detected.",
         evidence_notes=[f"highly_citable_count={count}", f"raw_score={raw}"],
         is_measured=True,
         measurement_note=None,
@@ -298,19 +298,19 @@ def _score_retrieval_accessibility(
         return GeoDimensionScore(
             key=GeoDimensionKey.RETRIEVAL_ACCESSIBILITY.value,
             label="Retrieval accessibility (HTTPS, robots, sitemap)",
-            score=0.0,
-            band="low",
+            score=None,
+            band="unmeasured",
             confidence=0.0,
-            summary="Retrieval accessibility was not measured because crawl manifest evidence is unavailable.",
-            evidence_notes=["manifest=NOT_AVAILABLE"],
+            summary="Crawl manifest unavailable; retrieval accessibility was not measured.",
+            evidence_notes=[],
             is_measured=False,
-            measurement_note="A crawl manifest with recorded robots, sitemap and URL evidence is required.",
+            measurement_note="Collect a crawl manifest with robots.txt, sitemap and fetch-status observations.",
         )
     robots = bool(manifest.robots_txt_found)
     sitemap = bool(manifest.sitemap_found)
     https = (website_url or "").startswith("https://")
 
-    score = 30.0
+    score = 0.0
     if https:
         score += 30.0
     if robots:
@@ -338,28 +338,27 @@ def _score_factual_grounding(
 ) -> GeoDimensionScore:
     if conflicting > 0:
         score = 20.0
-        summary = f"{conflicting} conflicting commercial fact(s) detected. Contradictory signals reduce AI trust."
+        summary = f"{conflicting} conflicting commercial fact(s) detected in the crawled sample."
     elif claims_res:
-        raw = min(100.0, claims_res.claim_clarity_score)
-        score = raw
-        summary = f"{claims_res.citable_claims_count} verified citable claims with no detected contradictions."
+        score = max(0.0, min(100.0, claims_res.claim_clarity_score))
+        summary = f"{claims_res.citable_claims_count} citable claims assessed; no contradiction was detected in the crawled sample."
     else:
         return GeoDimensionScore(
             key=GeoDimensionKey.FACTUAL_GROUNDING.value,
             label="Factual grounding & claim verifiability",
-            score=0.0,
-            band="low",
+            score=None,
+            band="unmeasured",
             confidence=0.0,
             summary="Claim analysis unavailable; factual grounding was not measured.",
-            evidence_notes=["conflicting_facts=0", "claim_clarity=NOT_MEASURED"],
+            evidence_notes=[f"conflicting_facts={conflicting}"],
             is_measured=False,
-            measurement_note="Run claim extraction and evidence validation before scoring factual grounding.",
+            measurement_note="Run claim extraction and contradiction analysis on successfully crawled pages.",
         )
 
     return GeoDimensionScore(
         key=GeoDimensionKey.FACTUAL_GROUNDING.value,
         label="Factual grounding & claim verifiability",
-        score=max(0.0, min(100.0, score)),
+        score=round(score, 1),
         band=_band(score),
         confidence=0.70 if not claims_res else 0.80,
         summary=summary,
@@ -371,7 +370,6 @@ def _score_factual_grounding(
         measurement_note=None,
     )
 
-
 def _score_external_authority(entity_res) -> GeoDimensionScore:
     """
     External authority cannot be measured from HTML crawl alone.
@@ -381,13 +379,12 @@ def _score_external_authority(entity_res) -> GeoDimensionScore:
     return GeoDimensionScore(
         key=GeoDimensionKey.EXTERNAL_AUTHORITY.value,
         label="External authority & backlink signals",
-        score=0.0,   # Placeholder value is ignored because is_measured=False
-        band="low",
+        score=None,
+        band="unmeasured",
         confidence=0.0,
         summary=(
             "External authority cannot be measured from on-page HTML crawl. "
-            "This requires GSC, backlink API, or business directory connector data. "
-            "No score is reported until external connector data are available."
+            "Connect GSC, a backlink provider or business-directory data to assess it."
         ),
         evidence_notes=["requires_connector=GSC or backlink API"],
         is_measured=False,
@@ -427,8 +424,8 @@ def _score_ai_engine_visibility(
         return GeoDimensionScore(
             key=GeoDimensionKey.AI_ENGINE_VISIBILITY.value,
             label="Live AI engine citation visibility",
-            score=0.0,
-            band="low",
+            score=None,
+            band="unmeasured",
             confidence=0.0,
             summary=(
                 "Live AI engine visibility was NOT measured in this audit run. "
@@ -464,11 +461,11 @@ def _compute_composite(dimension_scores: Dict[str, GeoDimensionScore]) -> Option
     total_score = 0.0
     for key, ds in dimension_scores.items():
         weight = _WEIGHTS.get(key, 0.0)
-        if ds.is_measured and weight > 0.0:
+        if ds.is_measured and ds.score is not None and weight > 0.0:
             total_score += ds.score * weight
             total_weight += weight
     if total_weight == 0.0:
-        return None  # Cannot compute is not a neutral score.
+        return None
     return round(total_score / total_weight, 1)
 
 
@@ -492,30 +489,28 @@ def evaluate_geo_readiness(
         host = urlparse(website_url or "").netloc.replace("www.", "")
         name = host.split(".")[0].capitalize() if host else "the company"
 
-    # An empty crawl is not evidence that the site's content is poor. Fail closed
-    # before generating unsupported-question findings or heuristic scores.
     if not pages:
+        visibility_is_measured = visibility_measured and visibility_score is not None
         return GeoReadinessReport(
-            entity_name=name,
-            visibility_status="MEASURED" if visibility_measured and visibility_score is not None else "NOT_CONFIGURED",
-            visibility_message=(
-                visibility_detail or "Live visibility is measured separately from on-page readiness."
-                if visibility_measured and visibility_score is not None
-                else "No live AI-engine measurement was supplied for this run."
+            visibility_status="MEASURED" if visibility_is_measured else "NOT_CONFIGURED",
+            visibility_message=visibility_detail or (
+                "Live visibility measured separately." if visibility_is_measured
+                else "No analyzed pages; readiness and live visibility are not measured."
             ),
+            entity_name=name,
             questions_total=0,
             questions_supported=0,
             questions_partial=0,
             questions_unsupported=0,
             questions_conflicting=0,
-            headline="GEO readiness unavailable: the crawl produced no analyzed pages. Retry the crawl before interpreting readiness.",
+            headline="No analyzed pages are available. GEO readiness is unmeasured; no readiness score was calculated.",
             questions=[],
             dimensions=[],
             dimension_scores={},
             schema_types=[],
-            extractability_score=None,
             market_country=(country or "Global").strip() or "Global",
             market_language=(language or "en").strip() or "en",
+            extractability_score=None,
         )
 
     blob = _corpus(pages)
