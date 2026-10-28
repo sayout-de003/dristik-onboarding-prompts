@@ -46,3 +46,33 @@ The MCP endpoint currently uses Dristik's existing authenticated session/bearer-
 5. Add durable outbound delivery, retries, idempotency keys, dead-letter handling, and webhook reconciliation.
 6. Add frontend Connect Hub, collaboration timeline, capability diagnostics, and artifact browser.
 7. Run the focused tests and the full backend test suite in CI and verify deployment behavior.
+
+
+## Provider adapters and Connect UI (follow-up implementation)
+
+The Connect workspace is available at the application route `#connect` and in the command palette for signed-in users. It provides provider registration, a live prompt test, and collaboration task visibility.
+
+Supported provider adapters use fixed HTTPS API hosts:
+- OpenAI-compatible: OpenAI, xAI/Grok, DeepSeek, OpenRouter.
+- Anthropic Messages API.
+- Google Gemini generateContent API.
+
+Configure a Fernet key before storing provider credentials:
+
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Set the output as `DRISTIK_CONNECT_FERNET_KEY` in the backend deployment secret store. Do not commit the key or put it in frontend configuration. Losing the key makes stored credentials unreadable; rotating it requires an explicit credential re-encryption/rotation procedure.
+
+Provider endpoints:
+- `GET /api/v1/connect/providers`
+- `POST /api/v1/connect/providers` with provider, label, model and api_key.
+- `POST /api/v1/connect/providers/{provider_id}/invoke` with prompt, optional system and max_tokens.
+
+A website audit task can now be submitted to the existing canonical audit route:
+- `POST /api/v1/connect/tasks/{task_id}/execute-audit`
+- The task inputs must contain `url` or `website_url`.
+- The existing audit route still applies Dristik's normal entitlement and active-LLM configuration gates. The task records the resulting analysis ID.
+
+The current provider implementation is a first production-oriented adapter slice, not complete certification: provider-specific API behavior and model names must be verified in CI with mocked HTTP responses and in deployment with each tenant's own keys. Remote MCP client execution, OAuth, retries/DLQ and object storage remain outstanding.
