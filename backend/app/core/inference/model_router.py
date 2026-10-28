@@ -363,7 +363,7 @@ class ModelRouter:
             except Exception as e:
                 last_error = e
                 msg = str(e).lower()
-                missing = "does not exist" in msg or "http 404" in msg or "model_not_found" in msg
+                missing = (_ACTIVE_PROVIDER_OVERRIDE.get() is None) and ("does not exist" in msg or "http 404" in msg or "model_not_found" in msg)
                 if missing:
                     nxt = self._next_model_after_missing(current_model, fast_model, tried_missing)
                     if not nxt:
@@ -412,7 +412,7 @@ class ModelRouter:
         Pass 2: Serialize into constrained JSON schema (temp 0.0).
         Validate with Pydantic with 1 retry on ValidationError.
         """
-        if not settings.has_active_llm_key:
+        if not settings.has_active_llm_key and _ACTIVE_PROVIDER_OVERRIDE.get() is None:
             return {
                 "status": "unavailable",
                 "unavailable_reason": "no_llm_key",
