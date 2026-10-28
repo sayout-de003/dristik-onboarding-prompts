@@ -46,12 +46,22 @@ def validate_agent_result(expected_agent_id: str, payload: Any) -> dict[str, Any
         }
 
     claims = payload.get("claims", [])
-    if not isinstance(claims, list):
+    if not isinstance(claims, list) or any(not isinstance(claim, dict) for claim in claims):
         return {
             "agent_id": expected_agent_id,
             "status": "error",
             "error_code": "INVALID_CLAIMS_SHAPE",
-            "unavailable_reason": "Agent claims field must be a list.",
+            "unavailable_reason": "Agent claims field must be a list of claim objects.",
+            "claims": [],
+        }
+
+    normalized_status = status.strip().lower()
+    if normalized_status in {"unavailable", "skipped", "error", "failed"} and claims:
+        return {
+            "agent_id": expected_agent_id,
+            "status": "error",
+            "error_code": "CLAIMS_ON_NON_SUCCESS_STATUS",
+            "unavailable_reason": "An unavailable, skipped, or failed agent cannot publish claims.",
             "claims": [],
         }
 
@@ -67,7 +77,7 @@ def validate_agent_result(expected_agent_id: str, payload: Any) -> dict[str, Any
 
     normalized = dict(payload)
     normalized["agent_id"] = expected_agent_id
-    normalized["status"] = status.strip().lower()
+    normalized["status"] = normalized_status
     normalized["claims"] = claims
-    normalized["evidence_refs"] = refs
+    normalized["evidence_refs"] = list(dict.fromkeys(refs))
     return normalized

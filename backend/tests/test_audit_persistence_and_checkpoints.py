@@ -191,3 +191,47 @@ def test_score_explainability_breakdown(temp_repo):
     assert "entity_clarity" in dim_keys
     assert "extractability" in dim_keys
     assert "ai_visibility" in dim_keys
+
+
+
+def test_final_run_and_findings_are_saved_as_one_replacement_set(temp_repo):
+    now = datetime.now(timezone.utc).isoformat()
+    analysis_id = "run_atomic_final"
+    run = AnalysisRun(
+        analysis_id=analysis_id,
+        org_id="org_atomic",
+        website_url="https://example.com",
+        status=AnalysisStage.EXECUTIVE_SYNTHESIS,
+        created_at=now,
+        updated_at=now,
+    )
+    old_finding = Finding(
+        finding_id="find_old",
+        id="find_old",
+        category=Category.ON_PAGE_SEO,
+        severity=Severity.INFO,
+        title="Stale finding",
+        description="Must not survive final report replacement",
+        impact=1,
+        recommendation="None",
+        evidence_refs=[],
+    )
+    final_finding = Finding(
+        finding_id="find_final",
+        id="find_final",
+        category=Category.ON_PAGE_SEO,
+        severity=Severity.MEDIUM,
+        title="Final finding",
+        description="Validated final finding",
+        impact=5,
+        recommendation="Fix with evidence",
+        evidence_refs=["ev_final"],
+    )
+    temp_repo.save_run(run)
+    temp_repo.persist_findings(analysis_id, [old_finding])
+
+    temp_repo.save_run(run, findings=[final_finding])
+
+    stored = temp_repo.get_persisted_findings(analysis_id)
+    assert [item.finding_id for item in stored] == ["find_final"]
+    assert temp_repo.get_run(analysis_id)["status"] == "executive_synthesis"

@@ -71,7 +71,8 @@ class Settings(BaseSettings):
     APP_NAME: str = "Dristik AI"
     APP_VERSION: str = "2.0.0"
     ENVIRONMENT: str = "development"
-    DEBUG: bool = False
+    # Development/test convenience only; production startup validation rejects DEBUG=True.
+    DEBUG: bool = True
     # Number of reverse proxies whose X-Forwarded-For hops may be trusted.
     # Zero means the socket address is the client. A browser cannot raise this.
     TRUSTED_PROXY_HOPS: int = Field(default=0, ge=0, le=5)

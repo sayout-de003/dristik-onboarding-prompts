@@ -321,6 +321,7 @@ class CoverGenerator:
 
                 <div class="cover-footer-bar">
                     <div>CONFIDENTIAL &amp; PROPRIETARY // PREPARED EXCLUSIVELY FOR {_esc(m.brand_name).upper()}</div>
+                    <div>ZERO-FAKE EVIDENCE POLICY // STATUS IN REPORT</div>
                     <div>PAGE 1 (COVER) // UNNUMBERED</div>
                 </div>
             </div>

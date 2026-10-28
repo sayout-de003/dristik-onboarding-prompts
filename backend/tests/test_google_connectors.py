@@ -45,7 +45,7 @@ def test_integrations_api_router_zero_synthetic():
     from app.main import app
 
     import uuid
-    client = TestClient(app)
+    client = TestClient(app, base_url="https://testserver")
     signup = client.post("/api/v1/auth/signup", json={
         "full_name": "Integrations Owner",
         "email": f"integ_{uuid.uuid4().hex[:8]}@example.com",
@@ -97,17 +97,25 @@ def test_google_analytics_connector_alias_and_oauth_routes():
     import uuid
 
     client = TestClient(app)
+    email = f"ga_{uuid.uuid4().hex[:8]}@example.com"
     signup = client.post("/api/v1/auth/signup", json={
         "full_name": "GA User",
-        "email": f"ga_{uuid.uuid4().hex[:8]}@example.com",
+        "email": email,
         "password": "Password123",
         "organization_name": "GA Org",
     })
     assert signup.status_code == 200
+    login = client.post("/api/v1/auth/login", json={
+        "email": email,
+        "password": "Password123",
+    })
+    assert login.status_code == 200, login.text
 
     # 1. Authorize routes for google_analytics and google_analytics_4
     with patch.object(settings, "GOOGLE_CLIENT_ID", "mock-client-id"), \
-         patch.object(settings, "GOOGLE_CLIENT_SECRET", "mock-client-sec"):
+         patch.object(settings, "GOOGLE_CLIENT_SECRET", "mock-client-sec"), \
+         patch.object(settings, "AUTH_SECRET", "test-oauth-state-signing-secret-0123456789abcdef"), \
+         patch.object(settings, "ENVIRONMENT", "test"):
         resp_ga = client.get(
             "/api/v1/connectors/oauth/google_analytics/authorize?domain=example.com",
             follow_redirects=False,

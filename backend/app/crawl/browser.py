@@ -11,6 +11,7 @@ import asyncio
 import logging
 from typing import Optional, Tuple, Dict, Any
 from app.core.config import settings
+from app.core.security.ssrf import is_safe_url
 
 logger = logging.getLogger("dristik.browser")
 
@@ -85,6 +86,7 @@ class BrowserRenderService:
 
         context = None
         page = None
+        blocked_unsafe_request = False
         try:
             context = await browser.new_context(
                 user_agent=settings.USER_AGENT,
@@ -95,14 +97,36 @@ class BrowserRenderService:
 
             # Enterprise Optimization: Block heavy media and tracking assets
             async def filter_route(route):
+                nonlocal blocked_unsafe_request
                 req = route.request
                 rtype = req.resource_type
+                # Abort intentionally excluded resources before DNS validation; they
+                # will not be fetched and therefore do not need an egress lookup.
                 if rtype in ["image", "media", "font"]:
                     await route.abort()
-                elif any(t in req.url.lower() for t in ["google-analytics", "googletagmanager", "hotjar", "facebook.net", "clarity.ms"]):
+                    return
+                if any(t in req.url.lower() for t in ["google-analytics", "googletagmanager", "hotjar", "facebook.net", "clarity.ms"]):
                     await route.abort()
-                else:
-                    await route.continue_()
+                    return
+                if settings.SSRF_PROTECTION_ENABLED:
+                    # Validate every request that will actually be sent, including
+                    # top-level navigations, redirects, scripts, and XHR/fetch calls.
+                    try:
+                        safe, reason = await asyncio.wait_for(
+                            asyncio.to_thread(is_safe_url, req.url),
+                            timeout=3.0,
+                        )
+                    except asyncio.TimeoutError:
+                        blocked_unsafe_request = True
+                        logger.warning("Blocked browser request after SSRF validation timeout: %s", req.url)
+                        await route.abort("blockedbyclient")
+                        return
+                    if not safe:
+                        blocked_unsafe_request = True
+                        logger.warning("Blocked unsafe browser request %s: %s", req.url, reason)
+                        await route.abort("blockedbyclient")
+                        return
+                await route.continue_()
 
             await page.route("**/*", filter_route)
 

@@ -1756,12 +1756,12 @@ class CrawlInventory(BaseModel):
     excluded_total: int = 0
     failed_total: int = 0
     untested_total: int = 0
-    url_coverage_pct: Optional[float] = 100.0
+    url_coverage_pct: Optional[float] = None
     coverage_denominator: str = "eligible_total"
     discovered_via_sitemap: int = 0
     discovered_via_links: int = 0
     seed_urls_count: int = 1
-    sampling_status: str = "FULL_CRAWL"  # FULL_CRAWL | SAMPLED_AUDIT | INTERRUPTED | PARTIAL
+    sampling_status: str = "NOT_ASSESSED"  # NOT_ASSESSED | FULL_CRAWL | SAMPLED_AUDIT | INTERRUPTED | PARTIAL
     tested_pages: int = 0  # alias for analyzed_total
     total_unique_discovered: int = 0  # alias for discovered_total
     total_crawled_tested: int = 0  # alias for analyzed_total
@@ -1806,8 +1806,8 @@ class CrawlManifest(BaseModel):
     orphan_urls: List[str] = Field(default_factory=list)
     indexation_rollup: Optional[IndexationAuditRollup] = None
     crawl_inventory: Union[CrawlInventory, Dict[str, Any]] = Field(default_factory=dict)
-    url_coverage_pct: float = 100.0
-    sampling_status: str = "FULL_CRAWL"  # "FULL_CRAWL" | "SAMPLED_AUDIT" | "INTERRUPTED" | "PARTIAL"
+    url_coverage_pct: Optional[float] = None
+    sampling_status: str = "NOT_ASSESSED"  # NOT_ASSESSED | FULL_CRAWL | SAMPLED_AUDIT | INTERRUPTED | PARTIAL
     discovered_urls: List[str] = Field(default_factory=list)
     discovered_via_links: List[str] = Field(default_factory=list)
     discovered_via_sitemap: List[str] = Field(default_factory=list)

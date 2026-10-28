@@ -48,13 +48,16 @@ def test_oauth_does_not_issue_mock_codes(monkeypatch):
     client = TestClient(app)
     anonymous = client.get("/api/v1/connectors/google/oauth/authorize?domain=example.com", follow_redirects=False)
     assert anonymous.status_code == 401
+    email = f"oauth_{uuid.uuid4().hex[:8]}@example.com"
     signup = client.post("/api/v1/auth/signup", json={
         "full_name": "OAuth Owner",
-        "email": f"oauth_{uuid.uuid4().hex[:8]}@example.com",
+        "email": email,
         "password": "OwnerPass1",
         "organization_name": "OAuth Org",
     })
     assert signup.status_code == 200, signup.text
+    login = client.post("/api/v1/auth/login", json={"email": email, "password": "OwnerPass1"})
+    assert login.status_code == 200, login.text
     response = client.get("/api/v1/connectors/google/oauth/authorize?domain=example.com", follow_redirects=False)
     assert response.status_code == 503
     assert "mock" not in response.text.lower() or "not issued" in response.text.lower()
@@ -112,7 +115,7 @@ def test_failed_external_evidence_is_not_ground_truth():
     assert is_usable_external(evidence) is False
 
 
-def test_robots_disallow_is_missing_not_invented():
+def test_training_bot_disallow_does_not_claim_search_bots_are_blocked():
     manifest = CrawlManifest(
         domain="example.com",
         base_url="https://example.com",
@@ -120,7 +123,9 @@ def test_robots_disallow_is_missing_not_invented():
         robots_txt_content="User-agent: GPTBot\nDisallow: /\n",
     )
     signal = _robots_signal(manifest)
-    assert signal.status == "MISSING"
+    assert signal.status == "PRESENT"
+    assert "training bots" in signal.summary.lower()
+    assert "disallows search crawlers" not in signal.summary.lower()
 
 
 @pytest.mark.asyncio

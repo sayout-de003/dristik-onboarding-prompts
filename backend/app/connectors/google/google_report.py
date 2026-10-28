@@ -203,8 +203,18 @@ def map_analytics(summary: Any) -> Dict[str, Any]:
             summary.get("payload") or {},
             str(summary.get("period") or "last 30 days"),
         )
-    if isinstance(summary, dict) and summary.get("state") in _NOTICES[ANALYTICS] and "provenance" not in summary:
-        return _channel(ANALYTICS, str(summary["state"]), property=summary.get("property"), period=summary.get("period"))
+    if (
+        isinstance(summary, dict)
+        and summary.get("state") in _NOTICES[ANALYTICS]
+        and summary.get("state") != "MEASURED"
+        and "provenance" not in summary
+    ):
+        return _channel(
+            ANALYTICS,
+            str(summary["state"]),
+            property=summary.get("property"),
+            period=summary.get("period"),
+        )
     if summary is None:
         return _channel(ANALYTICS, "NOT_CONNECTED")
 
@@ -229,7 +239,8 @@ def map_analytics(summary: Any) -> Dict[str, Any]:
             average_session_duration_sec=_num(_get(summary, "avg_session_duration_sec") if _get(summary, "avg_session_duration_sec") is not None else _get(summary, "average_session_duration_sec")),
             conversions=(
                 int(_num(_get(summary, "conversions") if _get(summary, "conversions") is not None else _get(summary, "conversions_count")))
-                if _num(_get(summary, "conversions") if _get(summary, "conversions") is not None else _get(summary, "conversions_count")) is not None
+                if (_get(summary, "conversions") is not None or _get(summary, "conversions_count") is not None)
+                and _num(_get(summary, "conversions") if _get(summary, "conversions") is not None else _get(summary, "conversions_count")) is not None
                 else None
             ),
             key_events=(

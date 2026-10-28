@@ -1813,16 +1813,28 @@ class AnalysisOrchestrator:
             final_findings = report.findings or final_findings
 
             try:
-                self.repository.persist_findings(analysis_id, final_findings)
-                self.repository.save_run(run)
+                self.repository.save_run(run, findings=final_findings)
             except Exception as pe:
                 logger.exception("Durable report persistence failed for %s", analysis_id)
+                # The durable write failed; do not let a retry of the failed run expose
+                # a report as certified when its final report/finding transaction did not commit.
+                report.certification_status = "NOT_CERTIFIED"
+                report.quality_gate_results = {
+                    **(report.quality_gate_results or {}),
+                    "report_persistence": {
+                        "status": "FAILED",
+                        "error_type": type(pe).__name__,
+                    },
+                }
+                run.report = report
                 run.status = AnalysisStage.FAILED
                 run.error = "REPORT_PERSISTENCE_FAILED"
                 run.current_step = "Validated report could not be durably persisted"
                 run.is_sealed = False
                 try:
-                    self.repository.save_run(run)
+                    # Clear any stale findings for a reused run ID while recording the
+                    # failed, uncertified state. The replacement is transactional.
+                    self.repository.save_run(run, findings=[])
                 except Exception:
                     logger.exception("Could not persist failure state for %s", analysis_id)
                 await self._emit_event(
@@ -1838,6 +1850,18 @@ class AnalysisOrchestrator:
                 seal_manifest(run_manifest, snapshots=blackboard.evidence_store.snapshots)
             except Exception as seal_err:
                 logger.exception("Manifest sealing failed for %s", analysis_id)
+                # A report must never remain certified when its evidence manifest could
+                # not be sealed. The report may already have been written, so persist an
+                # explicit downgrade together with the failed terminal state.
+                report.certification_status = "NOT_CERTIFIED"
+                report.quality_gate_results = {
+                    **(report.quality_gate_results or {}),
+                    "manifest_seal": {
+                        "status": "FAILED",
+                        "error_type": type(seal_err).__name__,
+                    },
+                }
+                run.report = report
                 run.status = AnalysisStage.FAILED
                 run.error = "MANIFEST_SEAL_FAILED"
                 run.current_step = "Validated report persisted but manifest sealing failed"

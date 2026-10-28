@@ -43,7 +43,7 @@ from app.crawl.analyzers.security import analyze_security_headers
 from app.crawl.analyzers.dynamic_content import extract_embedded_cms_content, needs_js_render
 from app.crawl.analyzers.visible import extract_visible_page
 from app.crawl.browser import BrowserRenderService
-from app.crawl.response_limits import read_response_limited
+from app.crawl.response_limits import ResponseTooLargeError, read_response_limited
 
 class CrawlerService:
     def __init__(self):
@@ -235,10 +235,25 @@ class CrawlerService:
         markdown is Playwright innerText when the local browser rendered the page —
         that is the closest analogue to what a human actually sees.
         """
+        # Browser and remote-render paths must validate the initial target too.
+        # The browser additionally validates each redirect/subresource in its route hook.
+        if settings.SSRF_PROTECTION_ENABLED:
+            try:
+                safe, reason = await asyncio.wait_for(
+                    asyncio.to_thread(is_safe_url, url),
+                    timeout=3.0,
+                )
+            except asyncio.TimeoutError:
+                return None, None, 0, (time.time() - start_time) * 1000, {}, 0, "SSRF validation timed out; render target blocked", None
+            if not safe:
+                return None, None, 0, (time.time() - start_time) * 1000, {}, 0, f"SSRF blocked render target: {reason}", None
+
         # Tier 1: Local High-Speed Playwright ($0 API cost, fast asset-blocked execution)
         if BrowserRenderService.is_available():
             try:
                 pw_html, pw_status, pw_ttfb, pw_headers, pw_err, pw_text, pw_perf = await BrowserRenderService.render_page(url)
+                if pw_err == "ssrf_blocked_browser_request":
+                    return None, None, 0, (time.time() - start_time) * 1000, {}, 0, "SSRF blocked unsafe browser redirect or subresource", None
                 if pw_html:
                     max_response_bytes = int(getattr(settings, "CRAWL_MAX_RESPONSE_BYTES", 5 * 1024 * 1024) or 5 * 1024 * 1024)
                     if len(pw_html.encode("utf-8")) > max_response_bytes:
@@ -335,7 +350,14 @@ class CrawlerService:
                 visited_in_chain.add(current_url)
 
                 if settings.SSRF_PROTECTION_ENABLED:
-                    is_safe, reason = is_safe_url(current_url)
+                    try:
+                        is_safe, reason = await asyncio.wait_for(
+                            asyncio.to_thread(is_safe_url, current_url),
+                            timeout=3.0,
+                        )
+                    except asyncio.TimeoutError:
+                        direct_err = f"SSRF blocked redirect validation timeout: {current_url}"
+                        break
                     if not is_safe:
                         direct_err = f"SSRF blocked redirect: {current_url} ({reason})"
                         break
@@ -351,8 +373,13 @@ class CrawlerService:
                         loc = stream_resp.headers.get("location") or stream_resp.headers.get("Location")
                         resp_headers = dict(stream_resp.headers)
                         resp_text = content.decode(stream_resp.encoding or "utf-8", errors="replace")
-                except Exception as e:
+                except ResponseTooLargeError as e:
+                    # Oversized responses are a hard per-URL limit, not a reason to
+                    # fetch the same document through a second renderer/provider.
                     direct_err = str(e)
+                    break
+                except Exception as e:
+                    direct_err = f"{type(e).__name__}: {e}"
                     break
 
                 if 300 <= status_code < 400 and loc:
@@ -388,7 +415,11 @@ class CrawlerService:
                     direct_err = f"HTTP {status_code}"
                     break
 
-            if direct_err and ("Redirect loop" in direct_err or "SSRF blocked" in direct_err):
+            if direct_err and (
+                "Redirect loop" in direct_err
+                or "SSRF blocked" in direct_err
+                or "response exceeds configured" in direct_err
+            ):
                 return None, 0, ttfb_ms, {}, 0, direct_err, None, redirect_chain, final_url, None
 
         html, markdown, status, js_ttfb, headers, nbytes, js_err, js_perf = await self._js_render_page(url, client, start_time)
@@ -438,9 +469,16 @@ class CrawlerService:
         base_origin = f"{parsed_target.scheme}://{parsed_target.netloc}"
         normalized_root = self._normalize_url(raw_url, base_domain, base_origin) or raw_url
 
-        # 1. SSRF Verification
+        # 1. SSRF Verification. Bound DNS validation so a slow resolver cannot
+        # stall the entire audit worker indefinitely; timeout fails closed.
         if settings.SSRF_PROTECTION_ENABLED:
-            is_safe, reason = is_safe_url(normalized_root)
+            try:
+                is_safe, reason = await asyncio.wait_for(
+                    asyncio.to_thread(is_safe_url, normalized_root),
+                    timeout=3.0,
+                )
+            except asyncio.TimeoutError as exc:
+                raise ValueError("Security Alert: SSRF validation timed out; crawl blocked.") from exc
             if not is_safe:
                 raise ValueError(f"Security Alert: {reason}")
 

@@ -49,9 +49,20 @@ class EvidenceCompatibilityGate:
         ev_selector = str(_get_val(evidence, "selector") or "").strip().lower()
         ev_element = str(_get_val(evidence, "element") or "").strip().lower()
         ev_snippet = str(_get_val(evidence, "snippet") or "").strip().lower()
-        ev_obs = str(_get_val(evidence, "observation") or "").strip().lower()
+        ev_obs = str(
+            _get_val(evidence, "observation")
+            or _get_val(evidence, "observed_value")
+            or ""
+        ).strip().lower()
         ev_val = str(_get_val(evidence, "value") or "").strip().lower()
-        ev_blob = f"{ev_selector} {ev_element} {ev_snippet} {ev_obs} {ev_val}"
+        ev_description = str(_get_val(evidence, "description") or "").strip().lower()
+        ev_expected = str(_get_val(evidence, "expected_condition") or "").strip().lower()
+        ev_test_method = str(_get_val(evidence, "test_method") or "").strip().lower()
+        ev_url = str(_get_val(evidence, "url") or "").strip().lower()
+        ev_blob = (
+            f"{ev_selector} {ev_element} {ev_snippet} {ev_obs} {ev_val} "
+            f"{ev_description} {ev_expected} {ev_test_method} {ev_url}"
+        )
 
         # 1. Image Evidence Detection
         is_image_ev = (
@@ -63,6 +74,21 @@ class EvidenceCompatibilityGate:
             or "15 image" in ev_blob
         )
         is_image_claim = any(k in claim_blob for k in IMAGE_KEYWORDS)
+        is_layout_shift_evidence = any(
+            token in ev_blob
+            for token in (
+                "layout shift",
+                "cumulative layout shift",
+                "cls risk",
+                "missing width/height",
+                "missing dimensions",
+            )
+        )
+        is_alt_evidence = any(token in ev_blob for token in ("alt attribute", "alt text", "missing alt"))
+
+        # A layout-shift/dimensions observation cannot substantiate an alt-text claim.
+        if is_image_claim and is_layout_shift_evidence and not is_alt_evidence:
+            return False
 
         # Image evidence can ONLY be bound to image/alt claims
         if is_image_ev and not is_image_claim:

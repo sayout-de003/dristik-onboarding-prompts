@@ -48,7 +48,7 @@ class LifecycleRevenueService:
                 "metrics": {
                     "queries_tracked": _metric(gsc.is_connected, len(gsc.queries)),
                     "impressions": _metric(gsc.is_connected, gsc.impressions),
-                    "ctr": _metric(gsc.is_connected, f"{gsc.ctr * 100:.1f}%"),
+                    "ctr": _metric(gsc.is_connected, f"{gsc.ctr * 100:.1f}%" if gsc.ctr is not None else "UNKNOWN"),
                     "avg_position": _metric(gsc.is_connected, gsc.average_position),
                 },
             },
@@ -56,8 +56,8 @@ class LifecycleRevenueService:
                 "name": "3. Visitor Engagement (GA4)",
                 "status": "MEASURED" if ga4.is_connected else "NOT_MEASURED",
                 "metrics": {
-                    "engagement_rate": _metric(ga4.is_connected, f"{ga4.engagement_rate * 100:.1f}%"),
-                    "conversion_rate": _metric(ga4.is_connected, f"{ga4.conversion_rate * 100:.1f}%"),
+                    "engagement_rate": _metric(ga4.is_connected, f"{ga4.engagement_rate * 100:.1f}%" if ga4.engagement_rate is not None else "UNKNOWN"),
+                    "conversion_rate": _metric(ga4.is_connected, f"{ga4.conversion_rate * 100:.1f}%" if ga4.conversion_rate is not None else "UNKNOWN"),
                     "abandonment_rate": "UNKNOWN",
                     "cta_click_rate": "UNKNOWN",
                 },
@@ -66,7 +66,7 @@ class LifecycleRevenueService:
                 "name": "4. Lead Generation (CRM)",
                 "status": "MEASURED" if crm.is_connected else "NOT_MEASURED",
                 "metrics": {
-                    "lead_quality": _metric(crm.is_connected, f"{crm.lead_quality_score:.1f}/100"),
+                    "lead_quality": _metric(crm.is_connected, f"{crm.lead_quality_score:.1f}/100" if crm.lead_quality_score is not None else "UNKNOWN"),
                     "active_leads": _metric(
                         crm.is_connected,
                         sum(int(s.get("leads") or 0) for s in crm.lead_source),

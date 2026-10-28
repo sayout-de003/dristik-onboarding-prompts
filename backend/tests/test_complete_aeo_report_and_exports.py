@@ -366,13 +366,17 @@ def test_aeo_four_pillars_decoupled_scoring():
     report = _make_dummy_aeo_report()
     scorecard = AeoMetricsCalculator.calculate(report)
 
-    # Pillar A: Content readiness computed from page passages
-    assert scorecard.pillar_a_content_readiness.composite_readiness_score is not None
-    assert scorecard.pillar_a_content_readiness.state in (EvidenceState.SAMPLE_VERIFIED, EvidenceState.VERIFIED)
+    # Pillar A: observed question coverage exists, but factual-support denominator is absent.
+    # The composite must remain unavailable rather than silently renormalizing its weights.
+    assert scorecard.pillar_a_content_readiness.composite_readiness_score is None
+    assert scorecard.pillar_a_content_readiness.question_coverage_pct is not None
+    assert scorecard.pillar_a_content_readiness.state == EvidenceState.SAMPLE_VERIFIED
 
-    # Pillar B: Technical eligibility
-    assert scorecard.pillar_b_technical_eligibility.composite_eligibility_score is not None
-    assert scorecard.pillar_b_technical_eligibility.state == EvidenceState.VERIFIED
+    # Pillar B: only some page-level technical dimensions are present in this fixture.
+    # A partial observation is not a complete technical eligibility composite.
+    assert scorecard.pillar_b_technical_eligibility.composite_eligibility_score is None
+    assert scorecard.pillar_b_technical_eligibility.crawlability_score is None
+    assert scorecard.pillar_b_technical_eligibility.state == EvidenceState.DATA_UNAVAILABLE
 
     # Pillar C: Observed visibility is NOT_TESTED when live APIs are disconnected (Zero fabrication!)
     assert scorecard.pillar_c_observed_visibility.state == EvidenceState.NOT_TESTED

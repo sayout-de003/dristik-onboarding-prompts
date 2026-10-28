@@ -32,7 +32,8 @@ def test_source_attribution_does_not_claim_verification_without_a_claim_source_m
 def test_verification_engine_does_not_claim_a_retest_was_executed():
     result = VerificationEngineSpecialist().evaluate(SimpleNamespace())
     assert result.status == EvidenceState.NOT_TESTED
-    assert "not executed" in result.summary.lower()
+    assert "no remediation recrawl" in result.summary.lower()
+    assert "was executed" in result.summary.lower()
 
 
 def test_question_discovery_does_not_claim_site_wide_absence_without_crawl_pages():

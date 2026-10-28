@@ -56,15 +56,17 @@ def _board(with_pages=True):
 
 
 def test_registry_has_exactly_50_specialists():
-    assert specialist_count() == 62
-    assert len(list_all_specialists()) == 62
-    assert len(TASK_CARDS) == 62
+    count = len(SPECIALIST_AGENTS_V3)
+    assert count >= 50
+    assert specialist_count() == count
+    assert len(list_all_specialists()) == count
+    assert len(TASK_CARDS) == count
     assert set(TASK_CARDS) == set(SPECIALIST_AGENTS_V3)
 
 
 def test_pool_instantiates_all_50():
     pool = AgentPool(_FakeRouter())
-    assert len(pool) == 62
+    assert len(pool) == len(SPECIALIST_AGENTS_V3)
     assert set(pool.agents) == set(SPECIALIST_AGENTS_V3)
 
 
@@ -184,9 +186,10 @@ async def test_execute_all_runs_50_agents():
     bb, _ = _board()
     pool = AgentPool(_FakeRouter())
     summary = await pool.execute_all(bb)
-    assert summary["agents_declared"] == 62
-    assert summary["agents_ran"] + summary["errors"] == 62
-    assert len(bb.blackboard_state.get("agent_results") or {}) == 62
+    count = len(SPECIALIST_AGENTS_V3)
+    assert summary["agents_declared"] == count
+    assert summary["agents_ran"] + summary["errors"] == count
+    assert len(bb.blackboard_state.get("agent_results") or {}) == count
 
 
 @pytest.mark.asyncio

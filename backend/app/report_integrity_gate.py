@@ -94,13 +94,54 @@ def validate_final_report(report: Any, manifest: Any | None = None) -> dict[str,
         blockers.append("overall score is missing, non-finite, or outside 0..100")
 
     category_scores = getattr(scores, "category_scores", None) or {}
+    active_category_weights: list[float] = []
     if isinstance(category_scores, dict):
         for key, item in category_scores.items():
             raw_score = getattr(item, "score", item if isinstance(item, (int, float)) else None)
-            if raw_score is None:
-                continue
-            if isinstance(raw_score, bool) or not isinstance(raw_score, (int, float)) or not math.isfinite(float(raw_score)) or not 0 <= float(raw_score) <= 100:
+            status = str(_value(getattr(item, "status", "MEASURED")) or "MEASURED").upper()
+            raw_weight = getattr(item, "weight", None)
+            raw_weighted = getattr(item, "weighted_score", None)
+            weight = None
+            if raw_weight is not None:
+                if (
+                    isinstance(raw_weight, bool)
+                    or not isinstance(raw_weight, (int, float))
+                    or not math.isfinite(float(raw_weight))
+                    or not 0 <= float(raw_weight) <= 1
+                ):
+                    blockers.append(f"category weight {key} is invalid")
+                else:
+                    weight = float(raw_weight)
+                    if status in {"MEASURED", "PARTIAL"} and weight > 0:
+                        active_category_weights.append(weight)
+
+            if raw_score is not None and (
+                isinstance(raw_score, bool)
+                or not isinstance(raw_score, (int, float))
+                or not math.isfinite(float(raw_score))
+                or not 0 <= float(raw_score) <= 100
+            ):
                 blockers.append(f"category score {key} is invalid")
+                continue
+
+            if status == "NOT_MEASURED" and raw_score is not None:
+                blockers.append(f"category {key} is marked NOT_MEASURED but has a numeric score")
+            if raw_score is None and weight is not None and weight > 0:
+                blockers.append(f"category {key} has positive weight but no measured score")
+
+            if raw_score is not None and weight is not None and raw_weighted is not None:
+                if (
+                    isinstance(raw_weighted, bool)
+                    or not isinstance(raw_weighted, (int, float))
+                    or not math.isfinite(float(raw_weighted))
+                    or not 0 <= float(raw_weighted) <= 100
+                ):
+                    blockers.append(f"category weighted score {key} is invalid")
+                elif weight > 0 and abs(float(raw_weighted) - float(raw_score) * weight) > 0.05:
+                    blockers.append(f"category weighted score {key} does not reconcile with score × weight")
+
+        if active_category_weights and abs(sum(active_category_weights) - 1.0) > 0.01:
+            blockers.append("measured category weights do not sum to 1.0")
 
     if manifest is not None:
         if getattr(manifest, "analysis_id", None) != getattr(report, "analysis_id", None):

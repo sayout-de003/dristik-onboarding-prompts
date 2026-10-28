@@ -188,33 +188,39 @@ def test_connectors_oauth_providers_status():
 def test_search_console_authorize_uses_registered_google_redirect():
     """Search Console must send the redirect URI registered on the Google client."""
     import uuid
-    signup = client.post("/api/v1/auth/signup", json={
+    secure_client = TestClient(app, base_url="https://testserver")
+    email = f"gsc_{uuid.uuid4().hex[:8]}@example.com"
+    signup = secure_client.post("/api/v1/auth/signup", json={
         "full_name": "Search Owner",
-        "email": f"gsc_{uuid.uuid4().hex[:8]}@example.com",
+        "email": email,
         "password": "OwnerPass1",
         "organization_name": "Search Org",
     })
     assert signup.status_code == 200, signup.text
+    login = secure_client.post("/api/v1/auth/login", json={"email": email, "password": "OwnerPass1"})
+    assert login.status_code == 200, login.text
     registered = "https://octaos.org/api/v1/external-authority/oauth/callback"
     with patch.object(settings, "GOOGLE_CLIENT_ID", "mock-google-id"), \
          patch.object(settings, "GOOGLE_CLIENT_SECRET", "mock-google-sec"), \
+         patch.object(settings, "AUTH_SECRET", "test-oauth-state-signing-secret-0123456789abcdef"), \
+         patch.object(settings, "ENVIRONMENT", "test"), \
          patch.object(settings, "GOOGLE_OAUTH_REDIRECT_URI", registered), \
          patch.object(settings, "EXTERNAL_OAUTH_REDIRECT_URI", None), \
          patch.object(settings, "OAUTH_REDIRECT_URI", "https://octaos.org/api/v1/connectors/oauth/callback"):
-        res = client.get(
+        res = secure_client.get(
             "/api/v1/connectors/google/oauth/authorize?domain=example.com",
             follow_redirects=False,
         )
         assert res.status_code == 302
         assert "/api/v1/connectors/oauth/google_search_console/authorize" in res.headers["location"]
 
-        followed = client.get(res.headers["location"], follow_redirects=False)
+        followed = secure_client.get(res.headers["location"], follow_redirects=False)
         assert followed.status_code in (302, 307)
         location = followed.headers["location"]
         assert "accounts.google.com" in location
         assert "external-authority%2Foauth%2Fcallback" in location or "external-authority/oauth/callback" in location
 
-        sso = client.get("/api/v1/auth/oauth/google/authorize", follow_redirects=False)
+        sso = secure_client.get("/api/v1/auth/oauth/google/authorize", follow_redirects=False)
         assert sso.status_code in (302, 307)
         assert "external-authority%2Foauth%2Fcallback" in sso.headers["location"] or "external-authority/oauth/callback" in sso.headers["location"]
 
@@ -287,26 +293,32 @@ def test_oauth_sso_callback_format_redirect():
 def test_ga4_connector_oauth_hosted_redirect_and_connect():
     """Verify GA4 1-click OAuth flow on hosted server preserves host, saves connected status, and updates status endpoint."""
     import uuid
+    secure_client = TestClient(app, base_url="https://testserver")
     from app.connectors.oauth_providers import _sign
     from app.connectors.store import connector_store
     from app.domain.enums import ConnectorType, ConnectorHealthStatus
 
-    signup = client.post("/api/v1/auth/signup", json={
+    email = f"ga4_{uuid.uuid4().hex[:8]}@example.com"
+    signup = secure_client.post("/api/v1/auth/signup", json={
         "full_name": "GA4 Owner",
-        "email": f"ga4_{uuid.uuid4().hex[:8]}@example.com",
+        "email": email,
         "password": "OwnerPass1",
         "organization_name": "GA4 Org",
     })
     assert signup.status_code == 200, signup.text
+    login = secure_client.post("/api/v1/auth/login", json={"email": email, "password": "OwnerPass1"})
+    assert login.status_code == 200, login.text
     org_id = signup.json()["user"]["org_id"]
 
     # 1. Authorize on a hosted domain with X-Forwarded-Host
     with patch.object(settings, "GOOGLE_CLIENT_ID", "mock-ga4-id"), \
          patch.object(settings, "GOOGLE_CLIENT_SECRET", "mock-ga4-sec"), \
+         patch.object(settings, "AUTH_SECRET", "test-oauth-state-signing-secret-0123456789abcdef"), \
+         patch.object(settings, "ENVIRONMENT", "test"), \
          patch.object(settings, "GOOGLE_OAUTH_REDIRECT_URI", None), \
          patch.object(settings, "EXTERNAL_OAUTH_REDIRECT_URI", None), \
          patch.object(settings, "OAUTH_REDIRECT_URI", "http://localhost:8000/api/v1/connectors/oauth/callback"):
-        res = client.get(
+        res = secure_client.get(
             "/api/v1/connectors/oauth/google_analytics_4/authorize?domain=acme-store.com",
             headers={"Host": "hosted-app.dristik.ai", "X-Forwarded-Proto": "https"},
             follow_redirects=False,
@@ -329,7 +341,7 @@ def test_ga4_connector_oauth_hosted_redirect_and_connect():
     with patch("app.connectors.oauth_providers._exchange", return_value=mock_token_data), \
          patch.object(settings, "GOOGLE_CLIENT_ID", "mock-ga4-id"), \
          patch.object(settings, "GOOGLE_CLIENT_SECRET", "mock-ga4-sec"):
-        res = client.get(
+        res = secure_client.get(
             f"/api/v1/connectors/oauth/callback?code=test_code_123&state={state}",
             headers={"Host": "hosted-app.dristik.ai", "X-Forwarded-Proto": "https"},
         )
@@ -351,7 +363,7 @@ def test_ga4_connector_oauth_hosted_redirect_and_connect():
         assert latest_ga4.status == ConnectorHealthStatus.CONNECTED
 
         # 4. Verify /api/v1/integrations/status reflects connected == True
-        status_res = client.get("/api/v1/integrations/status")
+        status_res = secure_client.get("/api/v1/integrations/status")
         assert status_res.status_code == 200
         data = status_res.json()
         assert data["google_analytics_4"]["connected"] is True

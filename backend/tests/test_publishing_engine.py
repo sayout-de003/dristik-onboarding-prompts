@@ -117,7 +117,8 @@ class TestCoverGenerator:
         assert "example-corp.com" in html_out
         assert "Example Corp" in html_out
         assert "STRICTLY CONFIDENTIAL" in html_out
-        assert "ZERO-FAKE AST CERTIFIED" in html_out
+        assert "ZERO-FAKE EVIDENCE POLICY" in html_out
+        assert "ZERO-FAKE AST CERTIFIED" not in html_out
         assert "PAGE 1 (COVER) // UNNUMBERED" in html_out
 
         # Verify category motif SVG is present

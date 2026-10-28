@@ -56,8 +56,12 @@ class AuditRepository:
     # -------------------------------------------------------------------------
     # Audit Run Persistence
     # -------------------------------------------------------------------------
-    def save_run(self, run: AnalysisRun) -> None:
-        """Saves or updates an AnalysisRun record."""
+    def save_run(self, run: AnalysisRun, findings: Optional[List[Finding]] = None) -> None:
+        """Save a run and optionally its final finding set in one transaction.
+
+        Supplying findings replaces the persisted set atomically with the report/run
+        snapshot so a crash cannot leave a new report paired with stale findings.
+        """
         domain = getattr(run, "domain", None) or urlparse(run.website_url).netloc.replace("www.", "")
         status_val = run.status.value if hasattr(run.status, "value") else str(run.status)
         stage_val = getattr(run, "current_step", str(run.status))
@@ -130,9 +134,41 @@ class AuditRepository:
             "error_message": getattr(run, "error", getattr(run, "error_message", None)),
         }
 
+        finding_rows = None
+        if findings is not None:
+            now = datetime.now(timezone.utc).isoformat()
+            finding_rows = []
+            for finding in findings:
+                finding_id = getattr(finding, "finding_id", None) or getattr(finding, "id", None)
+                category = finding.category.value if hasattr(finding.category, "value") else str(finding.category)
+                severity = finding.severity.value if hasattr(finding.severity, "value") else str(finding.severity)
+                verification = (
+                    finding.verification_status.value
+                    if getattr(finding, "verification_status", None) and hasattr(finding.verification_status, "value")
+                    else str(getattr(finding, "verification_status", "verified"))
+                )
+                finding_rows.append((
+                    finding_id, run.analysis_id, category, severity, finding.title,
+                    finding.description, finding.impact, finding.recommendation,
+                    json.dumps(finding.evidence_refs or []),
+                    json.dumps(getattr(finding, "claim_refs", [])), verification, now,
+                ))
+
+        finding_sql = """
+        INSERT OR REPLACE INTO audit_findings (
+            finding_id, analysis_id, category, severity, title, description,
+            impact, recommendation, evidence_refs_json, claim_refs_json,
+            verification_status, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+
         with self._lock:
             with self._get_conn() as conn:
                 conn.execute(sql, params)
+                if finding_rows is not None:
+                    conn.execute("DELETE FROM audit_findings WHERE analysis_id = ?", (run.analysis_id,))
+                    if finding_rows:
+                        conn.executemany(finding_sql, finding_rows)
                 conn.commit()
 
     def get_run(self, analysis_id: str) -> Optional[Dict[str, Any]]:

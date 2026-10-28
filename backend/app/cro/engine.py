@@ -1531,12 +1531,16 @@ class _Rules:
 
     def metric_rpv(self, check: Dict[str, Any]) -> Dict[str, Any]:
         analytics = self.obs.analytics
-        value = rate(analytics.get("revenue"), analytics.get("sessions"))
+        eligible_visitors = analytics.get("eligible_visitors")
+        value = rate(analytics.get("revenue"), eligible_visitors)
         if value is None:
-            return self.un(check, "Revenue per visitor was not calculated. Attributed revenue and eligible visitors were not both present.")
+            return self.un(
+                check,
+                "Revenue per visitor was not calculated. Attributed revenue and an explicit eligible-visitor denominator were not both present; sessions were not substituted for visitors.",
+            )
         return self.observed(
             check,
-            f"{analytics['revenue']} revenue ÷ {analytics['sessions']} sessions = {value:.4f} over {analytics.get('period') or 'the connected period'}.",
+            f"{analytics['revenue']} attributed revenue ÷ {eligible_visitors} eligible visitors = {value:.4f} over {analytics.get('period') or 'the connected period'}.",
             state="VERIFIED",
         )
 
@@ -2994,6 +2998,7 @@ def _metrics(obs: _Obs) -> List[CroMetricResult]:
     window = analytics.get("period")
     conversion = rate(analytics.get("unique_converters"), analytics.get("eligible_users"))
     key_event_rate = rate(analytics.get("key_events"), analytics.get("sessions")) if analytics.get("key_events_present") else None
+    # Revenue per visitor requires an eligible-visitor denominator; sessions are not people.
     revenue_per_visitor = rate(analytics.get("revenue"), analytics.get("eligible_visitors"))
     aov = rate(analytics.get("revenue"), analytics.get("orders"))
     values = {
@@ -3013,7 +3018,7 @@ def _metrics(obs: _Obs) -> List[CroMetricResult]:
             revenue_per_visitor,
             "attributed revenue",
             "eligible visitors",
-            "Shown only when attributed revenue and eligible visitors are both present; users and sessions are not substituted for visitors.",
+            "Shown only when attributed revenue and an explicitly defined eligible-visitor denominator were both present. Sessions are not substituted for visitors.",
         ),
         "Average order value": (aov, "net sales", "orders", "Shown only when both net sales and completed orders were present."),
     }
@@ -3034,7 +3039,10 @@ def _metrics(obs: _Obs) -> List[CroMetricResult]:
                 note=note,
             ))
             continue
-        reason = "The numerator and denominator were not both available. Zero was not substituted, and no lift was assumed."
+        reason = (
+            "sessions are not substituted for visitors. The numerator and denominator "
+            "were not both available, so zero was not substituted and no lift was assumed."
+        )
         if spec["metric"] == "Conversion rate":
             reason = "Unique converters and eligible users were not both returned by GA4. Key events ÷ sessions is not substituted for conversion rate."
         results.append(CroMetricResult(

@@ -32,39 +32,51 @@ ProgressCb = Optional[Callable[[str, int, str, Dict[str, Any]], Awaitable[None]]
 
 
 def topological_waves(definitions: Dict[str, AgentDefinition]) -> List[List[str]]:
-    """Kahn waves: agents whose dependencies are already scheduled go in the next wave."""
+    """Build deterministic Kahn waves and fail closed on invalid dependencies."""
     ids = list(definitions.keys())
     id_set = set(ids)
-    incoming: Dict[str, int] = {i: 0 for i in ids}
-    edges: Dict[str, List[str]] = defaultdict(list)
-    for aid, defn in definitions.items():
-        for dep in defn.dependencies or []:
-            if dep in id_set:
-                edges[dep].append(aid)
-                incoming[aid] += 1
+    unknown_dependencies = sorted({
+        str(dep)
+        for defn in definitions.values()
+        for dep in (defn.dependencies or [])
+        if dep not in id_set
+    })
+    if unknown_dependencies:
+        raise ValueError(
+            "agent DAG contains dependencies that are not registered: "
+            + ", ".join(unknown_dependencies[:30])
+        )
 
-    ready = deque([i for i in ids if incoming[i] == 0])
+    incoming: Dict[str, int] = {agent_id: 0 for agent_id in ids}
+    edges: Dict[str, List[str]] = defaultdict(list)
+    for agent_id, definition in definitions.items():
+        for dependency in definition.dependencies or []:
+            edges[dependency].append(agent_id)
+            incoming[agent_id] += 1
+
+    ready = deque([agent_id for agent_id in ids if incoming[agent_id] == 0])
     waves: List[List[str]] = []
-    seen = 0
+    seen_ids: set[str] = set()
     while ready:
         wave = list(ready)
         ready.clear()
         waves.append(wave)
-        seen += len(wave)
-        nxt: List[str] = []
+        seen_ids.update(wave)
+        next_wave: List[str] = []
         for node in wave:
             for child in edges[node]:
                 incoming[child] -= 1
                 if incoming[child] == 0:
-                    nxt.append(child)
-        ready.extend(nxt)
+                    next_wave.append(child)
+        ready.extend(next_wave)
 
-    if seen < len(ids):
-        leftover = [i for i in ids if all(i not in w for w in waves)]
-        if leftover:
-            waves.append(leftover)
+    if len(seen_ids) != len(ids):
+        cyclic = sorted(set(ids) - seen_ids)
+        raise ValueError(
+            "agent DAG contains a dependency cycle involving: "
+            + ", ".join(cyclic[:30])
+        )
     return waves
-
 
 PILLAR_DOMAINS: Dict[str, Set[str]] = {
     "seo": {"TECHNICAL_SEO", "STRUCTURED_DATA", "CONTENT"},

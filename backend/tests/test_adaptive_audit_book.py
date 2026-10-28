@@ -223,7 +223,8 @@ class TestAdaptiveAuditBookHtmlRendering:
         assert "ZERO-FAKE EVIDENCE ATTESTATION" in rendered_html
         assert "RE-VERIFICATION PROTOCOL" in rendered_html
         assert "acme-analytics.io" in rendered_html
-        assert "AUDIT CERTIFIED" in rendered_html
+        assert "NOT_ASSESSED" in rendered_html
+        assert "AUDIT CERTIFIED" not in rendered_html
 
     def test_handles_unmeasured_scores_without_defaulting_to_zero(self):
         rep = _build_test_report()
@@ -337,6 +338,9 @@ class TestSectionPdfEndpoint:
             async def fake_none(html, timeout_ms=60000):
                 return None
             monkeypatch.setattr(BrowserRenderService, "render_pdf", fake_none)
+            # Isolate the failure path from the successful PDF cached above.
+            from app.reports.pdf_generator import _SECTION_PDF_CACHE
+            _SECTION_PDF_CACHE.clear()
             assert client.get(url).status_code == 503
         finally:
             app.dependency_overrides.clear()

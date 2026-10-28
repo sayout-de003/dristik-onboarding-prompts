@@ -137,8 +137,16 @@ async def test_anthropic_rate_limit_backoff():
 
 
 @pytest.mark.asyncio
-async def test_model_router_does_not_repeat_exhausted_retries():
+async def test_model_router_does_not_repeat_exhausted_retries(monkeypatch):
     """Verify ModelRouter generates structured output and does not loop 4 times on rate limits."""
+    # Explicitly configure a test credential so the no-key guard does not short-circuit
+    # the retry-exhaustion path this test is intended to exercise.
+    from app.core.inference.model_router import settings as router_settings
+    monkeypatch.setattr(
+        type(router_settings),
+        "get_llm_credentials",
+        lambda self, **kwargs: {"api_key": "test-key", "model_fast": "test-model", "model_reasoning": "test-model"},
+    )
     router = ModelRouter()
     mock_client = AsyncMock()
     mock_client.provider = "anthropic"

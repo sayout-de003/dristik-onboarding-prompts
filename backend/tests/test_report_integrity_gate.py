@@ -88,3 +88,32 @@ def test_final_report_integrity_gate_rejects_invalid_overall_score(score):
 def test_final_report_integrity_gate_rejects_manifest_finding_mismatch():
     with pytest.raises(ValueError, match="manifest finding pins"):
         validate_final_report(_report(), _manifest(findings=[]))
+
+
+
+def test_final_report_integrity_gate_rejects_category_weight_sum_mismatch():
+    report = _report()
+    report.scores.category_scores = {
+        "TECHNICAL_SEO": SimpleNamespace(score=80.0, status="MEASURED", weight=0.6, weighted_score=48.0),
+        "CONTENT": SimpleNamespace(score=70.0, status="MEASURED", weight=0.3, weighted_score=21.0),
+    }
+    with pytest.raises(ValueError, match="measured category weights do not sum"):
+        validate_final_report(report, _manifest())
+
+
+def test_final_report_integrity_gate_rejects_weighted_score_mismatch():
+    report = _report()
+    report.scores.category_scores = {
+        "TECHNICAL_SEO": SimpleNamespace(score=80.0, status="MEASURED", weight=1.0, weighted_score=70.0),
+    }
+    with pytest.raises(ValueError, match="does not reconcile"):
+        validate_final_report(report, _manifest())
+
+
+def test_final_report_integrity_gate_rejects_numeric_score_for_unmeasured_category():
+    report = _report()
+    report.scores.category_scores = {
+        "TECHNICAL_SEO": SimpleNamespace(score=0.0, status="NOT_MEASURED", weight=0.0, weighted_score=0.0),
+    }
+    with pytest.raises(ValueError, match="NOT_MEASURED but has a numeric score"):
+        validate_final_report(report, _manifest())
