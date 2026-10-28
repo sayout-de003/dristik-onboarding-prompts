@@ -10,7 +10,6 @@ import hashlib
 import json
 import os
 import secrets
-import hmac
 import sqlite3
 import time
 import uuid
@@ -483,10 +482,12 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
         params = body.get("params") or {}
         name, args = params.get("name"), params.get("arguments") or {}
         if name == "dristik_list_capabilities":
+            if not _mcp_authorized(user, "capabilities.list", "mission:read"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit capability discovery.")
             result = await list_capabilities(user)
         elif name == "dristik_create_task":
-            if not Authorizer.can_perform(user, "mission:create"):
-                raise HTTPException(status_code=403, detail="You do not have permission to create collaboration tasks.")
+            if not _mcp_authorized(user, "tasks.create", "mission:create"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit creating collaboration tasks.")
             if not args.get("goal"):
                 raise HTTPException(status_code=400, detail="goal is required.")
             task = await create_task(TaskCreate(goal=args["goal"], inputs=args.get("inputs") or {}), user)
