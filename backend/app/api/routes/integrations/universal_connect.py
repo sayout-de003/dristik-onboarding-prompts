@@ -201,7 +201,7 @@ async def list_capabilities(user: UserIdentity = Depends(get_current_user)):
         {"name": "audit.create", "scope": "audit.create", "status": "available", "description": "Start the canonical Dristik website audit"},
         {"name": "audit.read", "scope": "audit.read", "status": "available", "description": "Inspect audit progress, state, and steps"},
         {"name": "audit.cancel", "scope": "audit.cancel", "status": "available", "description": "Cancel a running canonical audit"},
-        {"name": "agents.list", "scope": "agents.list", "status": "available", "description": "List the 105 registered specialist agents and their contracts"},
+        {"name": "agents.list", "scope": "agents.list", "status": "available", "description": "List the actual registered runtime agents and their contracts; the returned count is discovered from the runtime registry"},
         {"name": "agent.execute", "scope": "agent.execute", "status": "available", "description": "Execute a specific DAG node with prerequisite verification"},
         {"name": "workflow.execute", "scope": "workflow.execute", "status": "available", "description": "Execute a pipeline section in the audit DAG"},
         {"name": "pipeline.inspect", "scope": "pipeline.inspect", "status": "available", "description": "Inspect DAG sections, node hierarchy, and execution graph"},
@@ -700,7 +700,7 @@ async def test_ai_connection_message(
         response_data = {
             "agent_count": unique_agents,
             "sample_agents": [defn.agent_id for defn in list(AGENT_REGISTRY.values())[:5]],
-            "fleet_status": "operational",
+            "fleet_status": "registered; execution readiness is not inferred from registry presence",
         }
         summary_text = f"Agent fleet verified: {unique_agents} specialist agents registered."
     else:
@@ -917,6 +917,10 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
              "inputSchema": {"type": "object", "required": ["analysis_id", "section_id"], "properties": {"analysis_id": {"type": "string"}, "section_id": {"type": "string"}}}},
             {"name": "dristik_pipeline_inspect", "description": "Inspect the entire DAG pipeline sections, stages, node dependency hierarchy, and execution graph.",
              "inputSchema": {"type": "object", "properties": {}}},
+            {"name": "dristik_pipeline_status", "description": "Inspect section and node execution status for a tenant-owned audit, including dependencies, recent activity, and durable audit status.",
+             "inputSchema": {"type": "object", "required": ["analysis_id"], "properties": {"analysis_id": {"type": "string"}}}},
+            {"name": "dristik_report_artifacts", "description": "Get Dristik-owned HTML, PDF, GEO report, deliverables, and PPTX endpoints for a completed audit. URLs require the same authenticated tenant connection.",
+             "inputSchema": {"type": "object", "required": ["analysis_id"], "properties": {"analysis_id": {"type": "string"}}}},
             {"name": "dristik_blackboard_read", "description": "Read intermediate crawl pages, claims, evidence items, and scores from the shared audit blackboard.",
              "inputSchema": {"type": "object", "required": ["analysis_id"], "properties": {"analysis_id": {"type": "string"}}}},
             {"name": "dristik_claim_submit", "description": "Submit an external AI reasoned finding or claim into the audit blackboard for adversarial verification.",
@@ -965,6 +969,8 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             "dristik_claim_submit": "claim.submit",
             "dristik_ai_citations_track": "citations.track",
             "dristik_pipeline_inspect": "pipeline.inspect",
+            "dristik_pipeline_status": "audit.read",
+            "dristik_report_artifacts": "report.export",
             "dristik_agent_execute": "agent.execute",
             "dristik_workflow_execute": "workflow.execute",
             "dristik_connector_status": "connector.read",
@@ -1265,6 +1271,83 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             ]
             payload = {"sections": sections, "nodes": nodes, "total_nodes": len(nodes), "total_sections": len(sections)}
             result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
+        elif name == "dristik_pipeline_status":
+            if not _mcp_authorized(user, "audit.read", "mission:read"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit pipeline status access.")
+            analysis_id = args.get("analysis_id")
+            if not isinstance(analysis_id, str) or not analysis_id:
+                raise HTTPException(status_code=400, detail="analysis_id is required.")
+            from app.identity.access import require_analysis
+            from app.orchestration.pipeline_dag import get_pipeline_controller, SECTIONS_REGISTRY
+            run = require_analysis(analysis_id, user)
+            graph = get_pipeline_controller(analysis_id).get_full_graph_state()
+            nodes = graph.get("nodes", {})
+            sections = []
+            for section in SECTIONS_REGISTRY:
+                section_nodes = [nodes[node_id] for node_id in section.node_ids if node_id in nodes]
+                statuses = [node.get("status", "pending") for node in section_nodes]
+                if statuses and all(status == "completed" for status in statuses):
+                    section_status = "completed"
+                elif any(status == "running" for status in statuses):
+                    section_status = "running"
+                elif any(status == "failed" for status in statuses):
+                    section_status = "failed"
+                elif any(status == "completed" for status in statuses):
+                    section_status = "partial"
+                else:
+                    section_status = "pending"
+                sections.append({
+                    "section_id": section.section_id,
+                    "title": section.title,
+                    "description": section.description,
+                    "order": section.order,
+                    "status": section_status,
+                    "completed_nodes": sum(1 for status in statuses if status == "completed"),
+                    "total_nodes": len(section_nodes),
+                    "nodes": section_nodes,
+                })
+            payload = {
+                "analysis_id": analysis_id,
+                "website_url": run.website_url,
+                "audit_status": str(getattr(run.status, "value", run.status)),
+                "audit_progress_percentage": getattr(run, "progress_percentage", None),
+                "controller_progress_percentage": graph.get("progress_percentage", 0),
+                "completed_nodes": graph.get("completed_nodes", 0),
+                "total_nodes": graph.get("total_nodes", 0),
+                "is_paused": graph.get("is_paused", False),
+                "sections": sections,
+                "recent_activity": graph.get("activity_events", []),
+                "controller_state_scope": "process-local; node-level controller state may be empty after a server restart",
+            }
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
+        elif name == "dristik_report_artifacts":
+            if not _mcp_authorized(user, "report.export", "mission:read"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit report artifact access.")
+            analysis_id = args.get("analysis_id")
+            if not isinstance(analysis_id, str) or not analysis_id:
+                raise HTTPException(status_code=400, detail="analysis_id is required.")
+            from app.identity.access import require_analysis
+            run = require_analysis(analysis_id, user)
+            if not getattr(run, "report", None):
+                raise HTTPException(status_code=409, detail="Report is not ready yet.")
+            base_url = str(request.base_url).rstrip("/")
+            root = f"{base_url}/api/v1/reports/{analysis_id}"
+            payload = {
+                "analysis_id": analysis_id,
+                "status": "ready",
+                "artifacts": [
+                    {"id": "seo_audit_book_html", "format": "html", "url": f"{root}/seo-report?format=html", "owner": "dristik"},
+                    {"id": "seo_audit_book_pdf", "format": "pdf", "url": f"{root}/seo-report?format=pdf&download=true", "owner": "dristik"},
+                    {"id": "geo_audit_book_pdf", "format": "pdf", "url": f"{root}/geo-report?format=pdf", "owner": "dristik"},
+                    {"id": "executive_deck_html", "format": "html", "url": f"{root}/executive-deck", "owner": "dristik"},
+                    {"id": "executive_deck_pptx", "format": "pptx", "url": f"{root}/deck.pptx", "owner": "dristik"},
+                    {"id": "audit_deliverables_json", "format": "json", "url": f"{root}/deliverables", "owner": "dristik"},
+                    {"id": "remediation_tracker_csv", "format": "csv", "url": f"{root}/export/remediation-tracker.csv", "owner": "dristik"},
+                    {"id": "crawl_urls_csv", "format": "csv", "url": f"{root}/export/urls.csv", "owner": "dristik"},
+                ],
+                "access_note": "Artifact URLs are protected by Dristik authentication and tenant authorization; use the same bearer token and connection email headers.",
+            }
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
         elif name == "dristik_blackboard_read":
             if not _mcp_authorized(user, "blackboard.read", "mission:read"):
                 raise HTTPException(status_code=403, detail="Connection grant does not permit blackboard inspection.")
@@ -1367,31 +1450,18 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             if not isinstance(domain, str) or not domain.strip():
                 raise HTTPException(status_code=400, detail="domain is required.")
             clean_domain = domain.strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
-            queries = args.get("queries") or [
-                f"best {clean_domain} alternatives",
-                f"{clean_domain} review and pricing",
-                f"is {clean_domain} trustworthy",
-            ]
-            engines = args.get("engines") or ["perplexity", "chatgpt", "gemini", "claude"]
-            engine_results = {
-                eng.lower(): {
-                    "engine": eng.lower(),
-                    "supported": True,
-                    "citation_rate": 0.75,
-                    "tested_queries_count": len(queries),
-                    "brand_mentions": len(queries),
-                    "status": "active_monitoring",
-                }
-                for eng in engines
-            }
+            # Never synthesize citation rates or claim live measurement from a requested engine list.
+            # A live tracker must return provider-attributed query/engine/time evidence before metrics can be emitted.
             payload = {
                 "domain": clean_domain,
-                "tested_engines": engines,
-                "tested_queries": queries,
-                "overall_citation_score": 78.5,
-                "status": "measured",
-                "engines": engine_results,
-                "recommendation": "Maintain schema FAQPage and entity SameAs links to maximize AI citation rate in Perplexity and ChatGPT.",
+                "requested_queries": args.get("queries") or [],
+                "requested_engines": args.get("engines") or ["openai", "gemini", "anthropic", "xai", "deepseek"],
+                "status": "NOT_CONFIGURED",
+                "overall_citation_score": None,
+                "engines": {},
+                "metrics_available": False,
+                "reason": "No verified live citation-tracking adapter is wired to this MCP operation. No citation rates, mentions, or visibility scores were fabricated.",
+                "next_step": "Configure a supported live measurement adapter and persist engine, query, timestamp, response, and citation evidence before reporting metrics.",
             }
             result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
         elif name == "dristik_provider_invoke":
