@@ -116,6 +116,46 @@ async def fetch_crux(origin: str, form_factor: str = "PHONE", url: str | None = 
         return _error(provider, f"CrUX request failed ({type(exc).__name__}); no metrics were inferred.")
 
 
+async def fetch_google_search(query: str, num: int = 10, start: int = 1) -> dict[str, Any]:
+    """Query Google's Programmable Search JSON API; this is not a universal live-SERP rank tracker."""
+    provider = "Google Programmable Search JSON API"
+    key, cx = os.getenv("GOOGLE_CSE_API_KEY") or os.getenv("GOOGLE_API_KEY"), os.getenv("GOOGLE_CSE_CX")
+    if not key or not cx:
+        return _unavailable(provider, "Set GOOGLE_CSE_API_KEY (or GOOGLE_API_KEY) and GOOGLE_CSE_CX. This API returns configured Programmable Search results, not a guaranteed universal Google SERP.")
+    clean_query = query.strip()
+    if not clean_query:
+        return {"status": "INVALID_REQUEST", "provider": provider, "metrics_available": False, "results": [], "reason": "query is required."}
+    if len(clean_query) > 500:
+        return {"status": "INVALID_REQUEST", "provider": provider, "metrics_available": False, "results": [], "reason": "query must be 500 characters or fewer."}
+    num = max(1, min(int(num), 10))
+    start = max(1, min(int(start), 91))
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20, connect=5), follow_redirects=False) as client:
+            response = await client.get("https://www.googleapis.com/customsearch/v1", params={"key": key, "cx": cx, "q": clean_query, "num": num, "start": start})
+        if response.status_code in (400, 401, 403):
+            return _error(provider, "Google rejected the request, API key, search engine ID, or API access.", http_status=response.status_code)
+        if response.status_code == 429:
+            return _error(provider, "Google Programmable Search quota or rate limit was reached.", http_status=429)
+        response.raise_for_status()
+        data = response.json()
+        items = data.get("items") or []
+        return {
+            "status": "VERIFIED_LIVE" if items else "DATA_UNAVAILABLE",
+            "provider": provider,
+            "data_kind": "PROGRAMMABLE_SEARCH_RESULTS_NOT_UNIVERSAL_SERP_RANKINGS",
+            "metrics_available": bool(items),
+            "query": clean_query,
+            "total_results_estimate": (data.get("searchInformation") or {}).get("totalResults"),
+            "results": [{"title": item.get("title"), "url": item.get("link"), "snippet": item.get("snippet"), "display_link": item.get("displayLink")} for item in items],
+            "retrieved_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            "reason": None if items else "Google returned no results for this configured Programmable Search Engine."
+        }
+    except httpx.HTTPStatusError as exc:
+        return _error(provider, "Google Programmable Search API returned an unsuccessful response.", http_status=exc.response.status_code)
+    except httpx.HTTPError as exc:
+        return _error(provider, f"Google Search request failed ({type(exc).__name__}); no results were inferred.")
+
+
 async def fetch_pagespeed(url: str, strategy: str = "mobile", categories: list[str] | None = None) -> dict[str, Any]:
     provider = "Google PageSpeed Insights API / Lighthouse"
     try:
@@ -182,7 +222,16 @@ async def performance_data_status(user: UserIdentity = Depends(get_current_user)
                  "provider": "Chrome UX Report API", "data_type": "field_data"},
         "pagespeed": {"configured": True, "provider": "Google PageSpeed Insights API", "api_key_configured": bool(os.getenv("GOOGLE_PAGESPEED_API_KEY") or os.getenv("GOOGLE_API_KEY")),
                       "data_type": "lighthouse_lab_data"},
+        "google_programmable_search": {"configured": bool((os.getenv("GOOGLE_CSE_API_KEY") or os.getenv("GOOGLE_API_KEY")) and os.getenv("GOOGLE_CSE_CX")), "provider": "Google Programmable Search JSON API", "data_type": "configured_search_results_not_universal_serp"},
     }
+
+
+@router.get("/google-search")
+async def google_search_endpoint(q: str = Query(..., min_length=1, max_length=500),
+                                 num: int = Query(10, ge=1, le=10),
+                                 start: int = Query(1, ge=1, le=91),
+                                 user: UserIdentity = Depends(get_current_user)):
+    return await fetch_google_search(q, num, start)
 
 
 @router.post("/crux")
