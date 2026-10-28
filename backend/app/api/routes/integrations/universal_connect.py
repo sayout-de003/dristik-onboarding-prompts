@@ -316,8 +316,8 @@ async def get_artifact(artifact_id: str, user: UserIdentity = Depends(get_curren
 # inside this tenant; it never grants cross-tenant or platform-infrastructure access.
 AI_GRANT_SCOPES: dict[str, list[str]] = {
     "read_only": ["capabilities.list", "templates.list", "agents.list", "audit.read", "report.read", "findings.read", "evidence.read", "tasks.read"],
-    "audit_operator": ["capabilities.list", "templates.list", "agents.list", "audit.create", "audit.read", "report.read", "findings.read", "evidence.read", "tasks.create", "tasks.read"],
-    "workflow_admin": ["capabilities.list", "templates.list", "agents.list", "agent.execute", "workflow.execute", "audit.create", "audit.read", "audit.cancel", "report.read", "findings.read", "evidence.read", "tasks.create", "tasks.read", "connector.read"],
+    "audit_operator": ["capabilities.list", "templates.list", "agents.list", "providers.list", "audit.create", "audit.read", "report.read", "findings.read", "evidence.read", "tasks.create", "tasks.read"],
+    "workflow_admin": ["capabilities.list", "templates.list", "agents.list", "providers.list", "agent.execute", "workflow.execute", "audit.create", "audit.read", "audit.cancel", "report.read", "findings.read", "evidence.read", "tasks.create", "tasks.read", "connector.read"],
     "full_access": ["*"],
 }
 
@@ -528,6 +528,8 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
              "inputSchema": {"type": "object", "properties": {}}},
             {"name": "dristik_agents_list", "description": "List the actual registered specialist agents.",
              "inputSchema": {"type": "object", "properties": {}}},
+            {"name": "dristik_model_providers_list", "description": "List tenant-owned model provider IDs and health status without returning secrets.",
+             "inputSchema": {"type": "object", "properties": {}}},
             {"name": "dristik_audit_start", "description": "Start a canonical Dristik website audit with the normal entitlement and validation gates.",
              "inputSchema": {"type": "object", "required": ["website_url"], "properties": {"website_url": {"type": "string"}, "max_crawl_pages": {"type": "integer", "minimum": 1, "maximum": 100}, "target_pillars": {"type": "array", "items": {"type": "string"}}, "model_provider_id": {"type": "string", "description": "Optional tenant-owned configured provider ID for all compatible model-router calls in this run."}}}},
             {"name": "dristik_audit_status", "description": "Read the status of a tenant-owned canonical audit.",
@@ -549,6 +551,7 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             "dristik_get_task": "tasks.read",
             "dristik_templates_list": "templates.list",
             "dristik_agents_list": "agents.list",
+            "dristik_model_providers_list": "providers.list",
             "dristik_audit_start": "audit.create",
             "dristik_audit_status": "audit.read",
             "dristik_report_get": "report.read",
@@ -599,6 +602,12 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
                 agents = []
             result = {"content": [{"type": "text", "text": _json({"agents": agents, "count": len(agents)})}],
                       "structuredContent": {"agents": agents, "count": len(agents)}}
+        elif name == "dristik_model_providers_list":
+            if not _mcp_authorized(user, "providers.list", "mission:read"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit model-provider discovery.")
+            from app.api.routes.integrations.provider_adapters import list_providers
+            payload = await list_providers(user)
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
         elif name == "dristik_audit_start":
             if not _mcp_authorized(user, "audit.create", "mission:create"):
                 raise HTTPException(status_code=403, detail="Connection grant does not permit starting audits.")
