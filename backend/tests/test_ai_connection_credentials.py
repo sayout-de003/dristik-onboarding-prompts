@@ -373,3 +373,272 @@ def test_provider_credentials_rely_on_configured_fernet_key(isolated_db, monkeyp
     assert row["encrypted_secret"] != body.api_key
     assert providers._cipher().decrypt(row["encrypted_secret"].encode()).decode() == body.api_key
 
+
+def test_agents_list_exposes_105_specialist_agents(isolated_db):
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    client = TestClient(app)
+    created = asyncio.run(uc.create_ai_connection(
+        uc.AIConnectionCreate(name="Fleet Inspector", grant_profile="full_access"),
+        owner(),
+    ))
+    auth_headers = {
+        "Authorization": "Bearer " + created["api_key"],
+        "X-Dristik-Connection-Email": created["connection_email"],
+    }
+
+    # Discover all registered agents
+    resp = client.post(
+        "/api/v1/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": "agents-req-1",
+            "method": "tools/call",
+            "params": {"name": "dristik_agents_list", "arguments": {}},
+        },
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    data = resp.json()["result"]["structuredContent"]
+    assert data["count"] >= 105, f"Expected at least 105 registered agents, got {data['count']}"
+    domains = {agent["domain"].upper() for agent in data["agents"]}
+    for expected_domain in ["BUSINESS", "TECHNICAL_SEO", "CONTENT", "GEO", "AEO", "AI_SEARCH", "COPYWRITING", "PRESENTATION"]:
+        assert expected_domain in domains
+
+    # Query single agent by ID
+    single_resp = client.post(
+        "/api/v1/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": "agents-req-2",
+            "method": "tools/call",
+            "params": {"name": "dristik_agents_list", "arguments": {"agent_id": "ai_search.discoverability.v3"}},
+        },
+        headers=auth_headers,
+    )
+    assert single_resp.status_code == 200
+    single_data = single_resp.json()["result"]["structuredContent"]
+    assert single_data["count"] == 1
+    assert single_data["agents"][0]["agent_id"] == "ai_search.discoverability.v3"
+
+
+def test_external_ai_brain_pipeline_inspect_and_citations(isolated_db):
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    client = TestClient(app)
+    created = asyncio.run(uc.create_ai_connection(
+        uc.AIConnectionCreate(name="External AI Brain", grant_profile="full_access"),
+        owner(),
+    ))
+    auth_headers = {
+        "Authorization": "Bearer " + created["api_key"],
+        "X-Dristik-Connection-Email": created["connection_email"],
+    }
+
+    # 1. Pipeline inspect
+    pipe_resp = client.post(
+        "/api/v1/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": "pipe-1",
+            "method": "tools/call",
+            "params": {"name": "dristik_pipeline_inspect", "arguments": {}},
+        },
+        headers=auth_headers,
+    )
+    assert pipe_resp.status_code == 200
+    pipe_data = pipe_resp.json()["result"]["structuredContent"]
+    assert pipe_data["total_sections"] > 0
+    assert pipe_data["total_nodes"] > 0
+
+    # 2. AI citations track
+    cite_resp = client.post(
+        "/api/v1/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": "cite-1",
+            "method": "tools/call",
+            "params": {
+                "name": "dristik_ai_citations_track",
+                "arguments": {"domain": "dristik.org", "engines": ["perplexity", "chatgpt", "gemini", "claude"]},
+            },
+        },
+        headers=auth_headers,
+    )
+    assert cite_resp.status_code == 200
+    cite_data = cite_resp.json()["result"]["structuredContent"]
+    assert cite_data["domain"] == "dristik.org"
+    assert "perplexity" in cite_data["engines"]
+    assert cite_data["overall_citation_score"] > 0
+
+
+def test_external_ai_tasks_messaging_and_listing(isolated_db):
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    client = TestClient(app)
+    created = asyncio.run(uc.create_ai_connection(
+        uc.AIConnectionCreate(name="Task Collaborator", grant_profile="full_access"),
+        owner(),
+    ))
+    auth_headers = {
+        "Authorization": "Bearer " + created["api_key"],
+        "X-Dristik-Connection-Email": created["connection_email"],
+    }
+
+    # 1. Create task via MCP
+    create_resp = client.post(
+        "/api/v1/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": "task-create-1",
+            "method": "tools/call",
+            "params": {
+                "name": "dristik_create_task",
+                "arguments": {"goal": "Optimize brand citations on Perplexity", "inputs": {"target": "dristik.org"}},
+            },
+        },
+        headers=auth_headers,
+    )
+    assert create_resp.status_code == 200
+    task_id = create_resp.json()["result"]["structuredContent"]["id"]
+
+    # 2. Send message into task via MCP
+    msg_resp = client.post(
+        "/api/v1/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": "task-msg-1",
+            "method": "tools/call",
+            "params": {
+                "name": "dristik_task_send_message",
+                "arguments": {
+                    "task_id": task_id,
+                    "sender": "external_claude_brain",
+                    "payload": {"analysis": "Identified schema gap in Organization sameAs links"},
+                },
+            },
+        },
+        headers=auth_headers,
+    )
+    assert msg_resp.status_code == 200
+    assert msg_resp.json()["result"]["structuredContent"]["task_id"] == task_id
+
+    # 3. List tasks via MCP
+    list_resp = client.post(
+        "/api/v1/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": "task-list-1",
+            "method": "tools/call",
+            "params": {"name": "dristik_tasks_list", "arguments": {"limit": 10}},
+        },
+        headers=auth_headers,
+    )
+    assert list_resp.status_code == 200
+    tasks = list_resp.json()["result"]["structuredContent"]["tasks"]
+    assert any(t["id"] == task_id for t in tasks)
+
+
+def test_kimi_provider_creation_and_encryption(isolated_db, monkeypatch):
+    from app.api.routes.integrations import provider_adapters as providers
+    monkeypatch.setattr(providers, "DB_PATH", isolated_db / "kimi_providers.sqlite3")
+
+    body = providers.ProviderCreate(
+        provider="kimi",
+        label="Moonshot Kimi",
+        model="moonshot-v1-8k",
+        api_key="sk-kimi-test-secret-moonshot-12345",
+    )
+    user = providers.UserIdentity(org_id="org-a", email="owner@example.test", role=UserRole.OWNER)
+    res = asyncio.run(providers.create_provider(body, user))
+    assert res["status"] == "configured_not_tested"
+    assert res["provider"] == "kimi"
+    assert "api_key" not in res
+    assert providers.PROVIDERS["kimi"][0] == "https://api.moonshot.cn/v1"
+
+
+def test_blackboard_read_and_claim_submit(isolated_db):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.domain.models import AnalysisRun
+    from app.domain.enums import AnalysisStage
+    from app.orchestration.orchestrator import orchestrator
+    from app.orchestration.cognition.blackboard import CognitiveBlackboard
+
+    client = TestClient(app)
+    created = asyncio.run(uc.create_ai_connection(
+        uc.AIConnectionCreate(name="Brain Controller", grant_profile="full_access"),
+        owner(),
+    ))
+    auth_headers = {
+        "Authorization": "Bearer " + created["api_key"],
+        "X-Dristik-Connection-Email": created["connection_email"],
+    }
+
+    # Setup an active in-memory run and blackboard
+    from datetime import datetime, timezone
+    now_iso = datetime.now(timezone.utc).isoformat()
+    analysis_id = "test-analysis-123"
+    run = AnalysisRun(
+        analysis_id=analysis_id,
+        website_url="https://dristik.org",
+        org_id="org-a",
+        status=AnalysisStage.SPECIALIST_EXECUTION,
+        created_at=now_iso,
+        updated_at=now_iso,
+    )
+    orchestrator.runs[analysis_id] = run
+    bb = CognitiveBlackboard(run_id=analysis_id, website_url="https://dristik.org")
+    orchestrator.blackboards[analysis_id] = bb
+
+    try:
+        # 1. Read blackboard
+        read_resp = client.post(
+            "/api/v1/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": "bb-1",
+                "method": "tools/call",
+                "params": {"name": "dristik_blackboard_read", "arguments": {"analysis_id": analysis_id}},
+            },
+            headers=auth_headers,
+        )
+        assert read_resp.status_code == 200
+        assert read_resp.json()["result"]["structuredContent"]["analysis_id"] == analysis_id
+
+        # 2. Submit claim into blackboard
+        claim_resp = client.post(
+            "/api/v1/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": "claim-1",
+                "method": "tools/call",
+                "params": {
+                    "name": "dristik_claim_submit",
+                    "arguments": {
+                        "analysis_id": analysis_id,
+                        "statement": "Missing Product schema on pricing landing page",
+                        "category": "STRUCTURED_DATA",
+                        "confidence": 0.95,
+                        "supporting_evidence": ["dom_element_pricing_table"],
+                    },
+                },
+            },
+            headers=auth_headers,
+        )
+        assert claim_resp.status_code == 200
+        claim_data = claim_resp.json()["result"]["structuredContent"]
+        assert claim_data["confidence"] == 0.95
+        assert claim_data["verification_status"] == "registered_for_adversarial_verification"
+
+        # Verify claim is now inside blackboard
+        assert len(bb.claim_registry._claims) == 1
+    finally:
+        orchestrator.runs.pop(analysis_id, None)
+        orchestrator.blackboards.pop(analysis_id, None)
+
+
+

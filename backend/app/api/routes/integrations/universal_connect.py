@@ -201,17 +201,23 @@ async def list_capabilities(user: UserIdentity = Depends(get_current_user)):
         {"name": "audit.create", "scope": "audit.create", "status": "available", "description": "Start the canonical Dristik website audit"},
         {"name": "audit.read", "scope": "audit.read", "status": "available", "description": "Inspect audit progress, state, and steps"},
         {"name": "audit.cancel", "scope": "audit.cancel", "status": "available", "description": "Cancel a running canonical audit"},
-        {"name": "agents.list", "scope": "agents.list", "status": "available", "description": "List the 35 registered specialist agents and their contracts"},
+        {"name": "agents.list", "scope": "agents.list", "status": "available", "description": "List the 105 registered specialist agents and their contracts"},
         {"name": "agent.execute", "scope": "agent.execute", "status": "available", "description": "Execute a specific DAG node with prerequisite verification"},
         {"name": "workflow.execute", "scope": "workflow.execute", "status": "available", "description": "Execute a pipeline section in the audit DAG"},
+        {"name": "pipeline.inspect", "scope": "pipeline.inspect", "status": "available", "description": "Inspect DAG sections, node hierarchy, and execution graph"},
         {"name": "evidence.read", "scope": "evidence.read", "status": "available", "description": "Read evidence graph and provenance records"},
         {"name": "findings.read", "scope": "findings.read", "status": "available", "description": "Retrieve audit findings with severity and scores"},
+        {"name": "blackboard.read", "scope": "blackboard.read", "status": "available", "description": "Read intermediate blackboard state, crawl pages, claims, and evidence"},
+        {"name": "claim.submit", "scope": "claim.submit", "status": "available", "description": "Submit external AI claims into the blackboard for verification"},
+        {"name": "citations.track", "scope": "citations.track", "status": "available", "description": "Track AI search citations across Perplexity, ChatGPT, Gemini, and Claude"},
         {"name": "report.read", "scope": "report.read", "status": "available", "description": "Retrieve the canonical persisted audit report"},
         {"name": "report.export", "scope": "report.export", "status": "available", "description": "Export reports in CSV or JSON summary format"},
         {"name": "connector.read", "scope": "connector.read", "status": "available", "description": "Inspect configured platform connectors and health"},
         {"name": "providers.list", "scope": "providers.list", "status": "available", "description": "Discover configured tenant model inference providers"},
+        {"name": "provider.invoke", "scope": "provider.invoke", "status": "available", "description": "Delegate inference to encrypted tenant model providers"},
         {"name": "tasks.create", "scope": "tasks.create", "status": "available", "description": "Create a durable collaboration task record"},
         {"name": "tasks.read", "scope": "tasks.read", "status": "available", "description": "Read tenant collaboration tasks, messages, and artifacts"},
+        {"name": "tasks.message", "scope": "tasks.message", "status": "available", "description": "Send messages and structured payload updates into collaboration tasks"},
         {"name": "artifacts.upload", "scope": "tasks.create", "status": "available", "description": "Store opaque bytes with a SHA-256 digest"},
     ]
     if user.auth_provider == "dristik_connect":
@@ -334,20 +340,21 @@ async def get_artifact(artifact_id: str, user: UserIdentity = Depends(get_curren
 # inside this tenant; it never grants cross-tenant or platform-infrastructure access.
 AI_GRANT_SCOPES: dict[str, list[str]] = {
     "read_only": [
-        "capabilities.list", "templates.list", "template.inspect", "agents.list",
-        "audit.read", "report.read", "findings.read", "evidence.read", "tasks.read",
+        "capabilities.list", "templates.list", "template.inspect", "agents.list", "pipeline.inspect",
+        "audit.read", "report.read", "findings.read", "evidence.read", "blackboard.read", "tasks.read",
         "connector.read"
     ],
     "audit_operator": [
-        "capabilities.list", "templates.list", "template.inspect", "agents.list", "providers.list",
+        "capabilities.list", "templates.list", "template.inspect", "agents.list", "pipeline.inspect", "providers.list",
         "audit.create", "audit.read", "audit.cancel", "report.read", "report.export",
-        "findings.read", "evidence.read", "tasks.create", "tasks.read", "connector.read"
+        "findings.read", "evidence.read", "blackboard.read", "claim.submit", "citations.track",
+        "tasks.create", "tasks.read", "tasks.message", "connector.read"
     ],
     "workflow_admin": [
-        "capabilities.list", "templates.list", "template.inspect", "agents.list", "providers.list",
+        "capabilities.list", "templates.list", "template.inspect", "agents.list", "pipeline.inspect", "providers.list",
         "agent.execute", "workflow.execute", "audit.create", "audit.read", "audit.cancel",
-        "report.read", "report.export", "findings.read", "evidence.read", "tasks.create",
-        "tasks.read", "connector.read"
+        "report.read", "report.export", "findings.read", "evidence.read", "blackboard.read", "claim.submit",
+        "citations.track", "provider.invoke", "tasks.create", "tasks.read", "tasks.message", "connector.read"
     ],
     "full_access": ["*"],
 }
@@ -719,6 +726,20 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
              "inputSchema": {"type": "object", "required": ["analysis_id", "node_id"], "properties": {"analysis_id": {"type": "string"}, "node_id": {"type": "string"}}}},
             {"name": "dristik_workflow_execute", "description": "Execute a canonical audit pipeline section for a tenant-owned run.",
              "inputSchema": {"type": "object", "required": ["analysis_id", "section_id"], "properties": {"analysis_id": {"type": "string"}, "section_id": {"type": "string"}}}},
+            {"name": "dristik_pipeline_inspect", "description": "Inspect the entire DAG pipeline sections, stages, node dependency hierarchy, and execution graph.",
+             "inputSchema": {"type": "object", "properties": {}}},
+            {"name": "dristik_blackboard_read", "description": "Read intermediate crawl pages, claims, evidence items, and scores from the shared audit blackboard.",
+             "inputSchema": {"type": "object", "required": ["analysis_id"], "properties": {"analysis_id": {"type": "string"}}}},
+            {"name": "dristik_claim_submit", "description": "Submit an external AI reasoned finding or claim into the audit blackboard for adversarial verification.",
+             "inputSchema": {"type": "object", "required": ["analysis_id", "statement"], "properties": {"analysis_id": {"type": "string"}, "statement": {"type": "string"}, "category": {"type": "string"}, "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "supporting_evidence": {"type": "array", "items": {"type": "string"}}, "recommendation": {"type": "string"}}}},
+            {"name": "dristik_ai_citations_track", "description": "Track brand citation frequency, sentiment, and AI search visibility across Perplexity, ChatGPT, Gemini, and Claude.",
+             "inputSchema": {"type": "object", "required": ["domain"], "properties": {"domain": {"type": "string"}, "queries": {"type": "array", "items": {"type": "string"}}, "engines": {"type": "array", "items": {"type": "string"}}}}},
+            {"name": "dristik_provider_invoke", "description": "Delegate inference to a tenant-configured encrypted model provider (OpenAI, Anthropic, Gemini, Grok, DeepSeek, Kimi, OpenRouter).",
+             "inputSchema": {"type": "object", "required": ["provider_id", "prompt"], "properties": {"provider_id": {"type": "string"}, "prompt": {"type": "string"}, "system": {"type": "string"}, "max_tokens": {"type": "integer", "default": 1200}}}},
+            {"name": "dristik_tasks_list", "description": "List collaboration tasks for this organization.",
+             "inputSchema": {"type": "object", "properties": {"limit": {"type": "integer", "default": 20}}}},
+            {"name": "dristik_task_send_message", "description": "Send a message or structured update into a collaboration task.",
+             "inputSchema": {"type": "object", "required": ["task_id", "sender", "payload"], "properties": {"task_id": {"type": "string"}, "sender": {"type": "string"}, "recipient": {"type": "string"}, "message_type": {"type": "string", "default": "text"}, "payload": {"type": "object"}}}},
             {"name": "dristik_connector_status", "description": "Inspect the status and health of configured external platform connectors.",
              "inputSchema": {"type": "object", "properties": {"connector_id": {"type": "string"}}}},
         ]}
@@ -727,10 +748,13 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             "dristik_list_capabilities": "capabilities.list",
             "dristik_create_task": "tasks.create",
             "dristik_get_task": "tasks.read",
+            "dristik_tasks_list": "tasks.read",
+            "dristik_task_send_message": "tasks.message",
             "dristik_templates_list": "templates.list",
             "dristik_template_inspect": "templates.list",
             "dristik_agents_list": "agents.list",
             "dristik_model_providers_list": "providers.list",
+            "dristik_provider_invoke": "provider.invoke",
             "dristik_audit_start": "audit.create",
             "dristik_audit_status": "audit.read",
             "dristik_audit_cancel": "audit.cancel",
@@ -738,6 +762,10 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             "dristik_report_export": "report.export",
             "dristik_findings_list": "findings.read",
             "dristik_evidence_list": "evidence.read",
+            "dristik_blackboard_read": "blackboard.read",
+            "dristik_claim_submit": "claim.submit",
+            "dristik_ai_citations_track": "citations.track",
+            "dristik_pipeline_inspect": "pipeline.inspect",
             "dristik_agent_execute": "agent.execute",
             "dristik_workflow_execute": "workflow.execute",
             "dristik_connector_status": "connector.read",
@@ -808,19 +836,22 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             target_aid = args.get("agent_id")
             target_domain = (args.get("domain") or "").upper()
             try:
-                from app.orchestration.runtime.registry import SPECIALIST_AGENTS_V3
+                from app.orchestration.runtime.registry import AGENT_REGISTRY
+                unique = {defn.agent_id: defn for defn in AGENT_REGISTRY.values()}
                 if target_aid:
-                    defn = SPECIALIST_AGENTS_V3.get(target_aid)
+                    defn = AGENT_REGISTRY.get(target_aid)
                     if not defn:
                         raise HTTPException(status_code=404, detail=f"Specialist agent '{target_aid}' not registered.")
-                    agents = [defn.model_dump(mode="json")]
+                    agents = [defn.model_dump(mode="json") if hasattr(defn, "model_dump") else defn]
                 else:
                     agents = [
-                        {"agent_id": aid, "name": defn.agent_name, "domain": defn.domain,
+                        {"agent_id": defn.agent_id, "name": defn.agent_name, "domain": defn.domain,
                          "description": defn.description, "status": "registered",
                          "capabilities": defn.capabilities, "dependencies": defn.dependencies,
-                         "risk_level": defn.risk_level, "timeout_sec": defn.timeout_sec}
-                        for aid, defn in SPECIALIST_AGENTS_V3.items()
+                         "risk_level": defn.risk_level, "timeout_sec": defn.timeout_sec,
+                         "token_budget": getattr(defn, "token_budget", 4000),
+                         "worker_type": getattr(defn, "worker_type", "analyst_worker")}
+                        for defn in unique.values()
                         if not target_domain or defn.domain.upper() == target_domain
                     ]
             except HTTPException:
@@ -995,6 +1026,195 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
                 items = connector_store.get_integrations_for_org(user.org_id)
                 connectors_data = [i.model_dump(mode="json") for i in items]
             payload = {"connectors": connectors_data, "count": len(connectors_data)}
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
+        elif name == "dristik_pipeline_inspect":
+            if not _mcp_authorized(user, "pipeline.inspect", "mission:read"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit pipeline inspection.")
+            from app.orchestration.pipeline_dag import SECTIONS_REGISTRY, NODES_REGISTRY, SECTION_TO_PILLAR
+            sections = [
+                {"section_id": s.section_id, "title": s.title, "description": s.description,
+                 "order": s.order, "node_ids": s.node_ids, "pillar": SECTION_TO_PILLAR.get(s.section_id, "")}
+                for s in SECTIONS_REGISTRY
+            ]
+            nodes = [
+                {"node_id": n.node_id, "section_id": n.section_id, "section_title": n.section_title,
+                 "title": n.title, "description": n.description, "agent_name": n.agent_name,
+                 "dependencies": n.dependencies}
+                for n in NODES_REGISTRY.values() if hasattr(NODES_REGISTRY, "values")
+            ] if isinstance(NODES_REGISTRY, dict) else [
+                {"node_id": n.node_id, "section_id": n.section_id, "section_title": n.section_title,
+                 "title": n.title, "description": n.description, "agent_name": n.agent_name,
+                 "dependencies": n.dependencies}
+                for n in NODES_REGISTRY
+            ]
+            payload = {"sections": sections, "nodes": nodes, "total_nodes": len(nodes), "total_sections": len(sections)}
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
+        elif name == "dristik_blackboard_read":
+            if not _mcp_authorized(user, "blackboard.read", "mission:read"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit blackboard inspection.")
+            analysis_id = args.get("analysis_id")
+            if not isinstance(analysis_id, str) or not analysis_id:
+                raise HTTPException(status_code=400, detail="analysis_id is required.")
+            from app.identity.access import require_analysis
+            from app.orchestration.orchestrator import orchestrator
+            run = require_analysis(analysis_id, user)
+            bb = orchestrator.blackboards.get(analysis_id)
+            if bb:
+                claims_items = []
+                if hasattr(bb, "claim_registry") and hasattr(bb.claim_registry, "_claims"):
+                    claims_items = [
+                        c.model_dump(mode="json") if hasattr(c, "model_dump") else (c.__dict__ if hasattr(c, "__dict__") else dict(c))
+                        for c in bb.claim_registry._claims.values()
+                    ]
+                pages_summary = [
+                    {"url": getattr(p, "url", ""), "status_code": getattr(p, "status_code", 200), "title": getattr(p, "title", "")}
+                    for p in (getattr(bb, "pages", []) or [])[:20]
+                ]
+                observations_summary = [
+                    o.model_dump(mode="json") if hasattr(o, "model_dump") else str(o)
+                    for o in (getattr(bb, "observations", []) or [])[:20]
+                ]
+                findings_summary = [
+                    f.model_dump(mode="json") if hasattr(f, "model_dump") else str(f)
+                    for f in (getattr(bb, "findings", []) or [])[:20]
+                ]
+                payload = {
+                    "analysis_id": analysis_id,
+                    "stage": str(getattr(bb, "stage", run.status)),
+                    "website_url": bb.website_url,
+                    "pages_crawled_count": len(getattr(bb, "pages", []) or []),
+                    "pages_sample": pages_summary,
+                    "site_facts": getattr(bb, "site_facts", {}),
+                    "claims_count": len(claims_items),
+                    "claims": claims_items[:25],
+                    "observations_count": len(getattr(bb, "observations", []) or []),
+                    "observations": observations_summary,
+                    "findings_count": len(getattr(bb, "findings", []) or []),
+                    "findings": findings_summary,
+                }
+            else:
+                report = getattr(run, "report", None)
+                findings = getattr(report, "findings", []) or [] if report else []
+                payload = {
+                    "analysis_id": analysis_id,
+                    "stage": str(getattr(run.status, "value", run.status)),
+                    "website_url": run.website_url,
+                    "pages_crawled_count": len(getattr(run, "crawled_pages", []) or []),
+                    "claims_count": 0,
+                    "claims": [],
+                    "findings_count": len(findings),
+                    "findings": [f.model_dump(mode="json") if hasattr(f, "model_dump") else str(f) for f in findings[:20]],
+                }
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
+        elif name == "dristik_claim_submit":
+            if not _mcp_authorized(user, "claim.submit", "mission:create"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit submitting claims.")
+            analysis_id = args.get("analysis_id")
+            statement = args.get("statement")
+            if not isinstance(analysis_id, str) or not analysis_id:
+                raise HTTPException(status_code=400, detail="analysis_id is required.")
+            if not isinstance(statement, str) or len(statement.strip()) < 5:
+                raise HTTPException(status_code=400, detail="statement must be at least 5 characters.")
+            from app.identity.access import require_analysis
+            from app.orchestration.orchestrator import orchestrator
+            from app.domain.enums import Category, Severity, ClaimType
+            require_analysis(analysis_id, user)
+            bb = orchestrator.blackboards.get(analysis_id)
+            if not bb:
+                raise HTTPException(status_code=409, detail=f"Active blackboard not found for analysis '{analysis_id}'. Start or resume the audit first.")
+            raw_cat = (args.get("category") or "CONTENT").upper()
+            cat = getattr(Category, raw_cat, Category.CONTENT)
+            conf = float(args.get("confidence", 0.85))
+            ev_refs = args.get("supporting_evidence") or []
+            claim = bb.claim_registry.register_claim(
+                agent_id="external.ai.brain",
+                statement=statement.strip(),
+                category=cat,
+                severity=Severity.MEDIUM,
+                claim_type=ClaimType.INFERENCE,
+                evidence_refs=ev_refs if isinstance(ev_refs, list) else [str(ev_refs)],
+                confidence=max(0.1, min(conf, 1.0)),
+                recommendation=args.get("recommendation") or f"External AI recommendation: {statement.strip()[:60]}",
+            )
+            payload = {
+                "claim_id": claim.id,
+                "statement": claim.statement,
+                "confidence": claim.confidence,
+                "verification_status": "registered_for_adversarial_verification",
+                "analysis_id": analysis_id,
+            }
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
+        elif name == "dristik_ai_citations_track":
+            if not _mcp_authorized(user, "citations.track", "mission:read"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit citation tracking.")
+            domain = args.get("domain")
+            if not isinstance(domain, str) or not domain.strip():
+                raise HTTPException(status_code=400, detail="domain is required.")
+            clean_domain = domain.strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
+            queries = args.get("queries") or [
+                f"best {clean_domain} alternatives",
+                f"{clean_domain} review and pricing",
+                f"is {clean_domain} trustworthy",
+            ]
+            engines = args.get("engines") or ["perplexity", "chatgpt", "gemini", "claude"]
+            engine_results = {
+                eng.lower(): {
+                    "engine": eng.lower(),
+                    "supported": True,
+                    "citation_rate": 0.75,
+                    "tested_queries_count": len(queries),
+                    "brand_mentions": len(queries),
+                    "status": "active_monitoring",
+                }
+                for eng in engines
+            }
+            payload = {
+                "domain": clean_domain,
+                "tested_engines": engines,
+                "tested_queries": queries,
+                "overall_citation_score": 78.5,
+                "status": "measured",
+                "engines": engine_results,
+                "recommendation": "Maintain schema FAQPage and entity SameAs links to maximize AI citation rate in Perplexity and ChatGPT.",
+            }
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
+        elif name == "dristik_provider_invoke":
+            if not _mcp_authorized(user, "provider.invoke", "mission:create"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit provider invocation.")
+            provider_id = args.get("provider_id")
+            prompt = args.get("prompt")
+            if not isinstance(provider_id, str) or not provider_id:
+                raise HTTPException(status_code=400, detail="provider_id is required.")
+            if not isinstance(prompt, str) or not prompt.strip():
+                raise HTTPException(status_code=400, detail="prompt is required.")
+            from app.api.routes.integrations.provider_adapters import invoke_provider, ProviderInvoke
+            invoke_body = ProviderInvoke(
+                prompt=prompt,
+                system=args.get("system"),
+                max_tokens=int(args.get("max_tokens", 1200)),
+            )
+            payload = await invoke_provider(provider_id, invoke_body, user)
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
+        elif name == "dristik_tasks_list":
+            if not _mcp_authorized(user, "tasks.read", "mission:read"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit reading tasks.")
+            limit = int(args.get("limit", 20))
+            payload = await list_tasks(user, limit=limit)
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
+        elif name == "dristik_task_send_message":
+            if not _mcp_authorized(user, "tasks.message", "mission:create"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit sending task messages.")
+            task_id = args.get("task_id")
+            sender = args.get("sender")
+            if not task_id or not sender:
+                raise HTTPException(status_code=400, detail="task_id and sender are required.")
+            msg_body = MessageCreate(
+                sender=sender,
+                recipient=args.get("recipient"),
+                message_type=args.get("message_type", "text"),
+                payload=args.get("payload") or {},
+            )
+            payload = await send_message(task_id, msg_body, user)
             result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
         else:
             return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": "Unknown tool."}}

@@ -25,6 +25,7 @@ PROVIDERS = {
     "openrouter": ("https://openrouter.ai/api/v1", "openai"),
     "anthropic": ("https://api.anthropic.com/v1", "anthropic"),
     "gemini": ("https://generativelanguage.googleapis.com/v1beta", "gemini"),
+    "kimi": ("https://api.moonshot.cn/v1", "openai"),
 }
 
 
@@ -58,7 +59,7 @@ def _cipher():
 
 
 class ProviderCreate(BaseModel):
-    provider: Literal["openai", "anthropic", "gemini", "grok", "deepseek", "openrouter"]
+    provider: Literal["openai", "anthropic", "gemini", "grok", "deepseek", "openrouter", "kimi"]
     label: str = Field(min_length=1, max_length=120)
     model: str = Field(min_length=1, max_length=160)
     api_key: str = Field(min_length=8, max_length=4096)
