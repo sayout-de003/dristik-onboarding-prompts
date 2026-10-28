@@ -7,8 +7,10 @@ connection is not considered healthy until a real adapter tests it.
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import os
+import socket
 import secrets
 import sqlite3
 import time
@@ -16,6 +18,7 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit, urlunsplit
 
 from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
@@ -86,6 +89,45 @@ def _db():
 
 def _json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
+def _validate_public_audit_url(value: str) -> str:
+    """Preflight public HTTP(S) targets and reject obvious SSRF destinations.
+
+    This is a defense-in-depth preflight, not a substitute for redirect-aware
+    transport-level DNS pinning in the crawler.
+    """
+    raw = value.strip()
+    if not raw:
+        raise HTTPException(status_code=422, detail="A website URL is required.")
+    if "://" not in raw:
+        raw = "https://" + raw
+    try:
+        parsed = urlsplit(raw)
+        port = parsed.port
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid website URL.")
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+        raise HTTPException(status_code=422, detail="Only public HTTP or HTTPS website URLs are supported.")
+    if parsed.username or parsed.password:
+        raise HTTPException(status_code=422, detail="Website URLs must not contain embedded credentials.")
+    if port not in (None, 80, 443):
+        raise HTTPException(status_code=422, detail="Non-standard website ports are not permitted for AI-triggered audits.")
+    host = parsed.hostname.rstrip(".").lower()
+    if host in {"localhost", "localhost.localdomain"} or host.endswith((".local", ".internal", ".localhost")):
+        raise HTTPException(status_code=422, detail="Private and local network targets are not permitted.")
+    try:
+        addresses = {ipaddress.ip_address(host)}
+    except ValueError:
+        try:
+            addresses = {ipaddress.ip_address(item[4][0]) for item in socket.getaddrinfo(host, port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)}
+        except (OSError, ValueError):
+            raise HTTPException(status_code=422, detail="Website hostname could not be resolved safely.")
+    if not addresses or any(not address.is_global for address in addresses):
+        raise HTTPException(status_code=422, detail="Website URL resolves to a private, reserved, or non-public address.")
+    return urlunsplit((parsed.scheme.lower(), parsed.netloc, parsed.path or "/", parsed.query, ""))
+
+
 
 
 def _require_org(row: sqlite3.Row | None, user: UserIdentity) -> sqlite3.Row:
@@ -181,6 +223,7 @@ async def execute_task_audit(task_id: str, background_tasks: BackgroundTasks, us
     url = inputs.get("url") or inputs.get("website_url")
     if not isinstance(url, str) or not url.strip():
         raise HTTPException(status_code=422, detail="Task inputs must include a website url.")
+    url = _validate_public_audit_url(url)
     try:
         from app.domain.models import AnalysisRequest
         from app.api.routes.audits.analyses import start_analysis
@@ -562,6 +605,7 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             website_url = args.get("website_url")
             if not isinstance(website_url, str) or not website_url.strip():
                 raise HTTPException(status_code=400, detail="website_url is required.")
+            website_url = _validate_public_audit_url(website_url)
             from app.domain.models import AnalysisRequest
             from app.api.routes.audits.analyses import start_analysis
             request_model = AnalysisRequest(
