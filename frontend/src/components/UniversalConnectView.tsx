@@ -116,7 +116,7 @@ export function UniversalConnectView() {
     event.preventDefault(); setBusy(true); setError(''); setNotice('');
     try {
       const created = await request<Provider>('/api/v1/connect/providers', { method: 'POST', body: JSON.stringify({ provider, label, model, api_key: apiKey }) });
-      setApiKey(''); setSelected(created.id); setNotice('Credential encrypted and saved. Run a test prompt to verify connectivity.');
+      setApiKey(''); setSelected(''); setNotice('Credential encrypted and saved. Select the provider, then run a test prompt before choosing it for an audit.');
       await refresh();
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not save provider.'); }
     finally { setBusy(false); }
