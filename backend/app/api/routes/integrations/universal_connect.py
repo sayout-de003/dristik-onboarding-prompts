@@ -385,12 +385,17 @@ async def create_ai_connection(
             (connection_id, user.org_id, user.user_id, body.name, email, key_hash, body.grant_profile,
              _json(scopes), "active", expires_at, now, now),
         )
+    mcp_endpoint = os.getenv("DRISTIK_MCP_PUBLIC_URL", "/api/v1/mcp").strip()
+    mcp_config = {"url": mcp_endpoint, "headers": {
+        "Authorization": "Bearer " + api_key,
+        "X-Dristik-Connection-Email": email,
+    }}
     return {
         "id": connection_id, "name": body.name, "connection_email": email,
         "api_key": api_key, "grant_profile": body.grant_profile, "scopes": scopes,
         "status": "active", "expires_at": expires_at,
-        "mcp_endpoint": os.getenv("DRISTIK_MCP_PUBLIC_URL", "/api/v1/mcp"),
-        "key_display_policy": "shown_once",
+        "mcp_endpoint": mcp_endpoint, "mcp_endpoint_is_absolute": mcp_endpoint.startswith("https://"),
+        "mcp_config": mcp_config, "key_display_policy": "shown_once",
         "instructions": "Copy the API key now. It cannot be retrieved later. Configure the AI client to send Authorization: Bearer <api_key> and X-Dristik-Connection-Email: <connection_email>.",
     }
 
@@ -433,7 +438,13 @@ async def rotate_ai_connection(connection_id: str, user: UserIdentity = Depends(
         if row["status"] != "active":
             raise HTTPException(status_code=409, detail="Only active connections can be rotated.")
         conn.execute("UPDATE uc_ai_connections SET key_hash=?,updated_at=? WHERE id=?", (new_hash, now, connection_id))
+    mcp_endpoint = os.getenv("DRISTIK_MCP_PUBLIC_URL", "/api/v1/mcp").strip()
     return {"id": connection_id, "connection_email": row["connection_email"], "api_key": new_key,
+            "mcp_endpoint": mcp_endpoint, "mcp_endpoint_is_absolute": mcp_endpoint.startswith("https://"),
+            "mcp_config": {"url": mcp_endpoint, "headers": {
+                "Authorization": "Bearer " + new_key,
+                "X-Dristik-Connection-Email": row["connection_email"],
+            }},
             "status": "active", "key_display_policy": "shown_once"}
 
 
