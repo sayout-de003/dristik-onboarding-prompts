@@ -1,7 +1,6 @@
 """Security regression tests for Dristik-issued external AI credentials."""
 import asyncio
 import hashlib
-import json
 import time
 
 import pytest
@@ -9,6 +8,7 @@ from fastapi import HTTPException
 
 from app.api.routes.integrations import universal_connect as uc
 from app.identity.authorizer import UserIdentity
+from app.domain.enums import UserRole
 
 
 @pytest.fixture
@@ -19,7 +19,7 @@ def isolated_db(tmp_path, monkeypatch):
 
 
 def owner():
-    return UserIdentity(org_id="org-a", email="owner@example.test", role="owner")
+    return UserIdentity(org_id="org-a", email="owner@example.test", role=UserRole.OWNER)
 
 
 def test_create_connection_shows_key_once_and_stores_only_hash(isolated_db):
