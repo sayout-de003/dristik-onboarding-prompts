@@ -85,6 +85,15 @@ export function UniversalConnectView() {
     finally { setBusy(false); }
   };
 
+  const executeAudit = async (taskId: string) => {
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const response = await request<{ audit: { analysis_id: string; website_url: string } }>('/api/v1/connect/tasks/' + taskId + '/execute-audit', { method: 'POST' });
+      setNotice('Dristik audit started for ' + response.audit.website_url + '. Analysis ID: ' + response.audit.analysis_id);
+      await refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not start audit.'); }
+    finally { setBusy(false); }
+  };
   return <main className="mx-auto max-w-6xl space-y-7 p-4 sm:p-8">
     <header className="space-y-3">
       <div className="flex items-center gap-2 text-sm font-semibold text-emerald-600"><PlugZap size={18}/> DRISTIK CONNECT</div>
@@ -115,6 +124,6 @@ export function UniversalConnectView() {
         {result && <div className="rounded-xl border border-line bg-surface p-4"><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">Live provider response</p><pre className="whitespace-pre-wrap break-words text-sm text-ink">{result}</pre></div>}
       </section>
     </div>
-    <section className="card p-5"><div className="mb-4 flex items-center gap-2"><Activity size={20}/><h2 className="text-lg font-semibold text-ink">Recent collaboration tasks</h2></div>{tasks.length ? <div className="divide-y divide-line">{tasks.map((t) => <div key={t.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium text-ink">{t.goal}</p><p className="text-xs text-ink-500">{t.id} · {new Date(t.created_at * 1000).toLocaleString()}</p></div><span className="rounded-full border border-line px-3 py-1 text-xs text-ink-500">{t.status}{t.execution_started === false ? ' · awaiting worker integration' : ''}</span></div>)}</div> : <p className="text-sm text-ink-500">No collaboration tasks yet.</p>}</section>
+    <section className="card p-5"><div className="mb-4 flex items-center gap-2"><Activity size={20}/><h2 className="text-lg font-semibold text-ink">Recent collaboration tasks</h2></div>{tasks.length ? <div className="divide-y divide-line">{tasks.map((t) => <div key={t.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium text-ink">{t.goal}</p><p className="text-xs text-ink-500">{t.id} · {new Date(t.created_at * 1000).toLocaleString()}</p></div><span className="rounded-full border border-line px-3 py-1 text-xs text-ink-500">{t.status}</span><button type="button" disabled={busy} onClick={() => void executeAudit(t.id)} className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink disabled:opacity-50">Run website audit</button></div></div>)}</div> : <p className="text-sm text-ink-500">No collaboration tasks yet.</p>}</section>
   </main>;
 }
