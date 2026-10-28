@@ -4,7 +4,7 @@ import { Activity, Bot, CheckCircle2, CircleAlert, Loader2, PlugZap, Send, Shiel
 type Provider = { id: string; provider: string; label: string; model: string; status: string; created_at: number };
 type Task = { id: string; goal: string; status: string; created_at: number; execution_started?: boolean };
 type AIConnection = { id: string; name: string; connection_email: string; grant_profile: string; status: string; expires_at?: number | null; last_used_at?: number | null };
-type IssuedCredential = { id: string; name?: string; connection_email: string; api_key: string; grant_profile?: string; mcp_endpoint?: string; key_display_policy?: string };
+type IssuedCredential = { id: string; name?: string; connection_email: string; api_key: string; grant_profile?: string; mcp_endpoint?: string; mcp_endpoint_is_absolute?: boolean; mcp_config?: { url: string; headers: Record<string, string> }; key_display_policy?: string };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { credentials: 'include', ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } });
@@ -90,6 +90,18 @@ export function UniversalConnectView() {
     finally { setBusy(false); }
   };
 
+  const validateAIConnection = async () => {
+    if (!issuedCredential) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await request<{ valid: boolean }>('/api/v1/connect/ai-connections/validate', {
+        method: 'POST', body: JSON.stringify({ connection_email: issuedCredential.connection_email, api_key: issuedCredential.api_key }),
+      });
+      setNotice('Dristik validated this connection identity and key. This validates credentials, not external MCP-client compatibility.');
+    } catch (e) { setError(e instanceof Error ? e.message : 'Credential validation failed.'); }
+    finally { setBusy(false); }
+  };
+
   const copyCredential = async (value: string) => {
     try { await navigator.clipboard.writeText(value); setNotice('Copied to clipboard. Treat connection credentials as secrets.'); }
     catch { setError('Clipboard access is unavailable. Select and copy the credential manually.'); }
@@ -164,6 +176,8 @@ export function UniversalConnectView() {
         <label className="block space-y-1 text-sm"><span className="text-ink-600">Connection email / identity</span><div className="flex gap-2"><input className="input min-w-0 flex-1" readOnly value={issuedCredential.connection_email}/><button type="button" onClick={() => void copyCredential(issuedCredential.connection_email)} className="rounded-lg border border-line px-3 text-sm">Copy</button></div></label>
         <label className="block space-y-1 text-sm"><span className="text-ink-600">Dristik API key</span><div className="flex gap-2"><input className="input min-w-0 flex-1 font-mono" type="password" readOnly value={issuedCredential.api_key}/><button type="button" onClick={() => void copyCredential(issuedCredential.api_key)} className="rounded-lg border border-line px-3 text-sm">Copy key</button></div></label>
         <label className="block space-y-1 text-sm"><span className="text-ink-600">MCP endpoint</span><div className="flex gap-2"><input className="input min-w-0 flex-1" readOnly value={issuedCredential.mcp_endpoint || '/api/v1/mcp'}/><button type="button" onClick={() => void copyCredential(issuedCredential.mcp_endpoint || '/api/v1/mcp')} className="rounded-lg border border-line px-3 text-sm">Copy</button></div></label>
+        {!issuedCredential.mcp_endpoint_is_absolute && <p className="text-sm text-amber-800">Deployment setup required: set DRISTIK_MCP_PUBLIC_URL to the absolute HTTPS URL of this MCP endpoint before configuring an external AI client.</p>}
+        <div className="flex flex-wrap gap-2"><button type="button" disabled={busy} onClick={() => void validateAIConnection()} className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-ink disabled:opacity-50">Validate credentials</button><button type="button" onClick={() => void copyCredential(JSON.stringify(issuedCredential.mcp_config || { url: issuedCredential.mcp_endpoint || '/api/v1/mcp', headers: { Authorization: 'Bearer ' + issuedCredential.api_key, 'X-Dristik-Connection-Email': issuedCredential.connection_email } }, null, 2))} className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-ink">Copy MCP config</button></div>
         <button type="button" onClick={() => setIssuedCredential(null)} className="text-xs font-medium text-ink-500 underline">Hide credentials</button>
       </div>}
       <div className="space-y-2">
