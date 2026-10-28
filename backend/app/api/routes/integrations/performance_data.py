@@ -121,7 +121,7 @@ async def fetch_google_search(query: str, num: int = 10, start: int = 1) -> dict
     provider = "Google Programmable Search JSON API"
     key, cx = os.getenv("GOOGLE_CSE_API_KEY") or os.getenv("GOOGLE_API_KEY"), os.getenv("GOOGLE_CSE_CX")
     if not key or not cx:
-        return _unavailable(provider, "Set GOOGLE_CSE_API_KEY (or GOOGLE_API_KEY) and GOOGLE_CSE_CX. This API returns configured Programmable Search results, not a guaranteed universal Google SERP.")
+        return _unavailable(provider, "Set GOOGLE_CSE_API_KEY (or GOOGLE_API_KEY) and GOOGLE_CSE_CX. This API returns configured Programmable Search results, not a guaranteed universal Google SERP.", results=[])
     clean_query = query.strip()
     if not clean_query:
         return {"status": "INVALID_REQUEST", "provider": provider, "metrics_available": False, "results": [], "reason": "query is required."}
