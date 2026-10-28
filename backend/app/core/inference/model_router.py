@@ -63,8 +63,8 @@ class ModelRouter:
                 "SELECT provider,model,encrypted_secret,status FROM uc_provider_credentials WHERE id=? AND org_id=?",
                 (provider_id, org_id),
             ).fetchone()
-        if row is None or row["status"] == "revoked":
-            raise RuntimeError("Selected model provider is unavailable for this organization.")
+        if row is None or row["status"] != "healthy":
+            raise RuntimeError("Selected model provider is not healthy or is unavailable for this organization.")
         try:
             api_key = provider_adapters._cipher().decrypt(row["encrypted_secret"].encode()).decode()
         except Exception as exc:
