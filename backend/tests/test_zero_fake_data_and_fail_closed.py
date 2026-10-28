@@ -16,6 +16,7 @@ from app.connectors.base.models import ConnectorCredentials
 from app.connectors.github.client import GitHubClient
 from app.connectors.shopify.connector import ShopifyConnector
 from app.connectors.webflow.connector import WebflowConnector
+from app.core.config import settings
 from app.tenancy.agency import AgencyManager
 
 
@@ -111,8 +112,19 @@ async def test_verification_engine_fails_closed_when_snippet_missing():
 
 
 @pytest.mark.asyncio
-async def test_ai_citation_tracker_offline_honest_return():
+async def test_ai_citation_tracker_offline_honest_return(monkeypatch):
     """When live search keys are absent, AI citation tracker reports UNAVAILABLE honestly."""
+    for key in (
+        "PERPLEXITY_API_KEY",
+        "OPENROUTER_API_KEY",
+        "GROQ_API_KEY",
+        "GEMINI_API_KEY",
+        "GOOGLE_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "CLAUDE_API_KEY",
+    ):
+        monkeypatch.delenv(key, raising=False)
+        monkeypatch.setattr(settings, key, "", raising=False)
     tracker = AiCitationTracker()
     res = await tracker.track_buyer_queries(
         domain="unconfigured-test-domain.com",
