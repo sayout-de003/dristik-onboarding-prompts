@@ -110,7 +110,7 @@ async def _invoke(provider: str, model: str, key: str, prompt: str, system: str 
             output = "\n".join(part.get("text", "") for part in data.get("content", []) if part.get("type") == "text")
             usage = data.get("usage") or {}
         else:
-            response = await client.post(base + "/models/" + model + ":generateContent", params={"key": key},
+            response = await client.post(base + "/models/" + model + ":generateContent", headers={"x-goog-api-key": key},
                 json={"systemInstruction": {"parts": [{"text": system}]} if system else None,
                      "contents": [{"role": "user", "parts": [{"text": prompt}]}],
                      "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.1}})
