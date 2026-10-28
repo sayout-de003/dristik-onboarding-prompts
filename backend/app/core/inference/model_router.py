@@ -6,6 +6,9 @@ JSON auto-repair, adaptive backoff, and number hallucination sanitization.
 import asyncio
 import json
 import logging
+import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Dict, Any, List, Optional, Type
 from pydantic import BaseModel, ValidationError
 
@@ -26,6 +29,18 @@ from app.core.inference.schemas.shared import strip_ungrounded_numbers
 
 logger = logging.getLogger(__name__)
 
+_ACTIVE_PROVIDER_OVERRIDE: ContextVar[tuple[str, str] | None] = ContextVar("dristik_provider_override", default=None)
+
+
+@contextmanager
+def use_provider_override(provider_id: str, org_id: str):
+    """Route ModelRouter calls in the current async task through one tenant-owned provider."""
+    token = _ACTIVE_PROVIDER_OVERRIDE.set((provider_id, org_id))
+    try:
+        yield
+    finally:
+        _ACTIVE_PROVIDER_OVERRIDE.reset(token)
+
 class ModelRouter:
     def __init__(self, telemetry_tracker: Optional[TelemetryTracker] = None):
         self.client = LLMClient()
@@ -33,6 +48,48 @@ class ModelRouter:
         self.prompt_compiler = PromptCompiler()
         self.telemetry = telemetry_tracker or TelemetryTracker()
         self.fallback_engine = DeterministicFallbackEngine()
+
+    async def _generate_chat_completion(self, **kwargs: Any) -> Dict[str, Any]:
+        """Use the explicitly selected tenant provider for this run, otherwise the platform client."""
+        override = _ACTIVE_PROVIDER_OVERRIDE.get()
+        if override is None:
+            return await self.client.generate_chat_completion(**kwargs)
+
+        provider_id, org_id = override
+        from app.api.routes.integrations import provider_adapters
+
+        with provider_adapters._db() as conn:
+            row = conn.execute(
+                "SELECT provider,model,encrypted_secret,status FROM uc_provider_credentials WHERE id=? AND org_id=?",
+                (provider_id, org_id),
+            ).fetchone()
+        if row is None or row["status"] == "revoked":
+            raise RuntimeError("Selected model provider is unavailable for this organization.")
+        try:
+            api_key = provider_adapters._cipher().decrypt(row["encrypted_secret"].encode()).decode()
+        except Exception as exc:
+            raise RuntimeError("Selected model provider credentials could not be decrypted.") from exc
+
+        started = time.perf_counter()
+        response = await provider_adapters._invoke(
+            row["provider"], row["model"], api_key,
+            str(kwargs.get("user_prompt") or ""),
+            kwargs.get("system_prompt"),
+            int(kwargs.get("max_tokens") or 1200),
+            float(kwargs.get("temperature") if kwargs.get("temperature") is not None else 0.1),
+        )
+        usage = response.get("usage") or {}
+        input_tokens = usage.get("prompt_tokens", usage.get("input_tokens", usage.get("promptTokenCount", 0)))
+        output_tokens = usage.get("completion_tokens", usage.get("output_tokens", usage.get("candidatesTokenCount", 0)))
+        return {
+            "content": response.get("text", ""),
+            "provider": row["provider"],
+            "model": row["model"],
+            "input_tokens": int(input_tokens or 0),
+            "output_tokens": int(output_tokens or 0),
+            "latency_ms": (time.perf_counter() - started) * 1000,
+            "stop_reason": None,
+        }
 
     def set_active_stage(self, stage: str, display_name: Optional[str] = None) -> None:
         if hasattr(self.telemetry, "set_active_stage"):
@@ -125,7 +182,7 @@ class ModelRouter:
                 if current_model in tried_missing:
                     break
 
-                response = await self.client.generate_chat_completion(
+                response = await self._generate_chat_completion(
                     model=current_model,
                     system_prompt=system_prompt,
                     user_prompt=user_prompt,
@@ -150,7 +207,7 @@ class ModelRouter:
             except Exception as e:
                 last_error = e
                 msg = str(e).lower()
-                missing = "does not exist" in msg or "http 404" in msg or "model_not_found" in msg
+                missing = (_ACTIVE_PROVIDER_OVERRIDE.get() is None) and ("does not exist" in msg or "http 404" in msg or "model_not_found" in msg)
                 if missing:
                     nxt = self._next_model_after_missing(current_model, fast_model, tried_missing)
                     if not nxt:
@@ -189,7 +246,7 @@ class ModelRouter:
         a canned fallback audit (specialist agents must not invent results).
         """
         evidence_list = evidence_list if evidence_list is not None else []
-        if not settings.has_active_llm_key:
+        if not settings.has_active_llm_key and _ACTIVE_PROVIDER_OVERRIDE.get() is None:
             if not allow_fallback:
                 return {"status": "unavailable", "unavailable_reason": "no_llm_key", "claims": []}
             return self.fallback_engine.execute_fallback(
