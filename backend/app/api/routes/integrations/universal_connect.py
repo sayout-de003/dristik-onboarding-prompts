@@ -989,6 +989,7 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
              "inputSchema": {"type": "object", "required": ["domain"], "properties": {"domain": {"type": "string"}, "queries": {"type": "array", "items": {"type": "string"}}, "engines": {"type": "array", "items": {"type": "string"}}}}},
             {"name": "dristik_crux_query", "description": "Fetch real Chrome UX Report field metrics for a public URL or origin. Returns explicit NOT_CONFIGURED or DATA_UNAVAILABLE states rather than invented metrics.", "inputSchema": {"type": "object", "required": ["origin"], "properties": {"origin": {"type": "string"}, "url": {"type": "string"}, "form_factor": {"type": "string", "enum": ["PHONE", "DESKTOP", "TABLET"], "default": "PHONE"}}}},
             {"name": "dristik_pagespeed_query", "description": "Run a real Google PageSpeed Insights/Lighthouse lab audit for a public URL. Lab data is explicitly distinguished from CrUX field data.", "inputSchema": {"type": "object", "required": ["url"], "properties": {"url": {"type": "string"}, "strategy": {"type": "string", "enum": ["mobile", "desktop"], "default": "mobile"}, "categories": {"type": "array", "items": {"type": "string", "enum": ["performance", "accessibility", "best-practices", "seo"]}}}}},
+            {"name": "dristik_google_search", "description": "Run a real Google Programmable Search query when configured. Results are explicitly labeled as configured search-engine results, not universal live Google SERP rankings.", "inputSchema": {"type": "object", "required": ["query"], "properties": {"query": {"type": "string"}, "num": {"type": "integer", "minimum": 1, "maximum": 10, "default": 10}, "start": {"type": "integer", "minimum": 1, "maximum": 91, "default": 1}}}},
             {"name": "dristik_provider_invoke", "description": "Delegate inference to a tenant-configured encrypted model provider (OpenAI, Anthropic, Gemini, Grok, DeepSeek, Kimi, OpenRouter).",
              "inputSchema": {"type": "object", "required": ["provider_id", "prompt"], "properties": {"provider_id": {"type": "string"}, "prompt": {"type": "string"}, "system": {"type": "string"}, "max_tokens": {"type": "integer", "default": 1200}}}},
             {"name": "dristik_tasks_list", "description": "List collaboration tasks for this organization.",
@@ -1032,6 +1033,7 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             "dristik_ai_citations_track": "citations.track",
             "dristik_crux_query": "connector.read",
             "dristik_pagespeed_query": "connector.read",
+            "dristik_google_search": "connector.read",
             "dristik_pipeline_inspect": "pipeline.inspect",
             "dristik_pipeline_status": "audit.read",
             "dristik_report_artifacts": "report.export",
@@ -1497,6 +1499,18 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
                 if not isinstance(categories, list) or any(c not in allowed_categories for c in categories):
                     raise HTTPException(status_code=400, detail="categories contains an unsupported category.")
                 payload = await fetch_pagespeed(target_url, strategy, categories)
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
+        elif name == "dristik_google_search":
+            if not _mcp_authorized(user, "connector.read", "mission:read"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit reading integration data.")
+            query = args.get("query")
+            if not isinstance(query, str) or not query.strip():
+                raise HTTPException(status_code=400, detail="query is required.")
+            num, start = int(args.get("num", 10)), int(args.get("start", 1))
+            if num < 1 or num > 10 or start < 1 or start > 91:
+                raise HTTPException(status_code=400, detail="num must be 1-10 and start must be 1-91.")
+            from app.api.routes.integrations.performance_data import fetch_google_search
+            payload = await fetch_google_search(query, num, start)
             result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
         elif name == "dristik_ai_citations_track":
             if not _mcp_authorized(user, "citations.track", "mission:read"):
