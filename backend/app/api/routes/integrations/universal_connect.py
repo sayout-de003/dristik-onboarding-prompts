@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.identity.authorizer import UserIdentity
+from app.identity.authorizer import Authorizer, UserIdentity
 from app.identity.deps import get_current_user, require_permission
 
 router = APIRouter(tags=["Universal AI Connect"])
@@ -219,8 +219,9 @@ async def get_artifact(artifact_id: str, user: UserIdentity = Depends(get_curren
     path = Path(row["storage_path"])
     if not path.is_file():
         raise HTTPException(status_code=410, detail="Artifact metadata exists but its bytes are unavailable.")
+    safe_name = row["filename"].replace('"', "").replace("\\r", "").replace("\\n", "")
     return StreamingResponse(path.open("rb"), media_type=row["content_type"],
-        headers={"Content-Disposition": f'attachment; filename="{row["filename"]}"', "X-Content-SHA256": row["sha256"]})
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}"', "X-Content-SHA256": row["sha256"]})
 
 
 @router.post("/mcp")
@@ -253,6 +254,8 @@ async def mcp_json_rpc(request: Request, user: UserIdentity = Depends(get_curren
         if name == "dristik_list_capabilities":
             result = await list_capabilities(user)
         elif name == "dristik_create_task":
+            if not Authorizer.can_perform(user, "mission:create"):
+                raise HTTPException(status_code=403, detail="You do not have permission to create collaboration tasks.")
             if not args.get("goal"):
                 raise HTTPException(status_code=400, detail="goal is required.")
             task = await create_task(TaskCreate(goal=args["goal"], inputs=args.get("inputs") or {}), user)
