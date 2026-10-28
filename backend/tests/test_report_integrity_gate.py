@@ -90,7 +90,6 @@ def test_final_report_integrity_gate_rejects_manifest_finding_mismatch():
         validate_final_report(_report(), _manifest(findings=[]))
 
 
-
 def test_final_report_integrity_gate_rejects_category_weight_sum_mismatch():
     report = _report()
     report.scores.category_scores = {
@@ -117,3 +116,4 @@ def test_final_report_integrity_gate_rejects_numeric_score_for_unmeasured_catego
     }
     with pytest.raises(ValueError, match="NOT_MEASURED but has a numeric score"):
         validate_final_report(report, _manifest())
+
