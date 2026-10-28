@@ -9,6 +9,7 @@ import {
   Menu,
   Moon,
   PanelLeft,
+  PlugZap,
   Plus,
   Search,
   Settings,
@@ -214,6 +215,7 @@ export function AppShell(props: AppShellProps) {
     { id: 'home', label: 'Audits', icon: LayoutDashboard, active: view === 'home', onClick: () => onNavigate('home') },
     ...(user ? [{ id: 'analytics', label: 'Delta Analytics', icon: BarChart3, active: view === 'analytics', onClick: () => onNavigate('analytics') }] : []),
     ...(user ? [{ id: 'continuous', label: 'Continuous Intelligence', icon: Activity, active: view === 'continuous', onClick: () => onNavigate('continuous') }] : []),
+    ...(user ? [{ id: 'connect', label: 'AI Connect', icon: PlugZap, active: view === 'connect', onClick: () => onNavigate('connect') }] : []),
     { id: 'pricing', label: 'Pricing', icon: CreditCard, active: view === 'pricing', onClick: () => onNavigate('pricing') },
     { id: 'contact', label: 'Contact', icon: Contact, active: view === 'contact', onClick: () => onNavigate('contact') },
     ...(user
@@ -372,6 +374,12 @@ export function AppShell(props: AppShellProps) {
                 }
               >
                 <MenuLabel>Workspace Tools</MenuLabel>
+                <MenuItem onClick={() => onNavigate('connect')}>
+                  <div className="py-0.5">
+                    <span className="font-semibold text-xs text-ink block">Universal AI Connect</span>
+                    <span className="text-[10px] text-ink-500 block">External AI credentials &amp; MCP gateway</span>
+                  </div>
+                </MenuItem>
                 {onOpenConnectors && (
                   <MenuItem onClick={onOpenConnectors}>
                     <div className="py-0.5">
