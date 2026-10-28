@@ -146,14 +146,17 @@ async def create_connection(body: ConnectionCreate, user: UserIdentity = Depends
 
 @router.get("/connect/capabilities")
 async def list_capabilities(user: UserIdentity = Depends(get_current_user)):
-    return {"tenant_id": user.org_id, "capabilities": [
-        {"name": "connections.list", "status": "available", "description": "List tenant-owned registered connections"},
-        {"name": "tasks.create", "status": "available", "description": "Create a durable collaboration task record"},
-        {"name": "tasks.get", "status": "available", "description": "Read a tenant-owned collaboration task"},
-        {"name": "tasks.messages", "status": "available", "description": "Persist messages against a tenant-owned task"},
-        {"name": "artifacts.upload", "status": "available", "description": "Store opaque bytes with a SHA-256 digest"},
-        {"name": "audit.website", "status": "available", "description": "Start the canonical Dristik website-audit workflow with normal entitlement and evidence gates"}
-    ]}
+    catalog = [
+        {"name": "connections.list", "scope": "capabilities.list", "status": "available", "description": "List tenant-owned registered connections"},
+        {"name": "tasks.create", "scope": "tasks.create", "status": "available", "description": "Create a durable collaboration task record"},
+        {"name": "tasks.get", "scope": "tasks.read", "status": "available", "description": "Read a tenant-owned collaboration task"},
+        {"name": "tasks.messages", "scope": "tasks.create", "status": "available", "description": "Persist messages against a tenant-owned task"},
+        {"name": "artifacts.upload", "scope": "tasks.create", "status": "available", "description": "Store opaque bytes with a SHA-256 digest"},
+        {"name": "audit.website", "scope": "audit.create", "status": "available", "description": "Start the canonical Dristik website-audit workflow with normal entitlement and evidence gates"}
+    ]
+    if user.auth_provider == "dristik_connect":
+        catalog = [item for item in catalog if _mcp_authorized(user, item["scope"])]
+    return {"tenant_id": user.org_id, "capabilities": [{k: v for k, v in item.items() if k != "scope"} for item in catalog]}
 
 
 @router.post("/connect/tasks", status_code=201)
@@ -478,6 +481,18 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             {"name": "dristik_report_get", "description": "Retrieve the persisted report for a completed tenant-owned audit.",
              "inputSchema": {"type": "object", "required": ["analysis_id"], "properties": {"analysis_id": {"type": "string"}}}}
         ]}
+        scope_for_tool = {
+            "dristik_list_capabilities": "capabilities.list",
+            "dristik_create_task": "tasks.create",
+            "dristik_get_task": "tasks.read",
+            "dristik_templates_list": "templates.list",
+            "dristik_agents_list": "agents.list",
+            "dristik_audit_start": "audit.create",
+            "dristik_audit_status": "audit.read",
+            "dristik_report_get": "report.read",
+        }
+        result["tools"] = [tool for tool in result["tools"]
+                           if _mcp_authorized(user, scope_for_tool[tool["name"]]) ]
     elif method == "tools/call":
         params = body.get("params") or {}
         name, args = params.get("name"), params.get("arguments") or {}
