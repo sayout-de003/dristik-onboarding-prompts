@@ -987,6 +987,8 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
              "inputSchema": {"type": "object", "required": ["analysis_id", "statement"], "properties": {"analysis_id": {"type": "string"}, "statement": {"type": "string"}, "category": {"type": "string"}, "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "supporting_evidence": {"type": "array", "items": {"type": "string"}}, "recommendation": {"type": "string"}}}},
             {"name": "dristik_ai_citations_track", "description": "Track brand citation frequency, sentiment, and AI search visibility across Perplexity, ChatGPT, Gemini, and Claude.",
              "inputSchema": {"type": "object", "required": ["domain"], "properties": {"domain": {"type": "string"}, "queries": {"type": "array", "items": {"type": "string"}}, "engines": {"type": "array", "items": {"type": "string"}}}}},
+            {"name": "dristik_crux_query", "description": "Fetch real Chrome UX Report field metrics for a public URL or origin. Returns explicit NOT_CONFIGURED or DATA_UNAVAILABLE states rather than invented metrics.", "inputSchema": {"type": "object", "required": ["origin"], "properties": {"origin": {"type": "string"}, "url": {"type": "string"}, "form_factor": {"type": "string", "enum": ["PHONE", "DESKTOP", "TABLET"], "default": "PHONE"}}}},
+            {"name": "dristik_pagespeed_query", "description": "Run a real Google PageSpeed Insights/Lighthouse lab audit for a public URL. Lab data is explicitly distinguished from CrUX field data.", "inputSchema": {"type": "object", "required": ["url"], "properties": {"url": {"type": "string"}, "strategy": {"type": "string", "enum": ["mobile", "desktop"], "default": "mobile"}, "categories": {"type": "array", "items": {"type": "string", "enum": ["performance", "accessibility", "best-practices", "seo"]}}}}},
             {"name": "dristik_provider_invoke", "description": "Delegate inference to a tenant-configured encrypted model provider (OpenAI, Anthropic, Gemini, Grok, DeepSeek, Kimi, OpenRouter).",
              "inputSchema": {"type": "object", "required": ["provider_id", "prompt"], "properties": {"provider_id": {"type": "string"}, "prompt": {"type": "string"}, "system": {"type": "string"}, "max_tokens": {"type": "integer", "default": 1200}}}},
             {"name": "dristik_tasks_list", "description": "List collaboration tasks for this organization.",
@@ -1028,6 +1030,8 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             "dristik_blackboard_read": "blackboard.read",
             "dristik_claim_submit": "claim.submit",
             "dristik_ai_citations_track": "citations.track",
+            "dristik_crux_query": "connector.read",
+            "dristik_pagespeed_query": "connector.read",
             "dristik_pipeline_inspect": "pipeline.inspect",
             "dristik_pipeline_status": "audit.read",
             "dristik_report_artifacts": "report.export",
@@ -1465,6 +1469,34 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
                 "verification_status": "registered_for_adversarial_verification",
                 "analysis_id": analysis_id,
             }
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
+        elif name in ("dristik_crux_query", "dristik_pagespeed_query"):
+            if not _mcp_authorized(user, "connector.read", "mission:read"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit reading integration data.")
+            from app.api.routes.integrations.performance_data import fetch_crux, fetch_pagespeed
+            if name == "dristik_crux_query":
+                origin = args.get("origin")
+                if not isinstance(origin, str) or not origin.strip():
+                    raise HTTPException(status_code=400, detail="origin is required.")
+                form_factor = str(args.get("form_factor") or "PHONE").upper()
+                if form_factor not in ("PHONE", "DESKTOP", "TABLET"):
+                    raise HTTPException(status_code=400, detail="form_factor must be PHONE, DESKTOP, or TABLET.")
+                url = args.get("url")
+                if url is not None and not isinstance(url, str):
+                    raise HTTPException(status_code=400, detail="url must be a string.")
+                payload = await fetch_crux(origin, form_factor, url)
+            else:
+                target_url = args.get("url")
+                if not isinstance(target_url, str) or not target_url.strip():
+                    raise HTTPException(status_code=400, detail="url is required.")
+                strategy = str(args.get("strategy") or "mobile").lower()
+                if strategy not in ("mobile", "desktop"):
+                    raise HTTPException(status_code=400, detail="strategy must be mobile or desktop.")
+                categories = args.get("categories") or ["performance", "accessibility", "best-practices", "seo"]
+                allowed_categories = {"performance", "accessibility", "best-practices", "seo"}
+                if not isinstance(categories, list) or any(c not in allowed_categories for c in categories):
+                    raise HTTPException(status_code=400, detail="categories contains an unsupported category.")
+                payload = await fetch_pagespeed(target_url, strategy, categories)
             result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
         elif name == "dristik_ai_citations_track":
             if not _mcp_authorized(user, "citations.track", "mission:read"):
