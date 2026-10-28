@@ -70,7 +70,7 @@ export function UniversalConnectView() {
   const rotateAIConnection = async (id: string) => {
     setBusy(true); setError(''); setNotice(''); setIssuedCredential(null);
     try {
-      const rotated = await request<IssuedCredential>(\`/api/v1/connect/ai-connections/\${id}/rotate\`, { method: 'POST' });
+      const rotated = await request<IssuedCredential>(`/api/v1/connect/ai-connections/${id}/rotate`, { method: 'POST' });
       setIssuedCredential(rotated);
       setNotice('Connection key rotated. The previous key is invalid; update the AI client now.');
       await refresh();
@@ -82,7 +82,7 @@ export function UniversalConnectView() {
     if (!window.confirm('Revoke this AI connection? Its API key will stop working immediately.')) return;
     setBusy(true); setError(''); setNotice('');
     try {
-      await request(\`/api/v1/connect/ai-connections/\${id}/revoke\`, { method: 'POST' });
+      await request(`/api/v1/connect/ai-connections/${id}/revoke`, { method: 'POST' });
       setNotice('AI connection revoked.');
       if (issuedCredential?.id === id) setIssuedCredential(null);
       await refresh();
@@ -183,7 +183,7 @@ export function UniversalConnectView() {
       <div className="space-y-2">
         <h3 className="text-sm font-semibold text-ink">AI connections</h3>
         {aiConnections.length === 0 ? <p className="text-sm text-ink-500">No external AI credentials created yet.</p> : aiConnections.map((c) => <div key={c.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line p-3">
-          <div><p className="text-sm font-medium text-ink">{c.name}</p><p className="text-xs text-ink-500">{c.connection_email} · {c.grant_profile.replace(/_/g, ' ')} · {c.status}</p><p className="text-xs text-ink-500">{c.last_used_at ? \`Last used \${new Date(c.last_used_at * 1000).toLocaleString()}\` : 'Not used yet'}</p></div>
+          <div><p className="text-sm font-medium text-ink">{c.name}</p><p className="text-xs text-ink-500">{c.connection_email} · {c.grant_profile.replace(/_/g, ' ')} · {c.status}</p><p className="text-xs text-ink-500">{c.last_used_at ? `Last used ${new Date(c.last_used_at * 1000).toLocaleString()}` : 'Not used yet'}</p></div>
           {c.status === 'active' && <div className="flex gap-2"><button type="button" disabled={busy} onClick={() => void rotateAIConnection(c.id)} className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink disabled:opacity-50">Rotate key</button><button type="button" disabled={busy} onClick={() => void revokeAIConnection(c.id)} className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 disabled:opacity-50">Revoke</button></div>}
         </div>)}
       </div>
