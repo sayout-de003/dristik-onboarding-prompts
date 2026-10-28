@@ -641,4 +641,86 @@ def test_blackboard_read_and_claim_submit(isolated_db):
         orchestrator.blackboards.pop(analysis_id, None)
 
 
+def test_mcp_audits_list_ping_and_inbound_outbound_ledger(isolated_db):
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    client = TestClient(app)
+    created = asyncio.run(uc.create_ai_connection(
+        uc.AIConnectionCreate(name="Grok Brain", grant_profile="full_access"), owner()
+    ))
+    auth_headers = {
+        "Authorization": f"Bearer {created['api_key']}",
+        "X-Dristik-Connection-Email": created["connection_email"],
+    }
+
+    # 1. Ping tool
+    ping_resp = client.post(
+        "/api/v1/mcp",
+        json={"jsonrpc": "2.0", "id": "p-1", "method": "tools/call", "params": {"name": "dristik_ping", "arguments": {}}},
+        headers=auth_headers,
+    )
+    assert ping_resp.status_code == 200
+    assert ping_resp.json()["result"]["structuredContent"]["status"] == "connected"
+
+    # 2. Audits list tool (what Grok specifically requested!)
+    audits_resp = client.post(
+        "/api/v1/mcp",
+        json={"jsonrpc": "2.0", "id": "a-1", "method": "tools/call", "params": {"name": "dristik_audits_list", "arguments": {"limit": 10}}},
+        headers=auth_headers,
+    )
+    assert audits_resp.status_code == 200
+    audits_data = audits_resp.json()["result"]["structuredContent"]
+    assert "audits" in audits_data
+    assert audits_data["org_id"] == "org-a"
+
+    # 3. Two-way message tool
+    msg_resp = client.post(
+        "/api/v1/mcp",
+        json={"jsonrpc": "2.0", "id": "m-1", "method": "tools/call", "params": {"name": "dristik_send_message", "arguments": {"message": "Hello from Grok"}}},
+        headers=auth_headers,
+    )
+    assert msg_resp.status_code == 200
+    assert msg_resp.json()["result"]["structuredContent"]["status"] == "received"
+
+    # 4. Inbound & Outbound Ledger inspection
+    activity = asyncio.run(uc.get_ai_connection_activity(created["id"], owner()))
+    events = activity["events"]
+    assert len(events) >= 6
+
+    inbound_events = [e for e in events if e.get("direction") == "inbound"]
+    outbound_events = [e for e in events if e.get("direction") == "outbound"]
+
+    assert len(inbound_events) >= 3
+    assert len(outbound_events) >= 3
+
+    tool_names = [e.get("tool") for e in events if e.get("tool")]
+    assert "dristik_ping" in tool_names
+    assert "dristik_audits_list" in tool_names
+
+
+def test_ai_connection_interactive_test_probe_endpoint(isolated_db):
+    created = asyncio.run(uc.create_ai_connection(
+        uc.AIConnectionCreate(name="Claude Desktop", grant_profile="full_access"), owner()
+    ))
+
+    # Send audits_list probe from Dristik UI
+    probe_res = asyncio.run(uc.test_ai_connection_message(
+        created["id"],
+        uc.ConnectionTestProbe(probe_type="audits_list", message="Check past audits"),
+        owner(),
+    ))
+    assert probe_res["success"] is True
+    assert probe_res["probe_type"] == "audits_list"
+    assert "audits" in probe_res["response_data"]
+    assert probe_res["round_trip_ms"] >= 0
+
+    # Verify both outbound:probe_sent and inbound:probe_acknowledged are logged in ledger
+    activity = asyncio.run(uc.get_ai_connection_activity(created["id"], owner()))
+    event_names = [e["event"] for e in activity["events"]]
+    assert "outbound:probe_sent" in event_names
+    assert "inbound:probe_acknowledged" in event_names
+
+
+
 

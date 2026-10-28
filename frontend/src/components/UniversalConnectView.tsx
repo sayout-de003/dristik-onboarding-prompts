@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Activity,
+  ArrowDownLeft,
+  ArrowUpRight,
   Bot,
   Check,
   CheckCircle2,
@@ -13,7 +15,10 @@ import {
   History,
   Layers,
   Loader2,
+  MessageSquare,
   PlugZap,
+  Radio,
+  RefreshCw,
   Send,
   ShieldCheck,
   Sparkles,
@@ -24,7 +29,19 @@ type Provider = { id: string; provider: string; label: string; model: string; st
 type Task = { id: string; goal: string; status: string; created_at: number; execution_started?: boolean };
 type AIConnection = { id: string; name: string; connection_email: string; grant_profile: string; status: string; expires_at?: number | null; last_used_at?: number | null };
 type IssuedCredential = { id: string; name?: string; connection_email: string; api_key: string; grant_profile?: string; mcp_endpoint?: string; mcp_endpoint_is_absolute?: boolean; mcp_config?: { url: string; headers: Record<string, string> }; key_display_policy?: string };
-type ConnectionEvent = { id: string; event: string; created_at: number; metadata: Record<string, unknown> };
+type ConnectionEvent = {
+  id: string;
+  event: string;
+  created_at: number;
+  direction?: 'inbound' | 'outbound' | 'internal';
+  method?: string;
+  tool?: string | null;
+  arguments?: Record<string, unknown>;
+  summary?: string;
+  status?: string;
+  error?: string | null;
+  metadata?: Record<string, unknown>;
+};
 type CapabilityItem = { name: string; status: string; description: string };
 
 type ClientTab = 'claude' | 'chatgpt' | 'grok' | 'gemini' | 'deepseek' | 'kimi';
@@ -81,6 +98,13 @@ export function UniversalConnectView() {
   const [activeClientTab, setActiveClientTab] = useState<ClientTab>('claude');
   const [activeActivityId, setActiveActivityId] = useState<string | null>(null);
   const [activityEvents, setActivityEvents] = useState<ConnectionEvent[]>([]);
+  const [trafficFilter, setTrafficFilter] = useState<'all' | 'inbound' | 'outbound'>('all');
+  const [testingConnectionId, setTestingConnectionId] = useState<string | null>(null);
+  const [probeType, setProbeType] = useState<'ping' | 'audits_list' | 'pipeline_inspect' | 'agents_list' | 'custom_message'>('audits_list');
+  const [probeMessage, setProbeMessage] = useState('Inspect earlier audits for this account');
+  const [probeBusy, setProbeBusy] = useState(false);
+  const [probeResult, setProbeResult] = useState<Record<string, unknown> | null>(null);
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
   const [capabilities, setCapabilities] = useState<CapabilityItem[]>([]);
   const [showCapabilities, setShowCapabilities] = useState(false);
   const [provider, setProvider] = useState('anthropic');
@@ -94,6 +118,29 @@ export function UniversalConnectView() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+
+  const sendTestProbe = async (connectionId: string) => {
+    setProbeBusy(true);
+    setProbeResult(null);
+    setError('');
+    try {
+      const res = await request<Record<string, unknown>>(`/api/v1/connect/ai-connections/${connectionId}/test-message`, {
+        method: 'POST',
+        body: JSON.stringify({
+          message: probeMessage,
+          probe_type: probeType,
+          tool_arguments: probeType === 'audits_list' ? { limit: 10 } : {},
+        }),
+      });
+      setProbeResult(res);
+      const act = await request<{ events: ConnectionEvent[] }>(`/api/v1/connect/ai-connections/${connectionId}/activity`);
+      setActivityEvents(act.events);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to send test message');
+    } finally {
+      setProbeBusy(false);
+    }
+  };
 
   const refresh = useCallback(async () => {
     try {
@@ -848,18 +895,205 @@ export function UniversalConnectView() {
                   </div>
                 </div>
                 {activeActivityId === c.id && (
-                  <div className="rounded-lg border border-line bg-surface/50 p-3 text-xs">
-                    <p className="mb-1.5 font-semibold text-ink">Security & authentication events</p>
-                    {activityEvents.length === 0 ? (
-                      <p className="text-ink-500">No events recorded for this connection yet.</p>
-                    ) : (
-                      <div className="divide-y divide-line">
-                        {activityEvents.map((evt) => (
-                          <div key={evt.id} className="flex justify-between py-1 text-ink-500">
-                            <span className="font-mono font-medium text-ink">{evt.event}</span>
-                            <span>{new Date(evt.created_at * 1000).toLocaleString()}</span>
+                  <div className="space-y-3 rounded-lg border border-line bg-surface/50 p-3.5 text-xs">
+                    {/* Header with Traffic Direction Filters and Test Action */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2.5">
+                      <div>
+                        <p className="font-semibold text-ink flex items-center gap-1.5">
+                          <Radio size={14} className="text-emerald-500 animate-pulse" />
+                          Inbound & Outbound Traffic Ledger
+                        </p>
+                        <p className="text-[11px] text-ink-500">
+                          Real-time stream of incoming MCP tool invocations and outgoing Dristik payloads.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTestingConnectionId(testingConnectionId === c.id ? null : c.id);
+                            setProbeResult(null);
+                          }}
+                          className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
+                            testingConnectionId === c.id
+                              ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                              : 'border-line bg-surface text-ink hover:border-emerald-500'
+                          }`}
+                        >
+                          <Send size={12} />
+                          {testingConnectionId === c.id ? 'Close test console' : 'Test connection / Send message'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void viewActivity(c.id)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-2 py-1 text-xs text-ink-500 hover:text-ink"
+                          title="Refresh activity"
+                        >
+                          <RefreshCw size={12} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Interactive Test Console */}
+                    {testingConnectionId === c.id && (
+                      <div className="space-y-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                            <Sparkles size={13} /> Two-Way Connection Verification Console
+                          </span>
+                          <span className="text-[11px] text-ink-500">Target: {c.connection_email}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            { id: 'audits_list', label: '🔍 Past Audits (dristik_audits_list)', defaultMsg: 'Inspect earlier audits for this account' },
+                            { id: 'ping', label: '⚡ Ping Heartbeat', defaultMsg: 'Ping connection heartbeat and identity' },
+                            { id: 'pipeline_inspect', label: '🧠 DAG Pipeline Inspect', defaultMsg: 'Inspect pipeline execution graph' },
+                            { id: 'agents_list', label: '🤖 Specialist Agent Fleet', defaultMsg: 'Query registered specialist agents' },
+                            { id: 'custom_message', label: '💬 Custom Message', defaultMsg: 'Two-way test ping from Dristik UI' },
+                          ].map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => {
+                                setProbeType(item.id as typeof probeType);
+                                setProbeMessage(item.defaultMsg);
+                              }}
+                              className={`rounded-md px-2 py-1 text-[11px] font-medium transition ${
+                                probeType === item.id
+                                  ? 'bg-emerald-600 text-white'
+                                  : 'border border-line bg-surface text-ink-600 hover:text-ink'
+                              }`}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={probeMessage}
+                            onChange={(e) => setProbeMessage(e.target.value)}
+                            placeholder="Message or probe description..."
+                            className="input flex-1 text-xs py-1.5"
+                          />
+                          <button
+                            type="button"
+                            disabled={probeBusy}
+                            onClick={() => void sendTestProbe(c.id)}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                          >
+                            {probeBusy ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                            Send message & check
+                          </button>
+                        </div>
+                        {probeResult && (
+                          <div className="rounded border border-emerald-500/20 bg-surface p-2.5 text-xs space-y-1.5">
+                            <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 font-semibold text-[11px]">
+                              <span className="flex items-center gap-1">
+                                <CheckCircle2 size={12} /> Round-trip verified in {String(probeResult.round_trip_ms)}ms
+                              </span>
+                              <span className="uppercase text-[10px] tracking-wider text-ink-400">Status 200 OK</span>
+                            </div>
+                            <p className="text-ink font-medium">{String(probeResult.response_summary || '')}</p>
+                            <pre className="max-h-36 overflow-auto rounded bg-ink-900/5 dark:bg-black/40 p-2 font-mono text-[10px] text-ink-600 dark:text-ink-300">
+                              {JSON.stringify(probeResult.response_data, null, 2)}
+                            </pre>
                           </div>
-                        ))}
+                        )}
+                      </div>
+                    )}
+
+                    {/* Filter Tabs */}
+                    <div className="flex items-center gap-1 border-b border-line pb-1.5 text-[11px]">
+                      {[
+                        { id: 'all', label: `All Traffic (${activityEvents.length})` },
+                        {
+                          id: 'inbound',
+                          label: `Inbound (${activityEvents.filter((e) => e.direction === 'inbound').length})`,
+                          icon: ArrowDownLeft,
+                        },
+                        {
+                          id: 'outbound',
+                          label: `Outbound (${activityEvents.filter((e) => e.direction === 'outbound').length})`,
+                          icon: ArrowUpRight,
+                        },
+                      ].map((tab) => (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => setTrafficFilter(tab.id as typeof trafficFilter)}
+                          className={`inline-flex items-center gap-1 rounded px-2 py-1 font-medium transition ${
+                            trafficFilter === tab.id
+                              ? 'bg-ink text-surface dark:bg-ink-100 dark:text-ink-900'
+                              : 'text-ink-500 hover:text-ink'
+                          }`}
+                        >
+                          {tab.icon && <tab.icon size={11} />}
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Traffic Feed */}
+                    {activityEvents.length === 0 ? (
+                      <p className="text-ink-500 py-2">No events recorded for this connection yet.</p>
+                    ) : (
+                      <div className="divide-y divide-line max-h-80 overflow-y-auto space-y-0.5">
+                        {activityEvents
+                          .filter((evt) => {
+                            if (trafficFilter === 'inbound') return evt.direction === 'inbound';
+                            if (trafficFilter === 'outbound') return evt.direction === 'outbound';
+                            return true;
+                          })
+                          .map((evt) => (
+                            <div key={evt.id} className="py-2 space-y-1">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  {evt.direction === 'inbound' ? (
+                                    <span className="inline-flex items-center gap-1 rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400">
+                                      <ArrowDownLeft size={10} /> INBOUND
+                                    </span>
+                                  ) : evt.direction === 'outbound' ? (
+                                    <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                      <ArrowUpRight size={10} /> OUTBOUND
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 rounded bg-zinc-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-500">
+                                      SYSTEM
+                                    </span>
+                                  )}
+                                  <span className="font-mono font-medium text-ink">
+                                    {evt.tool ? `tool: ${evt.tool}` : evt.method || evt.event}
+                                  </span>
+                                  {evt.status === 'error' && (
+                                    <span className="rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
+                                      ERROR
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[11px] text-ink-400 font-mono">
+                                  {new Date(evt.created_at * 1000).toLocaleTimeString()}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-ink-600 dark:text-ink-300">{evt.summary}</p>
+                              {(evt.arguments && Object.keys(evt.arguments).length > 0) || evt.error ? (
+                                <div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedEventId(expandedEventId === evt.id ? null : evt.id)}
+                                    className="text-[10px] font-medium text-ink-400 hover:text-ink underline"
+                                  >
+                                    {expandedEventId === evt.id ? 'Hide payload' : 'Inspect payload'}
+                                  </button>
+                                  {expandedEventId === evt.id && (
+                                    <pre className="mt-1 overflow-auto rounded bg-ink-900/5 dark:bg-black/30 p-1.5 font-mono text-[10px] text-ink-600 dark:text-ink-300">
+                                      {JSON.stringify(evt.arguments || evt.error || evt.metadata, null, 2)}
+                                    </pre>
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+                          ))}
                       </div>
                     )}
                   </div>

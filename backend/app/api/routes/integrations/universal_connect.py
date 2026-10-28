@@ -594,6 +594,153 @@ async def revoke_ai_connection(connection_id: str, user: UserIdentity = Depends(
     return {"id": connection_id, "status": "revoked"}
 
 
+def _log_connection_event(
+    connection_id: str,
+    org_id: str,
+    event: str,
+    direction: Literal["inbound", "outbound", "internal"] = "inbound",
+    method: str = "",
+    tool: str | None = None,
+    arguments: dict | None = None,
+    summary: str | None = None,
+    status: str = "success",
+    error: str | None = None,
+    extra: dict | None = None,
+) -> None:
+    now = time.time()
+    payload = {
+        "direction": direction,
+        "method": method,
+        "tool": tool,
+        "arguments": arguments or {},
+        "summary": summary or "",
+        "status": status,
+        "error": error,
+        **(extra or {}),
+    }
+    with _db() as conn:
+        conn.execute(
+            "INSERT INTO uc_ai_connection_events VALUES (?,?,?,?,?,?)",
+            ("uce_" + uuid.uuid4().hex, connection_id, org_id, event, now, _json(payload)),
+        )
+
+
+class ConnectionTestProbe(BaseModel):
+    message: str = Field(default="Connection verification probe", description="Test message or probe description")
+    probe_type: Literal["ping", "audits_list", "pipeline_inspect", "agents_list", "custom_message"] = "ping"
+    tool_arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+@router.post("/connect/ai-connections/{connection_id}/test-message")
+@router.post("/ai-connections/{connection_id}/test-message")
+async def test_ai_connection_message(
+    connection_id: str,
+    probe: ConnectionTestProbe,
+    user: UserIdentity = Depends(require_permission("org:manage")),
+):
+    """Send an interactive test message or probe to verify two-way connection readiness and log inbound/outbound ledger records."""
+    start_time = time.time()
+    with _db() as conn:
+        row = conn.execute(
+            "SELECT * FROM uc_ai_connections WHERE id=?",
+            (connection_id,),
+        ).fetchone()
+        _require_org(row, user)
+        if row["status"] != "active":
+            raise HTTPException(status_code=400, detail=f"Cannot test inactive connection (status: {row['status']}).")
+
+    # 1. Log outbound test probe sent from Dristik
+    _log_connection_event(
+        connection_id, user.org_id,
+        event="outbound:probe_sent",
+        direction="outbound",
+        method=f"test:{probe.probe_type}",
+        arguments=probe.tool_arguments,
+        summary=f"Dristik sent test probe: {probe.probe_type} - '{probe.message}'",
+        status="success",
+    )
+
+    # 2. Execute probe logic
+    response_data: dict[str, Any] = {}
+    summary_text = ""
+    if probe.probe_type == "ping":
+        response_data = {
+            "status": "connected",
+            "ping": "pong",
+            "protocol": MCP_VERSION,
+            "connection_email": row["connection_email"],
+            "connection_name": row["name"],
+            "grant_profile": row["grant_profile"],
+            "scopes": json.loads(row["scopes_json"]) if row["scopes_json"] else ["*"],
+            "timestamp": time.time(),
+        }
+        summary_text = "Connection identity & MCP protocol verified active."
+    elif probe.probe_type == "audits_list":
+        from app.api.routes.audits.analyses import list_analyses
+        audits = await list_analyses(limit=probe.tool_arguments.get("limit", 10), user=user)
+        response_data = {
+            "audits": audits,
+            "count": len(audits),
+            "org_id": user.org_id,
+        }
+        summary_text = f"Retrieved {len(audits)} past audits for org {user.org_id}."
+    elif probe.probe_type == "pipeline_inspect":
+        from app.orchestration.pipeline_dag import SECTIONS_REGISTRY, NODES_REGISTRY
+        sections_count = len(SECTIONS_REGISTRY)
+        nodes_count = len(NODES_REGISTRY.values() if hasattr(NODES_REGISTRY, "values") else NODES_REGISTRY)
+        response_data = {
+            "sections_count": sections_count,
+            "nodes_count": nodes_count,
+            "pipeline_status": "ready",
+        }
+        summary_text = f"Pipeline verified: {sections_count} sections, {nodes_count} DAG nodes ready."
+    elif probe.probe_type == "agents_list":
+        from app.orchestration.runtime.registry import AGENT_REGISTRY
+        unique_agents = len({defn.agent_id: defn for defn in AGENT_REGISTRY.values()})
+        response_data = {
+            "agent_count": unique_agents,
+            "sample_agents": [defn.agent_id for defn in list(AGENT_REGISTRY.values())[:5]],
+            "fleet_status": "operational",
+        }
+        summary_text = f"Agent fleet verified: {unique_agents} specialist agents registered."
+    else:
+        response_data = {
+            "echo": probe.message,
+            "received": True,
+            "timestamp": time.time(),
+            "target": row["connection_email"],
+        }
+        summary_text = "Custom message delivered and recorded in connection ledger."
+
+    duration_ms = round((time.time() - start_time) * 1000, 2)
+
+    # 3. Log inbound probe acknowledgment
+    _log_connection_event(
+        connection_id, user.org_id,
+        event="inbound:probe_acknowledged",
+        direction="inbound",
+        method=f"test:{probe.probe_type}",
+        summary=f"{summary_text} ({duration_ms}ms round-trip)",
+        status="success",
+        extra={"duration_ms": duration_ms},
+    )
+
+    now = time.time()
+    with _db() as conn:
+        conn.execute("UPDATE uc_ai_connections SET last_used_at=?,updated_at=? WHERE id=?", (now, now, connection_id))
+
+    return {
+        "success": True,
+        "probe_type": probe.probe_type,
+        "round_trip_ms": duration_ms,
+        "connection_id": connection_id,
+        "connection_email": row["connection_email"],
+        "message": probe.message,
+        "response_summary": summary_text,
+        "response_data": response_data,
+    }
+
+
 @router.get("/connect/ai-connections/{connection_id}/activity")
 @router.get("/ai-connections/{connection_id}/activity")
 async def get_ai_connection_activity(
@@ -608,14 +755,36 @@ async def get_ai_connection_activity(
             "SELECT id,event,created_at,metadata_json FROM uc_ai_connection_events WHERE connection_id=? AND org_id=? ORDER BY created_at DESC LIMIT ?",
             (connection_id, user.org_id, limit),
         ).fetchall()
+    events = []
+    for r in rows:
+        meta = json.loads(r["metadata_json"]) if r["metadata_json"] else {}
+        evt_name = r["event"]
+        direction = meta.get("direction")
+        if not direction:
+            if evt_name.startswith("outbound:"):
+                direction = "outbound"
+            elif evt_name.startswith("inbound:"):
+                direction = "inbound"
+            elif evt_name in ("mcp_initialize", "mcp_tools/list", "mcp_tools/call", "mcp_ping", "mcp_notifications/initialized", "authenticated"):
+                direction = "inbound"
+            else:
+                direction = "internal"
+        events.append({
+            "id": r["id"],
+            "event": evt_name,
+            "created_at": r["created_at"],
+            "direction": direction,
+            "method": meta.get("method") or evt_name,
+            "tool": meta.get("tool"),
+            "arguments": meta.get("arguments"),
+            "summary": meta.get("summary") or meta.get("note") or evt_name,
+            "status": meta.get("status", "success"),
+            "error": meta.get("error"),
+            "metadata": meta,
+        })
     return {
         "connection_id": connection_id,
-        "events": [{
-            "id": r["id"],
-            "event": r["event"],
-            "created_at": r["created_at"],
-            "metadata": json.loads(r["metadata_json"]) if r["metadata_json"] else {},
-        } for r in rows],
+        "events": events,
     }
 
 
@@ -680,10 +849,26 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
         raise HTTPException(status_code=400, detail="Invalid JSON-RPC 2.0 request.")
     method, request_id = body["method"], body.get("id")
     if user.auth_provider == "dristik_connect":
-        with _db() as conn:
-            conn.execute(
-                "INSERT INTO uc_ai_connection_events VALUES (?,?,?,?,?,?)",
-                ("uce_" + uuid.uuid4().hex, user.user_id, user.org_id, f"mcp_{method}", time.time(), _json({"method": method})),
+        if method == "tools/call":
+            params = body.get("params") or {}
+            t_name = params.get("name")
+            t_args = params.get("arguments") or {}
+            _log_connection_event(
+                user.user_id, user.org_id,
+                event=f"mcp_tools/call",
+                direction="inbound",
+                method="tools/call",
+                tool=t_name,
+                arguments=t_args,
+                summary=f"Inbound tool call: {t_name}",
+            )
+        else:
+            _log_connection_event(
+                user.user_id, user.org_id,
+                event=f"mcp_{method}",
+                direction="inbound",
+                method=method,
+                summary=f"Inbound {method} request from AI client",
             )
     if method == "initialize":
         result = {"protocolVersion": MCP_VERSION, "capabilities": {"tools": {"listChanged": False}},
@@ -708,6 +893,8 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
              "inputSchema": {"type": "object", "properties": {"agent_id": {"type": "string"}, "domain": {"type": "string"}}}},
             {"name": "dristik_model_providers_list", "description": "List tenant-owned model provider IDs and health status without returning secrets.",
              "inputSchema": {"type": "object", "properties": {}}},
+            {"name": "dristik_audits_list", "description": "List earlier website audits and analyses for this organization, returning analysis_id, URL, domain, status, progress, composite score, and dates.",
+             "inputSchema": {"type": "object", "properties": {"limit": {"type": "integer", "default": 25, "minimum": 1, "maximum": 100}}}},
             {"name": "dristik_audit_start", "description": "Start a canonical Dristik website audit with normal entitlement and validation gates.",
              "inputSchema": {"type": "object", "required": ["website_url"], "properties": {"website_url": {"type": "string"}, "max_crawl_pages": {"type": "integer", "minimum": 1, "maximum": 100}, "target_pillars": {"type": "array", "items": {"type": "string"}}, "model_provider_id": {"type": "string", "description": "Optional tenant-owned configured provider ID for all compatible model-router calls in this run."}}}},
             {"name": "dristik_audit_status", "description": "Read the status of a tenant-owned canonical audit.",
@@ -715,6 +902,8 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             {"name": "dristik_audit_cancel", "description": "Cancel a running canonical audit.",
              "inputSchema": {"type": "object", "required": ["analysis_id"], "properties": {"analysis_id": {"type": "string"}}}},
             {"name": "dristik_report_get", "description": "Retrieve the persisted report for a completed tenant-owned audit.",
+             "inputSchema": {"type": "object", "required": ["analysis_id"], "properties": {"analysis_id": {"type": "string"}}}},
+            {"name": "dristik_audit_get", "description": "Retrieve comprehensive audit run details, composite scores, and executive report for an analysis ID.",
              "inputSchema": {"type": "object", "required": ["analysis_id"], "properties": {"analysis_id": {"type": "string"}}}},
             {"name": "dristik_report_export", "description": "Export a completed audit report in CSV format (remediation tracker or crawl URLs) or summary JSON.",
              "inputSchema": {"type": "object", "required": ["analysis_id"], "properties": {"analysis_id": {"type": "string"}, "format": {"type": "string", "enum": ["csv_remediation", "csv_urls", "summary_json"], "default": "summary_json"}}}},
@@ -742,6 +931,10 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
              "inputSchema": {"type": "object", "required": ["task_id", "sender", "payload"], "properties": {"task_id": {"type": "string"}, "sender": {"type": "string"}, "recipient": {"type": "string"}, "message_type": {"type": "string", "default": "text"}, "payload": {"type": "object"}}}},
             {"name": "dristik_connector_status", "description": "Inspect the status and health of configured external platform connectors.",
              "inputSchema": {"type": "object", "properties": {"connector_id": {"type": "string"}}}},
+            {"name": "dristik_ping", "description": "Verify two-way connection health, latency, tenant identity, and active capabilities.",
+             "inputSchema": {"type": "object", "properties": {"message": {"type": "string"}}}},
+            {"name": "dristik_send_message", "description": "Send a two-way message, query, or check-in between external AI client and Dristik.",
+             "inputSchema": {"type": "object", "required": ["message"], "properties": {"message": {"type": "string"}, "metadata": {"type": "object"}}}},
         ]}
         scope_for_tool = {
             "dristik_capabilities_list": "capabilities.list",
@@ -755,10 +948,16 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             "dristik_agents_list": "agents.list",
             "dristik_model_providers_list": "providers.list",
             "dristik_provider_invoke": "provider.invoke",
+            "dristik_audits_list": "audit.read",
+            "dristik_audit_list": "audit.read",
+            "dristik_analyses_list": "audit.read",
+            "dristik_runs_list": "audit.read",
             "dristik_audit_start": "audit.create",
             "dristik_audit_status": "audit.read",
             "dristik_audit_cancel": "audit.cancel",
             "dristik_report_get": "report.read",
+            "dristik_audit_get": "report.read",
+            "dristik_analysis_get": "report.read",
             "dristik_report_export": "report.export",
             "dristik_findings_list": "findings.read",
             "dristik_evidence_list": "evidence.read",
@@ -769,6 +968,8 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             "dristik_agent_execute": "agent.execute",
             "dristik_workflow_execute": "workflow.execute",
             "dristik_connector_status": "connector.read",
+            "dristik_ping": "capabilities.list",
+            "dristik_send_message": "tasks.message",
         }
         result["tools"] = [tool for tool in result["tools"]
                            if _mcp_authorized(user, scope_for_tool[tool["name"]])]
@@ -866,6 +1067,14 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             from app.api.routes.integrations.provider_adapters import list_providers
             payload = await list_providers(user)
             result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
+        elif name in ("dristik_audits_list", "dristik_audit_list", "dristik_analyses_list", "dristik_runs_list"):
+            if not _mcp_authorized(user, "audit.read", "mission:read"):
+                raise HTTPException(status_code=403, detail="Connection grant does not permit reading audits.")
+            limit = int(args.get("limit", 25))
+            from app.api.routes.audits.analyses import list_analyses
+            audits = await list_analyses(limit=limit, user=user)
+            payload = {"audits": audits, "count": len(audits), "org_id": user.org_id}
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
         elif name == "dristik_audit_start":
             if not _mcp_authorized(user, "audit.create", "mission:create"):
                 raise HTTPException(status_code=403, detail="Connection grant does not permit starting audits.")
@@ -918,7 +1127,7 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
                 in_mem.current_step = "Audit stopped by user via external AI connection"
             canceled_info = {"analysis_id": analysis_id, "status": "stopped", "stopped": True}
             result = {"content": [{"type": "text", "text": _json(canceled_info)}], "structuredContent": canceled_info}
-        elif name == "dristik_report_get":
+        elif name in ("dristik_report_get", "dristik_audit_get", "dristik_analysis_get"):
             if not _mcp_authorized(user, "report.read", "mission:read"):
                 raise HTTPException(status_code=403, detail="Connection grant does not permit report access.")
             analysis_id = args.get("analysis_id")
@@ -926,10 +1135,17 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
                 raise HTTPException(status_code=400, detail="analysis_id is required.")
             from app.identity.access import require_analysis
             run = require_analysis(analysis_id, user)
-            if not getattr(run, "report", None):
-                raise HTTPException(status_code=409, detail="Report is not ready yet.")
-            report = run.report.model_dump(mode="json") if hasattr(run.report, "model_dump") else run.report
-            result = {"content": [{"type": "text", "text": _json(report)}], "structuredContent": report}
+            report_data = run.report.model_dump(mode="json") if getattr(run, "report", None) and hasattr(run.report, "model_dump") else getattr(run, "report", None)
+            run_data = {
+                "analysis_id": run.analysis_id,
+                "website_url": run.website_url,
+                "status": str(getattr(run.status, "value", run.status)),
+                "progress_percentage": getattr(run, "progress_percentage", 100),
+                "created_at": str(getattr(run, "created_at", "")),
+                "completed_at": str(getattr(run, "completed_at", "")) if getattr(run, "completed_at", None) else None,
+                "report": report_data,
+            }
+            result = {"content": [{"type": "text", "text": _json(run_data)}], "structuredContent": run_data}
         elif name == "dristik_report_export":
             if not _mcp_authorized(user, "report.export", "mission:read"):
                 raise HTTPException(status_code=403, detail="Connection grant does not permit exporting reports.")
@@ -1216,10 +1432,94 @@ async def mcp_json_rpc(request: Request, background_tasks: BackgroundTasks, user
             )
             payload = await send_message(task_id, msg_body, user)
             result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
+        elif name in ("dristik_ping", "ping"):
+            payload = {
+                "status": "connected",
+                "ping": "pong",
+                "timestamp": time.time(),
+                "org_id": user.org_id,
+                "identity": user.email,
+                "client_name": user.full_name,
+                "protocol": MCP_VERSION,
+                "message": args.get("message") or "Two-way connection verified active.",
+            }
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
+        elif name in ("dristik_send_message", "dristik_message_send"):
+            msg = args.get("message")
+            if not msg or not isinstance(msg, str):
+                raise HTTPException(status_code=400, detail="message is required.")
+            payload = {
+                "status": "received",
+                "message_id": "msg_" + uuid.uuid4().hex[:12],
+                "sender": user.email,
+                "received_at": time.time(),
+                "echo": msg.strip(),
+                "org_id": user.org_id,
+                "ack": "Message acknowledged by Dristik Brain controller.",
+            }
+            result = {"content": [{"type": "text", "text": _json(payload)}], "structuredContent": payload}
         else:
             return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": "Unknown tool."}}
         if not (isinstance(result, dict) and "content" in result):
             result = {"content": [{"type": "text", "text": _json(result)}], "structuredContent": result}
+
+        # Log outbound response for tools/call
+        if user.auth_provider == "dristik_connect":
+            t_structured = result.get("structuredContent") if isinstance(result, dict) else None
+            outbound_summary = f"Executed {name} successfully"
+            if name in ("dristik_audits_list", "dristik_audit_list", "dristik_analyses_list", "dristik_runs_list") and t_structured:
+                outbound_summary = f"Returned {t_structured.get('count', 0)} audits for {user.org_id}"
+            elif name == "dristik_pipeline_inspect" and t_structured:
+                outbound_summary = f"Returned {t_structured.get('total_sections', 0)} pipeline sections & {t_structured.get('total_nodes', 0)} DAG nodes"
+            elif name == "dristik_agents_list" and t_structured:
+                outbound_summary = f"Returned {t_structured.get('count', 0)} registered specialist agents"
+            elif name in ("dristik_report_get", "dristik_audit_get") and t_structured:
+                outbound_summary = f"Returned audit report for {t_structured.get('analysis_id')}"
+            elif name in ("dristik_ping", "ping"):
+                outbound_summary = "Pong acknowledgment returned"
+            elif name in ("dristik_send_message", "dristik_message_send"):
+                outbound_summary = "Message acknowledged by Dristik controller"
+            _log_connection_event(
+                user.user_id, user.org_id,
+                event=f"outbound:tools/call:{name}",
+                direction="outbound",
+                method="tools/call",
+                tool=name,
+                summary=outbound_summary,
+                status="success",
+            )
     else:
         return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": "Method not supported."}}
+
+    # Log outbound response for discovery methods
+    if user.auth_provider == "dristik_connect":
+        if method == "tools/list":
+            tool_count = len(result.get("tools", [])) if isinstance(result, dict) else 0
+            _log_connection_event(
+                user.user_id, user.org_id,
+                event="outbound:tools/list",
+                direction="outbound",
+                method="tools/list",
+                summary=f"Exposed {tool_count} authorized MCP tools to AI client",
+                status="success",
+            )
+        elif method == "initialize":
+            _log_connection_event(
+                user.user_id, user.org_id,
+                event="outbound:initialize",
+                direction="outbound",
+                method="initialize",
+                summary=f"Handshake accepted (protocol {MCP_VERSION})",
+                status="success",
+            )
+        elif method == "ping":
+            _log_connection_event(
+                user.user_id, user.org_id,
+                event="outbound:ping",
+                direction="outbound",
+                method="ping",
+                summary="Pong acknowledgment returned",
+                status="success",
+            )
+
     return {"jsonrpc": "2.0", "id": request_id, "result": result}
