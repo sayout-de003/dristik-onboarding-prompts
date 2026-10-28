@@ -28,7 +28,8 @@ export function UniversalConnectView() {
   const [model, setModel] = useState('claude-sonnet-4-20250514');
   const [apiKey, setApiKey] = useState('');
   const [selected, setSelected] = useState('');
-  const [prompt, setPrompt] = useState('Explain how you can help analyze a website using evidence provided by Dristik.');
+  const [prompt, setPrompt] = useState('Review this website audit and summarize evidence-backed issues.');
+  const [websiteUrl, setWebsiteUrl] = useState('https://example.com');
   const [result, setResult] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -77,8 +78,8 @@ export function UniversalConnectView() {
   const createTask = async () => {
     setBusy(true); setError(''); setNotice('');
     try {
-      const task = await request<Task>('/api/v1/connect/tasks', { method: 'POST', body: JSON.stringify({ goal: prompt, inputs: { source: 'connect-ui' } }) });
-      setNotice(`Task ${task.id} was durably recorded. Execution is not yet wired to the audit worker.`);
+      const task = await request<Task>('/api/v1/connect/tasks', { method: 'POST', body: JSON.stringify({ goal: prompt, inputs: { source: 'connect-ui', url: websiteUrl } }) });
+      setNotice(`Task ${task.id} was durably recorded. You can submit it to the canonical Dristik audit pipeline from the task actions.`);
       await refresh();
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not create task.'); }
     finally { setBusy(false); }
@@ -107,7 +108,7 @@ export function UniversalConnectView() {
       </section>
       <section className="card space-y-4 p-5">
         <div className="flex items-center gap-2"><Send size={20}/><h2 className="text-lg font-semibold text-ink">Test a live model call</h2></div>
-        <form onSubmit={invoke} className="space-y-3">
+        <form onSubmit={invoke} className="space-y-3"><label className="block space-y-1 text-sm"><span className="text-ink-600">Website to audit</span><input className="input w-full" type="url" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} required placeholder="https://example.com"/></label>
           <label className="block space-y-1 text-sm"><span className="text-ink-600">Prompt</span><textarea className="input min-h-36 w-full" value={prompt} onChange={(e) => setPrompt(e.target.value)} required maxLength={30000}/></label>
           <div className="flex flex-wrap gap-2"><button disabled={busy || !selected} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">{busy ? <Loader2 className="animate-spin" size={16}/> : <Activity size={16}/>} Invoke selected provider</button><button type="button" disabled={busy} onClick={() => void createTask()} className="rounded-lg border border-line px-4 py-2.5 text-sm font-medium text-ink disabled:opacity-50">Record collaboration task</button></div>
         </form>
