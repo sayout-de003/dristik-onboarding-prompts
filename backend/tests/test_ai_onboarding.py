@@ -41,8 +41,34 @@ def test_kit_issues_real_scoped_key_and_copy_paste_prompt(isolated_db):
     assert connection["mcp_endpoint"] == "https://dristik.example.test/api/v1/mcp"
     assert "X-Dristik-Connection-Email" in connection["mcp_config"]["headers"]
     assert "do NOT" in result["prompt"] or "Do not" in result["prompt"]
+    assert result["prompt"] == result["prompts"]["claude"]
+    assert set(result["prompts"]) == set(onboarding.PROVIDERS)
+    assert "Selected AI/client: chatgpt" in result["prompts"]["chatgpt"]
+    assert connection["api_key"] not in result["prompt"]
+    assert all(connection["api_key"] not in text for text in result["prompts"].values())
     assert "dristik_ping" in {item["name"] for item in result["tool_inventory"]}
     assert "execution_policy" in result
+
+
+def test_prompt_preview_does_not_reveal_or_rotate_the_key(isolated_db):
+    created = asyncio.run(uc.create_ai_connection(
+        uc.AIConnectionCreate(name="Existing client", grant_profile="audit_operator"), owner(), request()
+    ))
+    result = asyncio.run(onboarding.onboarding_prompt(
+        onboarding.OnboardingPromptRequest(connection_id=created["id"], provider="grok"),
+        request(), owner(),
+    ))
+    assert result["connection_id"] == created["id"]
+    assert "Selected AI/client: grok" in result["prompt"]
+    assert result["prompt"] == result["prompts"]["grok"]
+    assert created["api_key"] not in json.dumps(result)
+    assert "api_key" not in result
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(onboarding.onboarding_prompt(
+            onboarding.OnboardingPromptRequest(connection_id=created["id"], provider="grok"),
+            request(), UserIdentity(org_id="org-b", email="other@example.test", role=UserRole.OWNER),
+        ))
+    assert exc.value.status_code == 404
 
 
 def test_response_is_staged_and_never_executed(isolated_db):

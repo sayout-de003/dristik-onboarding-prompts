@@ -29,6 +29,15 @@ SECRET_PATTERNS = (
     re.compile(r"(?i)(api[_-]?key|secret|password|access[_-]?token)\s*[:=]\s*['\"]?[^\s'\"]{12,}"),
     re.compile(r"(?i)-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
 )
+TOOL_CATALOG = (
+    {"name": "dristik_ping", "scope": "capabilities.list"},
+    {"name": "dristik_capabilities_list", "scope": "capabilities.list"},
+    {"name": "dristik_create_task", "scope": "tasks.create"},
+    {"name": "dristik_task_send_message", "scope": "tasks.message"},
+    {"name": "dristik_audit_start", "scope": "audit.create"},
+)
+NEXT_STEP = "Copy the prompt to the selected AI. Keep the Dristik API key out of the prompt; configure it only in a trusted MCP client secret field."
+EXECUTION_POLICY = "AI-generated code is staged for review and is never executed by this endpoint."
 
 def _db():
     uc.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -43,12 +52,22 @@ def _db():
     conn.execute("CREATE INDEX IF NOT EXISTS idx_uc_onboarding_org ON uc_ai_onboarding_submissions(org_id, created_at)")
     return conn
 
+ProviderName = Literal["chatgpt", "claude", "gemini", "grok", "deepseek", "kimi", "openrouter", "custom"]
+DEFAULT_GOAL = "Connect this AI to Dristik and verify authorized two-way messaging."
+
+
 class OnboardingCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    provider: Literal["chatgpt", "claude", "gemini", "grok", "deepseek", "kimi", "openrouter", "custom"]
+    provider: ProviderName
     grant_profile: Literal["read_only", "audit_operator", "workflow_admin", "full_access"] = "audit_operator"
     expires_in_days: int = Field(default=30, ge=1, le=365)
-    goal: str = Field(default="Connect this AI to Dristik and verify authorized two-way messaging.", max_length=3000)
+    goal: str = Field(default=DEFAULT_GOAL, max_length=3000)
+
+
+class OnboardingPromptRequest(BaseModel):
+    connection_id: str = Field(min_length=1, max_length=100)
+    provider: ProviderName
+    goal: str = Field(default=DEFAULT_GOAL, max_length=3000)
 
 class ReturnedFile(BaseModel):
     path: str = Field(min_length=1, max_length=240)
@@ -68,7 +87,7 @@ class ReturnedFile(BaseModel):
 
 class OnboardingResponse(BaseModel):
     connection_id: str = Field(min_length=1, max_length=100)
-    provider: Literal["chatgpt", "claude", "gemini", "grok", "deepseek", "kimi", "openrouter", "custom"]
+    provider: ProviderName
     summary: str = Field(min_length=1, max_length=8000)
     files: list[ReturnedFile] = Field(default_factory=list, max_length=40)
     setup_commands: list[str] = Field(default_factory=list, max_length=30)
@@ -91,6 +110,32 @@ Dristik uses authenticated MCP JSON-RPC at the endpoint above. Send Authorizatio
 
 Return a JSON object with keys: summary, files (array of {{path,content}}), setup_commands, dependencies, environment_variable_names, test_plan, limitations. Include complete proposed file contents. Do not fabricate URLs or provider credentials. Do not include secrets in files. Do not ask Dristik to run arbitrary shell commands automatically. Clearly identify any manual setup required and distinguish a proposed implementation from a verified live connection."""
 
+def _tool_inventory(scopes: list[str]) -> list[dict[str, str]]:
+    return [dict(tool) for tool in TOOL_CATALOG if "*" in scopes or tool["scope"] in scopes]
+
+def _provider_prompts(name: str, endpoint: str, email: str, scopes: list[str], goal: str) -> dict[str, str]:
+    return {provider: _prompt(provider, name, endpoint, email, scopes, goal) for provider in PROVIDERS}
+
+def _prompt_bundle(provider: str, prompts: dict[str, str], scopes: list[str]) -> dict:
+    return {
+        "provider": provider,
+        "prompt": prompts[provider],
+        "prompts": prompts,
+        "tool_inventory": _tool_inventory(scopes),
+        "next_step": NEXT_STEP,
+        "execution_policy": EXECUTION_POLICY,
+    }
+
+def _active_connection(connection_id: str, org_id: str) -> dict:
+    with uc._db() as base:
+        row = base.execute(
+            "SELECT id,name,connection_email,scopes_json,status FROM uc_ai_connections WHERE id=? AND org_id=?",
+            (connection_id, org_id),
+        ).fetchone()
+        if row is None or row["status"] != "active":
+            raise HTTPException(status_code=404, detail="Connection not found.")
+        return dict(row)
+
 @router.post("/kit", status_code=201)
 async def create_onboarding_kit(body: OnboardingCreate, request: Request,
                                 user: UserIdentity = Depends(require_permission("org:manage"))):
@@ -100,23 +145,21 @@ async def create_onboarding_kit(body: OnboardingCreate, request: Request,
                               expires_in_days=body.expires_in_days),
         user, request,
     )
-    tools = [
-        {"name": "dristik_ping", "scope": "capabilities.list"},
-        {"name": "dristik_capabilities_list", "scope": "capabilities.list"},
-        {"name": "dristik_create_task", "scope": "tasks.create"},
-        {"name": "dristik_task_send_message", "scope": "tasks.message"},
-        {"name": "dristik_audit_start", "scope": "audit.create"},
-    ]
+    prompts = _provider_prompts(body.name, issued["mcp_endpoint"], issued["connection_email"], issued["scopes"], body.goal)
     return {
         "connection": {k: issued[k] for k in ("id", "name", "connection_email", "api_key",
             "grant_profile", "scopes", "expires_at", "mcp_endpoint", "mcp_config", "key_display_policy")},
-        "provider": body.provider,
-        "prompt": _prompt(body.provider, body.name, issued["mcp_endpoint"],
-                          issued["connection_email"], issued["scopes"], body.goal),
-        "tool_inventory": [tool for tool in tools if "*" in issued["scopes"] or tool["scope"] in issued["scopes"]],
-        "next_step": "Copy the prompt to the selected AI. Keep the Dristik API key out of the prompt; configure it only in a trusted MCP client secret field.",
-        "execution_policy": "AI-generated code is staged for review and is never executed by this endpoint.",
+        **_prompt_bundle(body.provider, prompts, issued["scopes"]),
     }
+
+@router.post("/prompt")
+async def onboarding_prompt(body: OnboardingPromptRequest, request: Request,
+                            user: UserIdentity = Depends(require_permission("org:manage"))):
+    """Return copy/paste prompts for an existing connection. Does not reveal or rotate the API key."""
+    row = _active_connection(body.connection_id, user.org_id)
+    scopes = json.loads(row["scopes_json"])
+    prompts = _provider_prompts(row["name"], uc._resolve_mcp_endpoint(request), row["connection_email"], scopes, body.goal)
+    return {"connection_id": row["id"], **_prompt_bundle(body.provider, prompts, scopes)}
 
 @router.post("/response", status_code=201)
 async def submit_ai_response(body: OnboardingResponse,

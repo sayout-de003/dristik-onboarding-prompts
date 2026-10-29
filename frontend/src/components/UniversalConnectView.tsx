@@ -28,7 +28,12 @@ import {
 type Provider = { id: string; provider: string; label: string; model: string; status: string; created_at: number };
 type Task = { id: string; goal: string; status: string; created_at: number; execution_started?: boolean };
 type AIConnection = { id: string; name: string; connection_email: string; grant_profile: string; status: string; expires_at?: number | null; last_used_at?: number | null };
-type IssuedCredential = { id: string; name?: string; connection_email: string; api_key: string; grant_profile?: string; mcp_endpoint?: string; mcp_endpoint_is_absolute?: boolean; mcp_config?: { url: string; headers: Record<string, string> }; key_display_policy?: string };
+type IssuedCredential = { id: string; name?: string; connection_email: string; api_key: string; grant_profile?: string; scopes?: string[]; mcp_endpoint?: string; mcp_endpoint_is_absolute?: boolean; mcp_config?: { url: string; headers: Record<string, string> }; key_display_policy?: string };
+type ToolInventoryItem = { name: string; scope: string };
+type OnboardingPrompts = Partial<Record<ClientTab, string>>;
+type OnboardingBundle = { provider: ClientTab; prompt: string; prompts: OnboardingPrompts; tool_inventory: ToolInventoryItem[]; next_step: string; execution_policy?: string };
+type OnboardingKit = OnboardingBundle & { connection: IssuedCredential };
+type SavedPrompt = { connectionId: string; prompts: OnboardingPrompts; tools: ToolInventoryItem[]; nextStep: string };
 type ConnectionEvent = {
   id: string;
   event: string;
@@ -44,7 +49,20 @@ type ConnectionEvent = {
 };
 type CapabilityItem = { name: string; status: string; description: string };
 
-type ClientTab = 'claude' | 'chatgpt' | 'grok' | 'gemini' | 'deepseek' | 'kimi';
+type ClientTab = 'claude' | 'chatgpt' | 'grok' | 'gemini' | 'deepseek' | 'kimi' | 'openrouter' | 'custom';
+
+const CLIENT_TABS: ClientTab[] = ['claude', 'chatgpt', 'grok', 'gemini', 'deepseek', 'kimi', 'openrouter', 'custom'];
+const CLIENT_LABELS: Record<ClientTab, string> = {
+  claude: 'Claude',
+  chatgpt: 'ChatGPT',
+  grok: 'Grok',
+  gemini: 'Gemini',
+  deepseek: 'DeepSeek',
+  kimi: 'Kimi',
+  openrouter: 'OpenRouter',
+  custom: 'Custom',
+};
+const DEFAULT_ONBOARDING_GOAL = 'Connect this AI to Dristik and verify authorized two-way messaging.';
 
 const PROFILE_DETAILS: Record<string, { label: string; description: string; scopeSummary: string }> = {
   read_only: {
@@ -91,8 +109,15 @@ export function UniversalConnectView() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [aiConnections, setAiConnections] = useState<AIConnection[]>([]);
   const [connectionName, setConnectionName] = useState('Claude — Full Audit Access');
+  const [connectionProvider, setConnectionProvider] = useState<ClientTab>('claude');
+  const [onboardingGoal, setOnboardingGoal] = useState(DEFAULT_ONBOARDING_GOAL);
   const [grantProfile, setGrantProfile] = useState('full_access');
   const [issuedCredential, setIssuedCredential] = useState<IssuedCredential | null>(null);
+  const [issuedPrompts, setIssuedPrompts] = useState<OnboardingPrompts>({});
+  const [issuedTools, setIssuedTools] = useState<ToolInventoryItem[]>([]);
+  const [issuedNextStep, setIssuedNextStep] = useState('');
+  const [savedPrompt, setSavedPrompt] = useState<SavedPrompt | null>(null);
+  const [savedPromptTab, setSavedPromptTab] = useState<ClientTab>('claude');
   const [showApiKey, setShowApiKey] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [activeClientTab, setActiveClientTab] = useState<ClientTab>('claude');
@@ -243,19 +268,46 @@ export function UniversalConnectView() {
     void copyToClipboard(block, 'all');
   };
 
+  const rememberIssuedPrompt = (bundle: OnboardingBundle) => {
+    setIssuedPrompts(bundle.prompts || {});
+    setIssuedTools(bundle.tool_inventory || []);
+    setIssuedNextStep(bundle.next_step || '');
+    if (bundle.provider) setActiveClientTab(bundle.provider);
+  };
+
+  const clearIssuedPrompt = () => {
+    setIssuedPrompts({});
+    setIssuedTools([]);
+    setIssuedNextStep('');
+  };
+
+  const fetchOnboardingPrompt = (connectionId: string, provider: ClientTab) =>
+    request<OnboardingBundle & { connection_id: string }>('/api/v1/connect/ai-onboarding/prompt', {
+      method: 'POST',
+      body: JSON.stringify({ connection_id: connectionId, provider, goal: onboardingGoal }),
+    });
+
   const createAIConnection = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setError('');
     setNotice('');
     setIssuedCredential(null);
+    clearIssuedPrompt();
     try {
-      const created = await request<IssuedCredential>('/api/v1/connect/ai-connections', {
+      const created = await request<OnboardingKit>('/api/v1/connect/ai-onboarding/kit', {
         method: 'POST',
-        body: JSON.stringify({ name: connectionName, grant_profile: grantProfile, expires_in_days: 90 }),
+        body: JSON.stringify({
+          name: connectionName,
+          provider: connectionProvider,
+          grant_profile: grantProfile,
+          expires_in_days: 90,
+          goal: onboardingGoal,
+        }),
       });
-      setIssuedCredential(created);
-      setNotice('Dristik connection created. Copy the identity and API key now; the key is shown only once.');
+      setIssuedCredential(created.connection);
+      rememberIssuedPrompt(created);
+      setNotice('Dristik connection created. Copy the API key now, then copy the onboarding prompt into the selected AI. The key is shown only once and is left out of the prompt.');
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not create AI connection.');
@@ -272,7 +324,13 @@ export function UniversalConnectView() {
     try {
       const rotated = await request<IssuedCredential>(`/api/v1/connect/ai-connections/${id}/rotate`, { method: 'POST' });
       setIssuedCredential(rotated);
-      setNotice('Connection key rotated. The previous key is invalid; update the AI client now.');
+      setNotice('Connection key rotated. The previous key is invalid; update the AI client now. The onboarding prompt does not contain the key.');
+      try {
+        rememberIssuedPrompt(await fetchOnboardingPrompt(id, connectionProvider));
+      } catch (promptError) {
+        clearIssuedPrompt();
+        setError(promptError instanceof Error ? promptError.message : 'Key rotated, but the onboarding prompt could not be loaded.');
+      }
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not rotate connection key.');
@@ -289,7 +347,11 @@ export function UniversalConnectView() {
     try {
       await request(`/api/v1/connect/ai-connections/${id}/revoke`, { method: 'POST' });
       setNotice('AI connection revoked.');
-      if (issuedCredential?.id === id) setIssuedCredential(null);
+      if (issuedCredential?.id === id) {
+        setIssuedCredential(null);
+        clearIssuedPrompt();
+      }
+      if (savedPrompt?.connectionId === id) setSavedPrompt(null);
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not revoke connection.');
@@ -537,9 +599,50 @@ export function UniversalConnectView() {
           2,
         ),
       },
+      openrouter: {
+        title: 'OpenRouter',
+        desc: 'Use this when the selected client reaches Dristik through an OpenRouter-compatible tool host. Confirm that host can send the Dristik MCP headers.',
+        lang: 'json',
+        code: JSON.stringify(
+          {
+            mcpServers: {
+              dristik: {
+                url: ep,
+                headers: {
+                  Authorization: `Bearer ${key}`,
+                  'X-Dristik-Connection-Email': email,
+                },
+              },
+            },
+          },
+          null,
+          2,
+        ),
+      },
+      custom: {
+        title: 'Custom MCP client',
+        desc: 'Use this for any other client that can call the Dristik MCP endpoint with the connection identity and bearer key.',
+        lang: 'json',
+        code: JSON.stringify(
+          {
+            mcpServers: {
+              dristik: {
+                url: ep,
+                headers: {
+                  Authorization: `Bearer ${key}`,
+                  'X-Dristik-Connection-Email': email,
+                },
+              },
+            },
+          },
+          null,
+          2,
+        ),
+      },
     };
 
     const current = snippets[activeClientTab];
+    const onboardingPrompt = issuedPrompts[activeClientTab] || '';
 
     return (
       <div className="mt-4 rounded-xl border border-line bg-surface/70 p-4">
@@ -550,23 +653,55 @@ export function UniversalConnectView() {
           <span className="text-[11px] text-ink-400">Two-Way Integration Ready</span>
         </div>
         <p className="mb-3 text-xs text-ink-500">
-          Select your external AI client to get the ready-to-paste integration configuration with your connection credentials injected.
+          Select the AI client, copy its onboarding prompt, and paste that prompt into the AI. Put the API key only in the client's secret field. The prompt does not include the key.
         </p>
 
         {/* Client selector tabs */}
         <div className="flex flex-wrap gap-1.5 border-b border-line pb-2.5">
-          {(['claude', 'chatgpt', 'grok', 'gemini', 'deepseek', 'kimi'] as ClientTab[]).map((tab) => (
+          {CLIENT_TABS.map((tab) => (
             <button
               key={tab}
               type="button"
               onClick={() => setActiveClientTab(tab)}
-              className={`rounded-lg px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
+              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
                 activeClientTab === tab ? 'bg-ink text-white shadow-sm' : 'border border-line bg-surface text-ink hover:bg-surface-2'
               }`}
             >
-              {tab === 'chatgpt' ? 'ChatGPT' : tab}
+              {CLIENT_LABELS[tab]}
             </button>
           ))}
+        </div>
+
+        <div className="mt-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-ink">Copy/paste prompt for {CLIENT_LABELS[activeClientTab]}</p>
+            <button
+              type="button"
+              disabled={!onboardingPrompt}
+              onClick={() => void copyToClipboard(onboardingPrompt, `prompt_${activeClientTab}`)}
+              className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2.5 py-1 text-xs font-medium text-ink hover:bg-surface-2 disabled:opacity-50"
+            >
+              {copiedKey === `prompt_${activeClientTab}` ? (
+                <>
+                  <Check size={12} className="text-emerald-600" /> Prompt copied
+                </>
+              ) : (
+                <>
+                  <Copy size={12} /> Copy prompt
+                </>
+              )}
+            </button>
+          </div>
+          <textarea
+            readOnly
+            aria-label={`Copy/paste onboarding prompt for ${CLIENT_LABELS[activeClientTab]}`}
+            value={onboardingPrompt || 'The onboarding prompt has not been loaded for this client.'}
+            className="input min-h-40 w-full resize-y font-mono text-[11px] leading-relaxed"
+          />
+          {issuedTools.length > 0 && (
+            <p className="text-[11px] text-ink-500">Authorized tools: {issuedTools.map((tool) => tool.name).join(', ')}</p>
+          )}
+          {issuedNextStep && <p className="text-[11px] text-ink-500">{issuedNextStep}</p>}
         </div>
 
         <div className="mt-3 space-y-2">
@@ -641,10 +776,10 @@ export function UniversalConnectView() {
           <h2 className="text-lg font-semibold text-ink">Connect an external AI to Dristik</h2>
         </div>
         <p className="max-w-3xl text-sm leading-6 text-ink-500">
-          Dristik issues a connection identity and a one-time API key. Give both to your compatible MCP client (Claude, ChatGPT, Grok, Gemini, DeepSeek, Kimi). The external AI connects as the Brain to inspect DAG pipelines, drive step-by-step audits, read intermediate blackboard memory, and submit verified claims.
+          Dristik issues a connection identity, a one-time API key, and a provider-specific copy/paste prompt. Paste the prompt into Claude, ChatGPT, Grok, Gemini, DeepSeek, Kimi, OpenRouter, or a custom client. Put the API key only in that client's secret field.
         </p>
 
-        <form onSubmit={createAIConnection} className="grid gap-3 md:grid-cols-[1fr_190px_auto] md:items-end">
+        <form onSubmit={createAIConnection} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px_190px_auto] md:items-end">
           <label className="block space-y-1 text-sm">
             <span className="text-ink-600">Connection name</span>
             <input
@@ -654,6 +789,22 @@ export function UniversalConnectView() {
               required
               maxLength={120}
             />
+          </label>
+          <label className="block space-y-1 text-sm">
+            <span className="text-ink-600">AI client</span>
+            <select
+              className="input w-full"
+              value={connectionProvider}
+              onChange={(e) => {
+                const next = e.target.value as ClientTab;
+                setConnectionProvider(next);
+                setActiveClientTab(next);
+              }}
+            >
+              {CLIENT_TABS.map((tab) => (
+                <option key={tab} value={tab}>{CLIENT_LABELS[tab]}</option>
+              ))}
+            </select>
           </label>
           <label className="block space-y-1 text-sm">
             <span className="text-ink-600">Permission profile</span>
@@ -670,6 +821,15 @@ export function UniversalConnectView() {
           >
             {busy ? <Loader2 className="animate-spin" size={16} /> : <PlugZap size={16} />} Generate credentials
           </button>
+          <label className="col-span-full block space-y-1 text-sm">
+            <span className="text-ink-600">Onboarding goal</span>
+            <input
+              className="input w-full"
+              value={onboardingGoal}
+              onChange={(e) => setOnboardingGoal(e.target.value)}
+              maxLength={3000}
+            />
+          </label>
           <div className="col-span-full rounded-lg border border-line bg-surface/50 p-3 text-xs">
             <p className="font-semibold text-ink">
               {PROFILE_DETAILS[grantProfile]?.label}:{' '}
@@ -833,7 +993,10 @@ export function UniversalConnectView() {
               </button>
               <button
                 type="button"
-                onClick={() => setIssuedCredential(null)}
+                onClick={() => {
+                  setIssuedCredential(null);
+                  clearIssuedPrompt();
+                }}
                 className="text-xs font-medium text-ink-500 underline ml-auto"
               >
                 Hide credentials
@@ -864,6 +1027,37 @@ export function UniversalConnectView() {
                     </p>
                   </div>
                   <div className="flex gap-2">
+                    {c.status === 'active' && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          if (savedPrompt?.connectionId === c.id) {
+                            setSavedPrompt(null);
+                            return;
+                          }
+                          setBusy(true);
+                          setError('');
+                          void fetchOnboardingPrompt(c.id, savedPromptTab)
+                            .then((bundle) => {
+                              setSavedPrompt({
+                                connectionId: c.id,
+                                prompts: bundle.prompts || {},
+                                tools: bundle.tool_inventory || [],
+                                nextStep: bundle.next_step || '',
+                              });
+                              if (bundle.provider) setSavedPromptTab(bundle.provider);
+                            })
+                            .catch((e: unknown) => {
+                              setError(e instanceof Error ? e.message : 'Could not load the onboarding prompt.');
+                            })
+                            .finally(() => setBusy(false));
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink disabled:opacity-50"
+                      >
+                        <Sparkles size={12} /> {savedPrompt?.connectionId === c.id ? 'Hide prompt' : 'Onboarding prompt'}
+                      </button>
+                    )}
                     <button
                       type="button"
                       disabled={busy}
@@ -894,6 +1088,53 @@ export function UniversalConnectView() {
                     )}
                   </div>
                 </div>
+                {savedPrompt?.connectionId === c.id && (
+                  <div className="space-y-2 rounded-lg border border-line bg-surface/50 p-3">
+                    <div className="flex flex-wrap gap-1.5">
+                      {CLIENT_TABS.map((tab) => (
+                        <button
+                          key={tab}
+                          type="button"
+                          onClick={() => setSavedPromptTab(tab)}
+                          className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                            savedPromptTab === tab ? 'bg-ink text-white shadow-sm' : 'border border-line bg-surface text-ink hover:bg-surface-2'
+                          }`}
+                        >
+                          {CLIENT_LABELS[tab]}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-ink">Copy/paste prompt for {CLIENT_LABELS[savedPromptTab]}</p>
+                      <button
+                        type="button"
+                        disabled={!savedPrompt.prompts[savedPromptTab]}
+                        onClick={() => void copyToClipboard(savedPrompt.prompts[savedPromptTab] || '', `saved_prompt_${c.id}_${savedPromptTab}`)}
+                        className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2.5 py-1 text-xs font-medium text-ink hover:bg-surface-2 disabled:opacity-50"
+                      >
+                        {copiedKey === `saved_prompt_${c.id}_${savedPromptTab}` ? (
+                          <>
+                            <Check size={12} className="text-emerald-600" /> Prompt copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={12} /> Copy prompt
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <textarea
+                      readOnly
+                      aria-label={`Copy/paste onboarding prompt for ${CLIENT_LABELS[savedPromptTab]}`}
+                      value={savedPrompt.prompts[savedPromptTab] || 'The onboarding prompt has not been loaded for this client.'}
+                      className="input min-h-40 w-full resize-y font-mono text-[11px] leading-relaxed"
+                    />
+                    {savedPrompt.tools.length > 0 && (
+                      <p className="text-[11px] text-ink-500">Authorized tools: {savedPrompt.tools.map((tool) => tool.name).join(', ')}</p>
+                    )}
+                    {savedPrompt.nextStep && <p className="text-[11px] text-ink-500">{savedPrompt.nextStep}</p>}
+                  </div>
+                )}
                 {activeActivityId === c.id && (
                   <div className="space-y-3 rounded-lg border border-line bg-surface/50 p-3.5 text-xs">
                     {/* Header with Traffic Direction Filters and Test Action */}

@@ -21,7 +21,11 @@ Content-Type: application/json
 }
 ```
 
-The response includes a Dristik-issued one-time API key, connection identity, actual MCP endpoint, authorized tool summary, and provider-specific copy/paste prompt. Show/store the key only in a trusted secret field; do not paste it into a public AI chat or embed it in source code. Keys are hashed in the database and cannot be retrieved after creation. Choose the least-privileged grant profile needed.
+The response includes a Dristik-issued one-time API key, connection identity, actual MCP endpoint, authorized tool summary, and provider-specific copy/paste prompt. `prompt` matches the requested provider. `prompts` contains one prompt for every supported provider so a client can switch the copy target without issuing another key. Show/store the key only in a trusted secret field; do not paste it into a public AI chat or embed it in source code. Keys are hashed in the database and cannot be retrieved after creation. Choose the least-privileged grant profile needed.
+
+The Connect page uses this kit when the operator clicks **Generate credentials**. It shows the prompt for the selected AI client and a copy button. The API key stays in the credential fields and is left out of the prompt.
+
+To show the prompt again for a connection that already exists, call `POST /api/v1/connect/ai-onboarding/prompt` with `connection_id`, `provider`, and an optional `goal`. The response has the same prompt fields and does not return or rotate the API key. The Connect page loads it from **Onboarding prompt** on a saved connection.
 
 Supported prompt targets: `chatgpt`, `claude`, `gemini`, `grok`, `deepseek`, `kimi`, `openrouter`, `custom`. This is a label for the user's selected AI surface, not a claim that every surface can act as an MCP client. The generated prompt explicitly requires the AI to state its actual limitations.
 
